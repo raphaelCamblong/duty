@@ -1,7 +1,7 @@
 ---
 id: T-03
 title: Board file domain package
-status: todo
+status: done
 blocked-by: [T-01]
 ---
 
@@ -33,11 +33,52 @@ All functions take `content []byte`, return `[]byte` (+ error). No filesystem.
 Filesystem access, knowledge of other boards or task-file internals.
 
 ## Gates
-- [ ] Table-driven tests in `tests/` prove surgical edits: a board with hand-written
+- [x] Table-driven tests in `tests/` prove surgical edits: a board with hand-written
   prose and unusual spacing keeps every untouched line byte-identical through
   add/move/drop/status/prune/footer operations.
-- [ ] Section create + prune covered; prune-never-default covered.
-- [ ] `go test ./tests/... -coverpkg=./internal/...` green; `gofmt -l .` empty;
+- [x] Section create + prune covered; prune-never-default covered.
+- [x] `go test ./tests/... -coverpkg=./internal/...` green; `gofmt -l .` empty;
   `go vet ./...` clean.
 
 ## Report
+
+2026-07-09 — done.
+
+Files changed:
+- `internal/board/board.go` (new): pure `BOARD.md` model. Exported: `Render`,
+  `Title`, `FindRow`, `AddRow`, `SetRowStatus`, `MoveRow`, `DropRow`,
+  `PruneEmptySections`, `SetArchivedCount`, `AddBoardBullet`, plus
+  `DefaultSection` ("Open tasks"). Every edit splits on `\n`, touches only the
+  target line(s), and rejoins — never a re-render. Imports stdlib only
+  (`fmt`, `regexp`, `strconv`, `strings`); zero filesystem.
+- `tests/board_test.go` (new): black-box table-driven tests. A fixture board
+  with a hand-written banner, free prose, and a row with unusual cell spacing;
+  every expected output is built from the same fixture lines, so any byte
+  drift in an untouched line fails. Covers: skeleton render + title
+  round-trip, row find (incl. filename-in-prose non-match), add to
+  existing/new section, footerless-board error, status cell rewrite
+  preserving odd spacing in other cells, drop, move (existing + created
+  section, byte-identical row), prune (empty removed, default never, prose
+  and bullets kept, multi-section pass), footer count rewrite, Boards bullet
+  append + section creation, and `TestSurgicalRoundTrip` — add → status →
+  move to a created section → move back → prune → drop → footer bump/restore
+  ends byte-identical to the starting fixture.
+
+Gate output tails:
+- `go test ./tests/... -coverpkg=./internal/... -count=1` →
+  `ok  github.com/raphaelCamblong/duty/tests  0.226s  coverage: 90.3% of statements in ./internal/...`
+- `gofmt -l .` → empty; `go vet ./...` → clean. golangci-lint not installed.
+
+Interface notes (for CLI consumers):
+- `FindRow` returns `(row string, ok bool)` — comma-ok so `list` can branch
+  on a missing row (drift) without a sentinel error.
+- `MoveRow` does not prune; compose with `PruneEmptySections` (mirrors the
+  scope listing them as separate operations).
+- `AddRow`/`MoveRow` error when a new section is needed but the footer line
+  is missing (the footer is the insertion anchor); `SetArchivedCount` errors
+  on a missing footer too.
+- `PruneEmptySections` removes only sections whose body is blank lines plus
+  empty table scaffolding; sections holding prose or bullets are never
+  touched, and `## Open tasks` is never removed.
+
+Deviations: none. Follow-ups deliberately left: none.
