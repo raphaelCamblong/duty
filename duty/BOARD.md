@@ -20,6 +20,6 @@ Order top-to-bottom is the intended build order.
 | [T-11](T-11-tui-mouse-motion-charts-polish.md) | TUI mouse, motion, charts polish | done |
 | [T-12](T-12-convention-names-and-filesystem-port.md) | Convention names and filesystem port | done |
 | [T-13](T-13-application-layer-and-cobra-cli.md) | Application layer and cobra CLI | done |
-| [T-14](T-14-comment-hygiene-and-final-cleanup.md) | Comment hygiene and final cleanup | todo |
+| [T-14](T-14-comment-hygiene-and-final-cleanup.md) | Comment hygiene and final cleanup | done |
 
 Completed tasks (0) archived: [archive/](archive/).

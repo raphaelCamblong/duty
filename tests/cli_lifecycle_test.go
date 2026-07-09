@@ -369,7 +369,7 @@ func TestList(t *testing.T) {
 		mustRun(t, root, "board", "backend")
 		sub := filepath.Join(root, "backend")
 		rootName := createTask(t, root, "Root task")
-		subName := createTask(t, sub, "Backend task")
+		createTask(t, sub, "Backend task")
 
 		boardPath := filepath.Join(root, "BOARD.md")
 		index := readText(t, boardPath)
@@ -410,7 +410,6 @@ func TestList(t *testing.T) {
 		if want := []string{"T-02", "backend", "todo", "Backend task", ""}; !equalFields(sub02, want) {
 			t.Errorf("T-02 record = %v, want %v", sub02, want)
 		}
-		_ = subName
 	})
 }
 
