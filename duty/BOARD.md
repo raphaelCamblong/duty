@@ -15,7 +15,7 @@ Order top-to-bottom is the intended build order.
 | [T-06](T-06-cli-dispatch-init-create-board.md) | CLI dispatch, init, create, board | done |
 | [T-07](T-07-cli-status-link-report-move.md) | CLI status, link, report, move | done |
 | [T-08](T-08-cli-archive-delete-list-agent-output.md) | CLI archive, delete, list, agent output | done |
-| [T-09](T-09-spec-invariants-test-suite.md) | Spec invariants test suite | todo |
+| [T-09](T-09-spec-invariants-test-suite.md) | Spec invariants test suite | done |
 | [T-10](T-10-tui-live-board-viewer.md) | TUI live board viewer | todo |
 | [T-11](T-11-tui-mouse-motion-charts-polish.md) | TUI mouse, motion, charts polish | todo |
 
