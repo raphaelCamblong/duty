@@ -86,11 +86,11 @@ func runInit(cwd string, args []string) error {
 		return fmt.Errorf("already inside a duty tree (%s)", dir)
 	}
 	dir := filepath.Join(cwd, "duty")
-	if err := os.MkdirAll(filepath.Join(dir, "archive"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, tree.ArchiveDir), 0o755); err != nil {
 		return fmt.Errorf("init: %w", err)
 	}
 	if err := fsutil.WriteAtomic(filepath.Join(dir, boardFile), board.Render(title)); err != nil {
 		return err
 	}
-	return fsutil.WriteAtomic(filepath.Join(dir, "README.md"), []byte(readme))
+	return fsutil.WriteAtomic(filepath.Join(dir, tree.ReadmeFile), []byte(readme))
 }

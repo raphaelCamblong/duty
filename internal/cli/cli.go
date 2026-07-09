@@ -13,10 +13,14 @@ import (
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
-// boardFile is the index file every board directory holds.
-const boardFile = "BOARD.md"
+// boardFile is the index file every board directory holds. internal/tree
+// owns the filename convention; every other package references it from
+// there, never repeating the literal.
+const boardFile = tree.BoardFile
 
 // nameRE validates sub-board folder names and task filename slugs.
 var nameRE = regexp.MustCompile(`^[a-z0-9-]+$`)
@@ -42,6 +46,14 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		err = runCreate(cwd, args[1:], stdout)
 	case "board":
 		err = runBoard(cwd, args[1:])
+	case "status":
+		err = runStatus(cwd, args[1:])
+	case "link":
+		err = runLink(cwd, args[1:])
+	case "report":
+		err = runReport(cwd, args[1:], stdin)
+	case "move":
+		err = runMove(cwd, args[1:])
 	default:
 		fmt.Fprintf(stderr, "unknown command %q\n", cmd)
 		return 2
@@ -73,6 +85,17 @@ func positionals(fs *flag.FlagSet, args []string, usage string) ([]string, error
 		pos = append(pos, fs.Arg(0))
 		args = fs.Args()[1:]
 	}
+}
+
+// resolveOpen resolves id to its open task file anywhere in the tree
+// containing cwd. Archived ids fail with tree.ErrArchived in the chain:
+// archived tasks are read-only.
+func resolveOpen(cwd, id string) (string, error) {
+	root, err := tree.FindRoot(cwd)
+	if err != nil {
+		return "", err
+	}
+	return tree.ResolveTask(root, id)
 }
 
 // stringList is a repeatable string flag; each occurrence may also carry

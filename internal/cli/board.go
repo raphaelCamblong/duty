@@ -55,7 +55,7 @@ func runBoard(cwd string, args []string) error {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Join(sub, "archive"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(sub, tree.ArchiveDir), 0o755); err != nil {
 		return fmt.Errorf("create board: %w", err)
 	}
 	if err := fsutil.WriteAtomic(filepath.Join(sub, boardFile), board.Render(t)); err != nil {

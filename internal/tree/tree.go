@@ -18,11 +18,19 @@ import (
 // directory; archived tasks are read-only by convention.
 var ErrArchived = errors.New("archived tasks are read-only")
 
-// boardFile is the marker file that makes a directory a board.
-const boardFile = "BOARD.md"
+// BoardFile is the marker file that makes a directory a board. Every other
+// package that needs the board index's filename imports this constant
+// instead of repeating the literal.
+const BoardFile = "BOARD.md"
 
-// configFile is the project config file; its presence marks the tree root.
-const configFile = "duty.toml"
+// ConfigFile is the project config file; its presence marks the tree root.
+const ConfigFile = "duty.toml"
+
+// ArchiveDir is the name of a board's completed-tasks subdirectory.
+const ArchiveDir = "archive"
+
+// ReadmeFile is the convention doc `duty init` writes next to the root board.
+const ReadmeFile = "README.md"
 
 // taskNN extracts the numeric part of a task filename (T-NN-<slug>.md).
 var taskNN = regexp.MustCompile(`^T-(\d+)-.*\.md$`)
@@ -43,11 +51,11 @@ func FindRoot(cwd string) (string, error) {
 	}
 	root := board
 	for {
-		if hasFile(root, configFile) {
+		if hasFile(root, ConfigFile) {
 			return root, nil
 		}
 		parent := filepath.Dir(root)
-		if parent == root || !hasFile(parent, boardFile) {
+		if parent == root || !hasFile(parent, BoardFile) {
 			return root, nil
 		}
 		root = parent
@@ -80,13 +88,13 @@ func Boards(root string) ([]string, error) {
 		if !d.IsDir() {
 			return nil
 		}
-		if d.Name() == "archive" && path != root {
+		if d.Name() == ArchiveDir && path != root {
 			return fs.SkipDir
 		}
-		if path != root && hasFile(path, configFile) {
+		if path != root && hasFile(path, ConfigFile) {
 			return fmt.Errorf("second duty.toml found in %s: only the tree root may hold one", path)
 		}
-		if hasFile(path, boardFile) {
+		if hasFile(path, BoardFile) {
 			boards = append(boards, path)
 		}
 		return nil
@@ -164,7 +172,7 @@ func NextNN(root string) (string, error) {
 // BOARD.md, or false if the walk reaches the filesystem root without one.
 func nearestBoard(dir string) (string, bool) {
 	for {
-		if hasFile(dir, boardFile) {
+		if hasFile(dir, BoardFile) {
 			return dir, true
 		}
 		parent := filepath.Dir(dir)
@@ -200,7 +208,7 @@ func underArchive(root, path string) bool {
 		return false
 	}
 	for _, part := range strings.Split(rel, string(filepath.Separator)) {
-		if part == "archive" {
+		if part == ArchiveDir {
 			return true
 		}
 	}
