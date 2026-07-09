@@ -11,7 +11,8 @@ import (
 
 	"github.com/raphaelCamblong/duty/internal/board"
 	"github.com/raphaelCamblong/duty/internal/config"
-	"github.com/raphaelCamblong/duty/internal/tree"
+	"github.com/raphaelCamblong/duty/internal/fsys"
+	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/tui"
 )
 
@@ -42,7 +43,7 @@ func mustDuty(t *testing.T, dir string, args ...string) string {
 // mustScan scans root, failing the test on error.
 func mustScan(t *testing.T, root string) tui.Snapshot {
 	t.Helper()
-	snap, err := tui.Scan(root)
+	snap, err := tui.Scan(fsys.OS{}, root)
 	if err != nil {
 		t.Fatalf("Scan() error = %v", err)
 	}
@@ -69,7 +70,7 @@ func scanRow(snap tui.Snapshot, boardPath, id string) (tui.Row, bool) {
 // hand-made corruption, exactly what the TUI must surface).
 func rewriteBoard(t *testing.T, dir string, edit func([]byte) ([]byte, error)) {
 	t.Helper()
-	path := filepath.Join(dir, tree.BoardFile)
+	path := filepath.Join(dir, names.BoardFile)
 	content, err := edit([]byte(readText(t, path)))
 	if err != nil {
 		t.Fatalf("edit board: %v", err)
@@ -212,7 +213,7 @@ func newTUIModelSize(t *testing.T, root string, w, h int) tui.Model {
 	t.Helper()
 	cfg := config.Config{Editor: "vi"}
 	cfg.TUI.Theme = "dark"
-	m, err := tui.New(root, cfg)
+	m, err := tui.New(fsys.OS{}, root, cfg)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -493,7 +494,7 @@ func drainTicks(c <-chan struct{}) {
 
 func TestWatcherRefresh(t *testing.T) {
 	root := tuiTree(t)
-	w, err := tui.NewWatcher(root)
+	w, err := tui.NewWatcher(fsys.OS{}, root)
 	if err != nil {
 		t.Fatalf("NewWatcher() error = %v", err)
 	}

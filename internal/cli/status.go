@@ -4,11 +4,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/raphaelCamblong/duty/internal/board"
-	"github.com/raphaelCamblong/duty/internal/fsutil"
+	"github.com/raphaelCamblong/duty/internal/fsys"
+	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/task"
 )
 
@@ -18,9 +18,9 @@ const statusUsage = "usage: duty status <id> <status>"
 // board row's status cell change in one command (the sync invariant).
 // Unknown statuses and archived ids are rejected; both new contents are
 // computed before either file is written.
-func runStatus(cwd string, args []string) error {
-	fs := flag.NewFlagSet("status", flag.ContinueOnError)
-	pos, err := positionals(fs, args, statusUsage)
+func runStatus(f fsys.FS, cwd string, args []string) error {
+	set := flag.NewFlagSet("status", flag.ContinueOnError)
+	pos, err := positionals(set, args, statusUsage)
 	if err != nil {
 		return err
 	}
@@ -32,11 +32,11 @@ func runStatus(cwd string, args []string) error {
 		return unknownStatusErr(status)
 	}
 
-	taskPath, err := resolveOpen(cwd, id)
+	taskPath, err := resolveOpen(f, cwd, id)
 	if err != nil {
 		return err
 	}
-	content, err := os.ReadFile(taskPath)
+	content, err := f.ReadFile(taskPath)
 	if err != nil {
 		return err
 	}
@@ -44,8 +44,8 @@ func runStatus(cwd string, args []string) error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", taskPath, err)
 	}
-	boardPath := filepath.Join(filepath.Dir(taskPath), boardFile)
-	index, err := os.ReadFile(boardPath)
+	boardPath := filepath.Join(filepath.Dir(taskPath), names.BoardFile)
+	index, err := f.ReadFile(boardPath)
 	if err != nil {
 		return err
 	}
@@ -54,8 +54,8 @@ func runStatus(cwd string, args []string) error {
 		return err
 	}
 
-	if err := fsutil.WriteAtomic(taskPath, updated); err != nil {
+	if err := f.WriteFile(taskPath, updated); err != nil {
 		return err
 	}
-	return fsutil.WriteAtomic(boardPath, withCell)
+	return f.WriteFile(boardPath, withCell)
 }

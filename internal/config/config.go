@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/raphaelCamblong/duty/internal/fsys"
 )
 
 // Config holds duty's tunable settings. Config tunes presentation only;
@@ -29,12 +31,12 @@ type Config struct {
 // the built-in defaults, key by key: project overrides user overrides
 // defaults. An empty path or a missing file is skipped; a malformed file is
 // an error.
-func Load(userPath, projectPath string) (Config, error) {
+func Load(f fsys.FS, userPath, projectPath string) (Config, error) {
 	cfg := defaults()
-	if err := mergeFile(&cfg, userPath); err != nil {
+	if err := mergeFile(f, &cfg, userPath); err != nil {
 		return Config{}, err
 	}
-	if err := mergeFile(&cfg, projectPath); err != nil {
+	if err := mergeFile(f, &cfg, projectPath); err != nil {
 		return Config{}, err
 	}
 	return cfg, nil
@@ -63,11 +65,11 @@ func defaults() Config {
 
 // mergeFile decodes the TOML file at path into cfg, overriding only the keys
 // the file sets. An empty path or a missing file leaves cfg untouched.
-func mergeFile(cfg *Config, path string) error {
+func mergeFile(f fsys.FS, cfg *Config, path string) error {
 	if path == "" {
 		return nil
 	}
-	data, err := os.ReadFile(path)
+	data, err := f.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}

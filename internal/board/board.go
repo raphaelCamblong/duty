@@ -1,4 +1,4 @@
-// Package board is the pure domain model of a BOARD.md file (spec §4).
+// Package board is the pure domain model of a board index file (spec §4).
 // Every operation is line-surgical: it locates the target line, changes only
 // that line, and leaves every other byte intact — a board is never re-rendered
 // from a model. The package touches no filesystem: all functions take bytes
@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/raphaelCamblong/duty/internal/names"
 )
 
 // DefaultSection is the task section every board always has. It is the
@@ -23,16 +25,16 @@ const (
 )
 
 var (
-	footerRe    = regexp.MustCompile(`^Completed tasks \((\d+)\) archived: \[archive/\]\(archive/\)\.$`)
+	footerRe    = regexp.MustCompile(`^Completed tasks \((\d+)\) archived: \[` + names.ArchiveDir + `/\]\(` + names.ArchiveDir + `/\)\.$`)
 	separatorRe = regexp.MustCompile(`^\|[-: |]+\|$`)
 )
 
-// Render returns a skeleton BOARD.md: H1 = title, the convention line, an
+// Render returns a skeleton board index: H1 = title, the convention line, an
 // empty "## Open tasks" table, and the zero-count archive footer.
 func Render(title string) []byte {
 	return []byte("# " + title + "\n" +
 		"\n" +
-		"Convention: [README.md](README.md). Workers update their row's status via the CLI.\n" +
+		"Convention: [" + names.ReadmeFile + "](" + names.ReadmeFile + "). Workers update their row's status via the CLI.\n" +
 		"Order top-to-bottom is the intended build order.\n" +
 		"\n" +
 		"## " + DefaultSection + "\n" +
@@ -40,7 +42,7 @@ func Render(title string) []byte {
 		tableHeader + "\n" +
 		tableSeparator + "\n" +
 		"\n" +
-		"Completed tasks (0) archived: [archive/](archive/).\n")
+		"Completed tasks (0) archived: [" + names.ArchiveDir + "/](" + names.ArchiveDir + "/).\n")
 }
 
 // Title returns the board's H1 text, or "" when the board has no H1.
@@ -165,11 +167,11 @@ func SetArchivedCount(content []byte, n int) ([]byte, error) {
 	return joinLines(lines), nil
 }
 
-// AddBoardBullet appends the sub-board bullet "- [name/](name/BOARD.md) — title"
-// to the "## Boards" section, creating the section before the first task
-// section when absent. name is the sub-board folder name, without slash.
+// AddBoardBullet appends a sub-board bullet linking name/ to its board index,
+// with title, to the "## Boards" section, creating the section before the
+// first task section when absent. name is the sub-board folder, without slash.
 func AddBoardBullet(content []byte, name, title string) ([]byte, error) {
-	bullet := "- [" + name + "/](" + name + "/BOARD.md) — " + title
+	bullet := "- [" + name + "/](" + name + "/" + names.BoardFile + ") — " + title
 	lines := splitLines(content)
 	start, end, ok := sectionBounds(lines, boardsSection)
 	if !ok {

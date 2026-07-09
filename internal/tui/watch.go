@@ -3,10 +3,11 @@ package tui
 import (
 	"fmt"
 	"io/fs"
-	"path/filepath"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+
+	"github.com/raphaelCamblong/duty/internal/fsys"
 )
 
 // debounce is how long the watcher coalesces a burst of filesystem events
@@ -20,29 +21,30 @@ const debounce = 100 * time.Millisecond
 type Watcher struct {
 	// C receives one value per debounced burst of events; it is closed when
 	// the watcher stops.
-	C  chan struct{}
-	fs *fsnotify.Watcher
+	C     chan struct{}
+	fsys  fsys.FS
+	notif *fsnotify.Watcher
 }
 
 // NewWatcher watches every directory under root and starts the debounce
 // loop. Callers own Close.
-func NewWatcher(root string) (*Watcher, error) {
+func NewWatcher(f fsys.FS, root string) (*Watcher, error) {
 	fw, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("watch %s: %w", root, err)
 	}
-	if err := addDirs(fw, root, true); err != nil {
+	if err := addDirs(f, fw, root, true); err != nil {
 		fw.Close()
 		return nil, err
 	}
-	w := &Watcher{C: make(chan struct{}, 1), fs: fw}
+	w := &Watcher{C: make(chan struct{}, 1), fsys: f, notif: fw}
 	go w.loop(root)
 	return w, nil
 }
 
 // Close stops the watcher; C is closed once the loop drains.
 func (w *Watcher) Close() error {
-	return w.fs.Close()
+	return w.notif.Close()
 }
 
 // loop debounces events: the first event of a burst arms a timer; when it
@@ -54,20 +56,20 @@ func (w *Watcher) loop(root string) {
 	var fire <-chan time.Time
 	for {
 		select {
-		case _, ok := <-w.fs.Events:
+		case _, ok := <-w.notif.Events:
 			if !ok {
 				return
 			}
 			if fire == nil {
 				fire = time.After(debounce)
 			}
-		case _, ok := <-w.fs.Errors:
+		case _, ok := <-w.notif.Errors:
 			if !ok {
 				return
 			}
 		case <-fire:
 			fire = nil
-			addDirs(w.fs, root, false)
+			addDirs(w.fsys, w.notif, root, false)
 			select {
 			case w.C <- struct{}{}:
 			default:
@@ -76,11 +78,12 @@ func (w *Watcher) loop(root string) {
 	}
 }
 
-// addDirs walks root and watches every directory. Adding a watched path
-// again is a no-op, so re-walks are cheap. With strict false, per-directory
-// failures are skipped — directories vanish mid-walk when tasks are archived.
-func addDirs(fw *fsnotify.Watcher, root string, strict bool) error {
-	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+// addDirs walks root through the port and watches every directory. Adding a
+// watched path again is a no-op, so re-walks are cheap. With strict false,
+// per-directory failures are skipped — directories vanish mid-walk when tasks
+// are archived.
+func addDirs(f fsys.FS, fw *fsnotify.Watcher, root string, strict bool) error {
+	return f.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if strict {
 				return fmt.Errorf("watch %s: %w", path, err)

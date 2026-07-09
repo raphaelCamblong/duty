@@ -4,23 +4,23 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/raphaelCamblong/duty/internal/board"
-	"github.com/raphaelCamblong/duty/internal/fsutil"
+	"github.com/raphaelCamblong/duty/internal/fsys"
+	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
 const initUsage = "usage: duty init [title]"
 
 // readme is the agent-facing convention page duty init drops next to the
-// root BOARD.md (spec §9): the command table, the lifecycle→command mapping,
-// and what stays the worker's judgment.
+// root board index (spec §9): the command table, the lifecycle→command
+// mapping, and what stays the worker's judgment.
 const readme = `# duty/ — the task convention
 
 One file = one task, small enough for one worker (human or agent) in one sitting.
-[BOARD.md](BOARD.md) is the index: order top-to-bottom = build order. The task file is
+[` + names.BoardFile + `](` + names.BoardFile + `) is the index: order top-to-bottom = build order. The task file is
 the truth; the board is a projection the ` + "`duty`" + ` CLI keeps in sync.
 
 ## Task file
@@ -66,12 +66,12 @@ Filling Goal/Scope/Gates when authoring a task, ticking gates honestly, report p
 and respecting ` + "`blocked-by`" + ` — the tooling checks none of it.
 `
 
-// runInit bootstraps a duty tree in cwd: duty/ with a skeleton BOARD.md
-// (H1 = title, default "Board"), the convention README.md, and archive/.
-// It refuses to run inside an existing tree.
-func runInit(cwd string, args []string) error {
-	fs := flag.NewFlagSet("init", flag.ContinueOnError)
-	pos, err := positionals(fs, args, initUsage)
+// runInit bootstraps a duty tree in cwd: duty/ with a skeleton board index
+// (H1 = title, default "Board"), the convention readme, and archive/. It
+// refuses to run inside an existing tree.
+func runInit(f fsys.FS, cwd string, args []string) error {
+	set := flag.NewFlagSet("init", flag.ContinueOnError)
+	pos, err := positionals(set, args, initUsage)
 	if err != nil {
 		return err
 	}
@@ -82,15 +82,15 @@ func runInit(cwd string, args []string) error {
 	if len(pos) == 1 && pos[0] != "" {
 		title = pos[0]
 	}
-	if dir, err := tree.CurrentBoard(cwd); err == nil {
+	if dir, err := tree.CurrentBoard(f, cwd); err == nil {
 		return fmt.Errorf("already inside a duty tree (%s)", dir)
 	}
-	dir := filepath.Join(cwd, "duty")
-	if err := os.MkdirAll(filepath.Join(dir, tree.ArchiveDir), 0o755); err != nil {
+	dir := filepath.Join(cwd, names.TreeDir)
+	if err := f.MkdirAll(filepath.Join(dir, names.ArchiveDir)); err != nil {
 		return fmt.Errorf("init: %w", err)
 	}
-	if err := fsutil.WriteAtomic(filepath.Join(dir, boardFile), board.Render(title)); err != nil {
+	if err := f.WriteFile(filepath.Join(dir, names.BoardFile), board.Render(title)); err != nil {
 		return err
 	}
-	return fsutil.WriteAtomic(filepath.Join(dir, tree.ReadmeFile), []byte(readme))
+	return f.WriteFile(filepath.Join(dir, names.ReadmeFile), []byte(readme))
 }

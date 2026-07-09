@@ -4,12 +4,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/raphaelCamblong/duty/internal/board"
-	"github.com/raphaelCamblong/duty/internal/fsutil"
+	"github.com/raphaelCamblong/duty/internal/fsys"
+	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/task"
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
@@ -22,10 +22,10 @@ const moveUsage = "usage: duty move <id> <board-path> [--section NAME]"
 // section with the file's status preserved. board-path is relative to the
 // tree root; "." names the root board. All new contents are computed before
 // the rename and the board writes.
-func runMove(cwd string, args []string) error {
-	fs := flag.NewFlagSet("move", flag.ContinueOnError)
-	section := fs.String("section", board.DefaultSection, "target board section for the row")
-	pos, err := positionals(fs, args, moveUsage)
+func runMove(f fsys.FS, cwd string, args []string) error {
+	set := flag.NewFlagSet("move", flag.ContinueOnError)
+	section := set.String("section", board.DefaultSection, "target board section for the row")
+	pos, err := positionals(set, args, moveUsage)
 	if err != nil {
 		return err
 	}
@@ -38,20 +38,20 @@ func runMove(cwd string, args []string) error {
 		sect = board.DefaultSection
 	}
 
-	root, err := tree.FindRoot(cwd)
+	root, err := tree.FindRoot(f, cwd)
 	if err != nil {
 		return err
 	}
-	taskPath, err := tree.ResolveTask(root, id)
+	taskPath, err := tree.ResolveTask(f, root, id)
 	if err != nil {
 		return err
 	}
-	target, err := targetBoard(root, boardPath)
+	target, err := targetBoard(f, root, boardPath)
 	if err != nil {
 		return err
 	}
 
-	content, err := os.ReadFile(taskPath)
+	content, err := f.ReadFile(taskPath)
 	if err != nil {
 		return err
 	}
@@ -61,8 +61,8 @@ func runMove(cwd string, args []string) error {
 	}
 	filename := filepath.Base(taskPath)
 	srcDir := filepath.Dir(taskPath)
-	srcPath := filepath.Join(srcDir, boardFile)
-	src, err := os.ReadFile(srcPath)
+	srcPath := filepath.Join(srcDir, names.BoardFile)
+	src, err := f.ReadFile(srcPath)
 	if err != nil {
 		return err
 	}
@@ -77,11 +77,11 @@ func runMove(cwd string, args []string) error {
 		if err != nil {
 			return err
 		}
-		return fsutil.WriteAtomic(srcPath, withRow)
+		return f.WriteFile(srcPath, withRow)
 	}
 
-	dstPath := filepath.Join(target, boardFile)
-	dst, err := os.ReadFile(dstPath)
+	dstPath := filepath.Join(target, names.BoardFile)
+	dst, err := f.ReadFile(dstPath)
 	if err != nil {
 		return err
 	}
@@ -89,19 +89,19 @@ func runMove(cwd string, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.Rename(taskPath, filepath.Join(target, filename)); err != nil {
+	if err := f.Rename(taskPath, filepath.Join(target, filename)); err != nil {
 		return fmt.Errorf("move %s: %w", id, err)
 	}
-	if err := fsutil.WriteAtomic(srcPath, pruned); err != nil {
+	if err := f.WriteFile(srcPath, pruned); err != nil {
 		return err
 	}
-	return fsutil.WriteAtomic(dstPath, withRow)
+	return f.WriteFile(dstPath, withRow)
 }
 
 // targetBoard resolves boardPath — relative to root, "." meaning the root
-// board — to an existing board directory: one holding a BOARD.md inside the
-// tree.
-func targetBoard(root, boardPath string) (string, error) {
+// board — to an existing board directory: one holding a board index inside
+// the tree.
+func targetBoard(f fsys.FS, root, boardPath string) (string, error) {
 	if filepath.IsAbs(boardPath) {
 		return "", fmt.Errorf("board path %q must be relative to the tree root", boardPath)
 	}
@@ -110,9 +110,9 @@ func targetBoard(root, boardPath string) (string, error) {
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("board path %q escapes the tree", boardPath)
 	}
-	info, err := os.Stat(filepath.Join(dir, boardFile))
+	info, err := f.Stat(filepath.Join(dir, names.BoardFile))
 	if err != nil || info.IsDir() {
-		return "", fmt.Errorf("no board at %q: no %s there", boardPath, boardFile)
+		return "", fmt.Errorf("no board at %q: no %s there", boardPath, names.BoardFile)
 	}
 	return dir, nil
 }

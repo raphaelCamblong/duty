@@ -1,16 +1,17 @@
 // Package tui is the live board viewer: a read-only Bubble Tea program that
-// renders the tree from the task files (truth) in the order each BOARD.md
+// renders the tree from the task files (truth) in the order each board index
 // gives, and re-scans on any filesystem event. It never writes.
 package tui
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/raphaelCamblong/duty/internal/board"
+	"github.com/raphaelCamblong/duty/internal/fsys"
+	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/task"
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
@@ -23,17 +24,17 @@ type Snapshot struct {
 }
 
 // Board is one board's view model: identity, its direct sub-boards, and its
-// task rows grouped in BOARD.md section order.
+// task rows grouped in board-index section order.
 type Board struct {
 	// Path is the board's slash path relative to the root, "." for the root.
 	Path string
-	// Title is the BOARD.md H1, falling back to the folder name.
+	// Title is the board index H1, falling back to the folder name.
 	Title string
 	// Parent is the containing board's path, "" for the root.
 	Parent string
 	// Subs are the direct sub-boards, in lexical path order.
 	Subs []Sub
-	// Sections are the task sections in BOARD.md order; task files with no
+	// Sections are the task sections in board-index order; task files with no
 	// board row are appended to the default section with a drift flag.
 	Sections []Section
 	// Done and Total count open tasks read from the files — done vs all —
@@ -81,8 +82,8 @@ type Row struct {
 
 // Scan reads every board under root into a Snapshot. Archived tasks are
 // invisible: board discovery skips archive/ directories.
-func Scan(root string) (Snapshot, error) {
-	dirs, err := tree.Boards(root)
+func Scan(f fsys.FS, root string) (Snapshot, error) {
+	dirs, err := tree.Boards(f, root)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -94,7 +95,7 @@ func Scan(root string) (Snapshot, error) {
 			return Snapshot{}, fmt.Errorf("scan %s: %w", dir, err)
 		}
 		path := filepath.ToSlash(rel)
-		b, err := scanBoard(dir, path)
+		b, err := scanBoard(f, dir, path)
 		if err != nil {
 			return Snapshot{}, err
 		}
@@ -107,8 +108,8 @@ func Scan(root string) (Snapshot, error) {
 
 // scanBoard reads one board directory: its index for title and row order,
 // its task files for truth. Done/Total are local here; link aggregates.
-func scanBoard(dir, path string) (Board, error) {
-	index, err := os.ReadFile(filepath.Join(dir, tree.BoardFile))
+func scanBoard(f fsys.FS, dir, path string) (Board, error) {
+	index, err := f.ReadFile(filepath.Join(dir, names.BoardFile))
 	if err != nil {
 		return Board{}, err
 	}
@@ -116,7 +117,7 @@ func scanBoard(dir, path string) (Board, error) {
 	if title == "" {
 		title = filepath.Base(dir)
 	}
-	files, bad, err := readTasks(dir)
+	files, bad, err := readTasks(f, dir)
 	if err != nil {
 		return Board{}, err
 	}
@@ -143,8 +144,8 @@ func scanBoard(dir, path string) (Board, error) {
 // readTasks parses every task file directly in dir: files maps filename to
 // its truth Row; bad holds the raw content of files whose frontmatter does
 // not parse.
-func readTasks(dir string) (files map[string]Row, bad map[string][]byte, err error) {
-	entries, err := os.ReadDir(dir)
+func readTasks(f fsys.FS, dir string) (files map[string]Row, bad map[string][]byte, err error) {
+	entries, err := f.ReadDir(dir)
 	if err != nil {
 		return nil, nil, fmt.Errorf("scan %s: %w", dir, err)
 	}
@@ -155,7 +156,7 @@ func readTasks(dir string) (files map[string]Row, bad map[string][]byte, err err
 			continue
 		}
 		abs := filepath.Join(dir, e.Name())
-		content, err := os.ReadFile(abs)
+		content, err := f.ReadFile(abs)
 		if err != nil {
 			return nil, nil, err
 		}

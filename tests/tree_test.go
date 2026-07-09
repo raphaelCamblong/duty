@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/raphaelCamblong/duty/internal/fsys"
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
@@ -106,7 +107,7 @@ func TestFindRoot(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := buildTree(t, tt.entries...)
-			got, err := tree.FindRoot(filepath.Join(root, filepath.FromSlash(tt.cwd)))
+			got, err := tree.FindRoot(fsys.OS{}, filepath.Join(root, filepath.FromSlash(tt.cwd)))
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("FindRoot() = %q, want error", got)
@@ -168,7 +169,7 @@ func TestCurrentBoard(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := buildTree(t, tt.entries...)
-			got, err := tree.CurrentBoard(filepath.Join(root, filepath.FromSlash(tt.cwd)))
+			got, err := tree.CurrentBoard(fsys.OS{}, filepath.Join(root, filepath.FromSlash(tt.cwd)))
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("CurrentBoard() = %q, want error", got)
@@ -234,7 +235,7 @@ func TestBoards(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmp := buildTree(t, tt.entries...)
 			root := filepath.Join(tmp, "duty")
-			got, err := tree.Boards(root)
+			got, err := tree.Boards(fsys.OS{}, root)
 			if tt.wantErr != "" {
 				if err == nil {
 					t.Fatalf("Boards() = %v, want error containing %q", got, tt.wantErr)
@@ -312,7 +313,7 @@ func TestResolveTask(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmp := buildTree(t, entries...)
 			root := filepath.Join(tmp, "duty")
-			got, err := tree.ResolveTask(root, tt.id)
+			got, err := tree.ResolveTask(fsys.OS{}, root, tt.id)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("ResolveTask(%q) = %q, want error", tt.id, got)
@@ -420,7 +421,7 @@ func TestNextNN(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tmp := buildTree(t, tt.entries...)
-			got, err := tree.NextNN(filepath.Join(tmp, "duty"))
+			got, err := tree.NextNN(fsys.OS{}, filepath.Join(tmp, "duty"))
 			if err != nil {
 				t.Fatalf("NextNN() error = %v", err)
 			}

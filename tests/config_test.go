@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/raphaelCamblong/duty/internal/config"
+	"github.com/raphaelCamblong/duty/internal/fsys"
 )
 
 func TestLoad(t *testing.T) {
@@ -113,7 +114,7 @@ func TestLoad(t *testing.T) {
 				}
 			}
 
-			got, err := config.Load(userPath, projectPath)
+			got, err := config.Load(fsys.OS{}, userPath, projectPath)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("Load() error = nil, want an error")
@@ -136,7 +137,7 @@ func TestLoad(t *testing.T) {
 func TestLoadEmptyPaths(t *testing.T) {
 	t.Setenv("EDITOR", "nano")
 
-	got, err := config.Load("", "")
+	got, err := config.Load(fsys.OS{}, "", "")
 	if err != nil {
 		t.Fatalf("Load(\"\", \"\") error = %v", err)
 	}

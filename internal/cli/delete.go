@@ -4,11 +4,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/raphaelCamblong/duty/internal/board"
-	"github.com/raphaelCamblong/duty/internal/fsutil"
+	"github.com/raphaelCamblong/duty/internal/fsys"
+	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/task"
 )
 
@@ -17,10 +17,10 @@ const deleteUsage = "usage: duty delete <id> [--force]"
 // runDelete removes an open task: the file, its board row, and any section
 // the row's removal leaves empty. A done task is refused unless --force is
 // given — that's archive's job.
-func runDelete(cwd string, args []string) error {
-	fs := flag.NewFlagSet("delete", flag.ContinueOnError)
-	force := fs.Bool("force", false, "allow deleting a done task")
-	pos, err := positionals(fs, args, deleteUsage)
+func runDelete(f fsys.FS, cwd string, args []string) error {
+	set := flag.NewFlagSet("delete", flag.ContinueOnError)
+	force := set.Bool("force", false, "allow deleting a done task")
+	pos, err := positionals(set, args, deleteUsage)
 	if err != nil {
 		return err
 	}
@@ -29,11 +29,11 @@ func runDelete(cwd string, args []string) error {
 	}
 	id := pos[0]
 
-	taskPath, err := resolveOpen(cwd, id)
+	taskPath, err := resolveOpen(f, cwd, id)
 	if err != nil {
 		return err
 	}
-	content, err := os.ReadFile(taskPath)
+	content, err := f.ReadFile(taskPath)
 	if err != nil {
 		return err
 	}
@@ -45,8 +45,8 @@ func runDelete(cwd string, args []string) error {
 		return fmt.Errorf("%s is done: pass --force to delete, or use archive", id)
 	}
 
-	boardPath := filepath.Join(filepath.Dir(taskPath), boardFile)
-	index, err := os.ReadFile(boardPath)
+	boardPath := filepath.Join(filepath.Dir(taskPath), names.BoardFile)
+	index, err := f.ReadFile(boardPath)
 	if err != nil {
 		return err
 	}
@@ -56,8 +56,8 @@ func runDelete(cwd string, args []string) error {
 	}
 	pruned := board.PruneEmptySections(dropped)
 
-	if err := os.Remove(taskPath); err != nil {
+	if err := f.Remove(taskPath); err != nil {
 		return fmt.Errorf("delete %s: %w", id, err)
 	}
-	return fsutil.WriteAtomic(boardPath, pruned)
+	return f.WriteFile(boardPath, pruned)
 }

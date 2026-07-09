@@ -5,11 +5,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/raphaelCamblong/duty/internal/board"
+	"github.com/raphaelCamblong/duty/internal/fsys"
+	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/task"
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
@@ -27,11 +28,11 @@ type listRow struct {
 // runList prints every open task in the current board and every board below
 // it, read from the files (never the board index). --status filters by
 // status; --agent switches to stable TSV for scripts.
-func runList(cwd string, args []string, stdout io.Writer) error {
-	fs := flag.NewFlagSet("list", flag.ContinueOnError)
-	status := fs.String("status", "", "list only this status")
-	agent := fs.Bool("agent", false, "TSV output: id, board-path, status, title, drift")
-	pos, err := positionals(fs, args, listUsage)
+func runList(f fsys.FS, cwd string, args []string, stdout io.Writer) error {
+	set := flag.NewFlagSet("list", flag.ContinueOnError)
+	status := set.String("status", "", "list only this status")
+	agent := set.Bool("agent", false, "TSV output: id, board-path, status, title, drift")
+	pos, err := positionals(set, args, listUsage)
 	if err != nil {
 		return err
 	}
@@ -42,16 +43,16 @@ func runList(cwd string, args []string, stdout io.Writer) error {
 		return unknownStatusErr(*status)
 	}
 
-	boardDir, err := tree.CurrentBoard(cwd)
+	boardDir, err := tree.CurrentBoard(f, cwd)
 	if err != nil {
 		return err
 	}
-	boards, err := tree.Boards(boardDir)
+	boards, err := tree.Boards(f, boardDir)
 	if err != nil {
 		return err
 	}
 	for _, b := range boards {
-		rows, err := listBoardRows(boardDir, b)
+		rows, err := listBoardRows(f, boardDir, b)
 		if err != nil {
 			return err
 		}
@@ -72,7 +73,7 @@ func runList(cwd string, args []string, stdout io.Writer) error {
 // listBoardRows returns one listRow per task file directly in board b (its
 // sub-boards are separate entries in the caller's board list), tagged with
 // its path relative to root — the board list started from.
-func listBoardRows(root, b string) ([]listRow, error) {
+func listBoardRows(f fsys.FS, root, b string) ([]listRow, error) {
 	rel, err := filepath.Rel(root, b)
 	if err != nil {
 		return nil, fmt.Errorf("list %s: %w", b, err)
@@ -84,12 +85,12 @@ func listBoardRows(root, b string) ([]listRow, error) {
 		prefix = boardPath + "/"
 	}
 
-	indexPath := filepath.Join(b, boardFile)
-	index, err := os.ReadFile(indexPath)
+	indexPath := filepath.Join(b, names.BoardFile)
+	index, err := f.ReadFile(indexPath)
 	if err != nil {
 		return nil, err
 	}
-	entries, err := os.ReadDir(b)
+	entries, err := f.ReadDir(b)
 	if err != nil {
 		return nil, fmt.Errorf("list %s: %w", b, err)
 	}
@@ -100,7 +101,7 @@ func listBoardRows(root, b string) ([]listRow, error) {
 			continue
 		}
 		path := filepath.Join(b, e.Name())
-		content, err := os.ReadFile(path)
+		content, err := f.ReadFile(path)
 		if err != nil {
 			return nil, err
 		}

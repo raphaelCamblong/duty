@@ -14,6 +14,7 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/raphaelCamblong/duty/internal/config"
+	"github.com/raphaelCamblong/duty/internal/fsys"
 )
 
 // refreshMsg reports a debounced filesystem change from the watcher.
@@ -32,6 +33,7 @@ type editedMsg struct{ err error }
 // time, optionally a task detail on top. Update is a pure transition —
 // filesystem reads happen in commands, writes nowhere.
 type Model struct {
+	fsys    fsys.FS
 	root    string
 	editor  string
 	theme   string
@@ -62,12 +64,13 @@ type Model struct {
 
 // New scans the tree under root and returns a model opened on the root
 // board, styled per cfg.
-func New(root string, cfg config.Config) (Model, error) {
-	snap, err := Scan(root)
+func New(f fsys.FS, root string, cfg config.Config) (Model, error) {
+	snap, err := Scan(f, root)
 	if err != nil {
 		return Model{}, err
 	}
 	return Model{
+		fsys:      f,
 		root:      root,
 		editor:    cfg.Editor,
 		theme:     cfg.TUI.Theme,
@@ -130,13 +133,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.clampScroll(), nil
 	case refreshMsg:
 		if m.refresh == nil {
-			return m, scanCmd(m.root)
+			return m, scanCmd(m.fsys, m.root)
 		}
-		return m, tea.Batch(scanCmd(m.root), waitRefresh(m.refresh))
+		return m, tea.Batch(scanCmd(m.fsys, m.root), waitRefresh(m.refresh))
 	case snapMsg:
 		return m.withSnap(msg).clampScroll(), nil
 	case editedMsg:
-		return m, scanCmd(m.root)
+		return m, scanCmd(m.fsys, m.root)
 	case scrollTickMsg:
 		return m.stepScroll()
 	case tea.MouseMsg:
@@ -348,9 +351,9 @@ func waitRefresh(c <-chan struct{}) tea.Cmd {
 }
 
 // scanCmd re-reads the whole tree off the update loop.
-func scanCmd(root string) tea.Cmd {
+func scanCmd(f fsys.FS, root string) tea.Cmd {
 	return func() tea.Msg {
-		snap, err := Scan(root)
+		snap, err := Scan(f, root)
 		return snapMsg{snap: snap, err: err}
 	}
 }

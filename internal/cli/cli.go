@@ -1,8 +1,8 @@
 // Package cli dispatches duty's subcommands: one flag.FlagSet per command,
 // no framework. The sync invariant lives here — every mutating handler edits
 // the task file AND its board row in the same command — and every write goes
-// through fsutil.WriteAtomic. Commands are quiet on success; errors are one
-// lowercase line on stderr and a non-zero exit code.
+// through the injected fsys.FS (atomic). Commands are quiet on success; errors
+// are one lowercase line on stderr and a non-zero exit code.
 package cli
 
 import (
@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/raphaelCamblong/duty/internal/fsys"
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
@@ -23,18 +24,14 @@ func unknownStatusErr(status string) error {
 	return fmt.Errorf("unknown status %q: want todo, in-progress, done or blocked", status)
 }
 
-// boardFile is the index file every board directory holds. internal/tree
-// owns the filename convention; every other package references it from
-// there, never repeating the literal.
-const boardFile = tree.BoardFile
-
 // nameRE validates sub-board folder names and task filename slugs.
 var nameRE = regexp.MustCompile(`^[a-z0-9-]+$`)
 
-// Run executes one duty command. args is the command line without the program
-// name; stdin feeds commands that read input; stdout receives command output;
-// stderr receives one-line error messages. It returns the process exit code:
-// 0 on success, 2 on a missing or unknown command, 1 on any other error.
+// Run executes one duty command over the real filesystem. args is the command
+// line without the program name; stdin feeds commands that read input; stdout
+// receives command output; stderr receives one-line error messages. It returns
+// the process exit code: 0 on success, 2 on a missing or unknown command, 1 on
+// any other error.
 func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, "usage: duty <command> [args]")
@@ -45,29 +42,30 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
+	var f fsys.FS = fsys.OS{}
 	switch cmd := args[0]; cmd {
 	case "init":
-		err = runInit(cwd, args[1:])
+		err = runInit(f, cwd, args[1:])
 	case "create":
-		err = runCreate(cwd, args[1:], stdout)
+		err = runCreate(f, cwd, args[1:], stdout)
 	case "board":
-		err = runBoard(cwd, args[1:])
+		err = runBoard(f, cwd, args[1:])
 	case "status":
-		err = runStatus(cwd, args[1:])
+		err = runStatus(f, cwd, args[1:])
 	case "link":
-		err = runLink(cwd, args[1:])
+		err = runLink(f, cwd, args[1:])
 	case "report":
-		err = runReport(cwd, args[1:], stdin)
+		err = runReport(f, cwd, args[1:], stdin)
 	case "move":
-		err = runMove(cwd, args[1:])
+		err = runMove(f, cwd, args[1:])
 	case "archive":
-		err = runArchive(cwd, args[1:])
+		err = runArchive(f, cwd, args[1:])
 	case "delete":
-		err = runDelete(cwd, args[1:])
+		err = runDelete(f, cwd, args[1:])
 	case "list":
-		err = runList(cwd, args[1:], stdout)
+		err = runList(f, cwd, args[1:], stdout)
 	case "tui":
-		err = runTUI(cwd, args[1:])
+		err = runTUI(f, cwd, args[1:])
 	default:
 		fmt.Fprintf(stderr, "unknown command %q\n", cmd)
 		return 2
@@ -104,12 +102,12 @@ func positionals(fs *flag.FlagSet, args []string, usage string) ([]string, error
 // resolveOpen resolves id to its open task file anywhere in the tree
 // containing cwd. Archived ids fail with tree.ErrArchived in the chain:
 // archived tasks are read-only.
-func resolveOpen(cwd, id string) (string, error) {
-	root, err := tree.FindRoot(cwd)
+func resolveOpen(f fsys.FS, cwd, id string) (string, error) {
+	root, err := tree.FindRoot(f, cwd)
 	if err != nil {
 		return "", err
 	}
-	return tree.ResolveTask(root, id)
+	return tree.ResolveTask(f, root, id)
 }
 
 // stringList is a repeatable string flag; each occurrence may also carry

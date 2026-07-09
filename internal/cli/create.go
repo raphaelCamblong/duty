@@ -5,11 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 
 	"github.com/raphaelCamblong/duty/internal/board"
-	"github.com/raphaelCamblong/duty/internal/fsutil"
+	"github.com/raphaelCamblong/duty/internal/fsys"
+	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/task"
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
@@ -20,13 +20,13 @@ const createUsage = "usage: duty create <title> [--slug S] [--blocked-by ID]... 
 // --blocked-by id against the whole tree, numbers the task tree-wide, writes
 // the template file and appends the board row (status todo) in one command,
 // then prints the created path — the only output.
-func runCreate(cwd string, args []string, stdout io.Writer) error {
-	fs := flag.NewFlagSet("create", flag.ContinueOnError)
-	slug := fs.String("slug", "", "filename slug override")
-	section := fs.String("section", board.DefaultSection, "board section for the new row")
+func runCreate(f fsys.FS, cwd string, args []string, stdout io.Writer) error {
+	set := flag.NewFlagSet("create", flag.ContinueOnError)
+	slug := set.String("slug", "", "filename slug override")
+	section := set.String("section", board.DefaultSection, "board section for the new row")
 	var blockedBy stringList
-	fs.Var(&blockedBy, "blocked-by", "id of a task that must be done first (repeatable)")
-	pos, err := positionals(fs, args, createUsage)
+	set.Var(&blockedBy, "blocked-by", "id of a task that must be done first (repeatable)")
+	pos, err := positionals(set, args, createUsage)
 	if err != nil {
 		return err
 	}
@@ -38,20 +38,20 @@ func runCreate(cwd string, args []string, stdout io.Writer) error {
 		return fmt.Errorf("invalid slug %q: must match [a-z0-9-]+", *slug)
 	}
 
-	boardDir, err := tree.CurrentBoard(cwd)
+	boardDir, err := tree.CurrentBoard(f, cwd)
 	if err != nil {
 		return err
 	}
-	root, err := tree.FindRoot(cwd)
+	root, err := tree.FindRoot(f, cwd)
 	if err != nil {
 		return err
 	}
 	for _, dep := range blockedBy {
-		if _, err := tree.ResolveTask(root, dep); err != nil && !errors.Is(err, tree.ErrArchived) {
+		if _, err := tree.ResolveTask(f, root, dep); err != nil && !errors.Is(err, tree.ErrArchived) {
 			return fmt.Errorf("blocked-by: %w", err)
 		}
 	}
-	nn, err := tree.NextNN(root)
+	nn, err := tree.NextNN(f, root)
 	if err != nil {
 		return err
 	}
@@ -69,8 +69,8 @@ func runCreate(cwd string, args []string, stdout io.Writer) error {
 	}
 
 	filename := id + "-" + s + ".md"
-	boardPath := filepath.Join(boardDir, boardFile)
-	content, err := os.ReadFile(boardPath)
+	boardPath := filepath.Join(boardDir, names.BoardFile)
+	content, err := f.ReadFile(boardPath)
 	if err != nil {
 		return err
 	}
@@ -79,10 +79,10 @@ func runCreate(cwd string, args []string, stdout io.Writer) error {
 		return err
 	}
 	taskPath := filepath.Join(boardDir, filename)
-	if err := fsutil.WriteAtomic(taskPath, task.Render(id, title, blockedBy)); err != nil {
+	if err := f.WriteFile(taskPath, task.Render(id, title, blockedBy)); err != nil {
 		return err
 	}
-	if err := fsutil.WriteAtomic(boardPath, withRow); err != nil {
+	if err := f.WriteFile(boardPath, withRow); err != nil {
 		return err
 	}
 	fmt.Fprintln(stdout, taskPath)

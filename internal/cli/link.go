@@ -3,11 +3,11 @@ package cli
 import (
 	"errors"
 	"flag"
-	"os"
 	"path/filepath"
 
 	"github.com/raphaelCamblong/duty/internal/board"
-	"github.com/raphaelCamblong/duty/internal/fsutil"
+	"github.com/raphaelCamblong/duty/internal/fsys"
+	"github.com/raphaelCamblong/duty/internal/names"
 )
 
 const linkUsage = "usage: duty link <id> <section>"
@@ -16,9 +16,9 @@ const linkUsage = "usage: duty link <id> <section>"
 // above the footer when absent and pruning any section left empty. Sections
 // live only on the board — the task file carries none — so this is the one
 // mutation that touches a single file.
-func runLink(cwd string, args []string) error {
-	fs := flag.NewFlagSet("link", flag.ContinueOnError)
-	pos, err := positionals(fs, args, linkUsage)
+func runLink(f fsys.FS, cwd string, args []string) error {
+	set := flag.NewFlagSet("link", flag.ContinueOnError)
+	pos, err := positionals(set, args, linkUsage)
 	if err != nil {
 		return err
 	}
@@ -27,12 +27,12 @@ func runLink(cwd string, args []string) error {
 	}
 	id, section := pos[0], pos[1]
 
-	taskPath, err := resolveOpen(cwd, id)
+	taskPath, err := resolveOpen(f, cwd, id)
 	if err != nil {
 		return err
 	}
-	boardPath := filepath.Join(filepath.Dir(taskPath), boardFile)
-	index, err := os.ReadFile(boardPath)
+	boardPath := filepath.Join(filepath.Dir(taskPath), names.BoardFile)
+	index, err := f.ReadFile(boardPath)
 	if err != nil {
 		return err
 	}
@@ -40,5 +40,5 @@ func runLink(cwd string, args []string) error {
 	if err != nil {
 		return err
 	}
-	return fsutil.WriteAtomic(boardPath, board.PruneEmptySections(moved))
+	return f.WriteFile(boardPath, board.PruneEmptySections(moved))
 }
