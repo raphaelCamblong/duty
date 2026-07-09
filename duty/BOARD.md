@@ -23,5 +23,6 @@ Order top-to-bottom is the intended build order.
 | [T-14](T-14-comment-hygiene-and-final-cleanup.md) | Comment hygiene and final cleanup | done |
 | [T-15](T-15-tui-goal-preview-and-track-status-rollup.md) | TUI goal preview and track status rollups | done |
 | [T-16](T-16-templated-markdown-rendering.md) | Templated markdown rendering | done |
+| [T-17](T-17-tui-master-detail-layout-and-track-namin.md) | TUI master-detail layout and track naming | todo |
 
 Completed tasks (0) archived: [archive/](archive/).
