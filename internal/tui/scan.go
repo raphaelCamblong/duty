@@ -40,6 +40,8 @@ type Board struct {
 	// Done and Total count open tasks read from the files — done vs all —
 	// in this board and every board below it.
 	Done, Total int
+	// Counts tallies this subtree's open tasks by status (file truth).
+	Counts map[string]int
 }
 
 // Sub is one sub-board line of the parent's view, counts live from files.
@@ -52,6 +54,8 @@ type Sub struct {
 	Title string
 	// Done and Total count the sub-board's subtree like Board's.
 	Done, Total int
+	// Counts tallies the sub-board's subtree by status, like Board's.
+	Counts map[string]int
 }
 
 // Section is one "## <name>" group of task rows.
@@ -73,6 +77,9 @@ type Row struct {
 	File, Path string
 	// GatesDone and GatesTotal count ticked vs all gate checkboxes.
 	GatesDone, GatesTotal int
+	// Goal is the task's "## Goal" section text, read once during the scan
+	// so navigation previews it without reopening the file.
+	Goal string
 	// Drift is "" when file and board agree, else "board says <status>",
 	// "no row", "no file", or "unparsable file".
 	Drift string
@@ -132,11 +139,13 @@ func scanBoard(f fsys.FS, dir, path string) (Board, error) {
 		b.Sections = append(b.Sections, s)
 	}
 	appendOrphans(&b, files, used)
+	b.Counts = make(map[string]int)
 	for _, f := range files {
 		if f.Status == task.StatusDone {
 			b.Done++
 		}
 		b.Total++
+		b.Counts[f.Status]++
 	}
 	return b, nil
 }
@@ -170,6 +179,7 @@ func readTasks(f fsys.FS, dir string) (files map[string]Row, bad map[string][]by
 			ID: t.ID, Title: t.Title, Status: t.Status,
 			File: e.Name(), Path: abs,
 			GatesDone: gd, GatesTotal: gt,
+			Goal:    task.Section(content, "Goal"),
 			Content: content,
 		}
 	}
@@ -233,17 +243,23 @@ func appendOrphans(b *Board, files map[string]Row, used map[string]bool) {
 // Subs inherits.
 func link(snap Snapshot, paths []string) {
 	local := make(map[string][2]int, len(paths))
+	localCounts := make(map[string]map[string]int, len(paths))
 	for _, p := range paths {
 		b := snap.Boards[p]
 		local[p] = [2]int{b.Done, b.Total}
+		localCounts[p] = b.Counts
 	}
 	for _, p := range paths {
 		b := snap.Boards[p]
 		b.Done, b.Total = 0, 0
+		b.Counts = make(map[string]int)
 		for _, q := range paths {
 			if within(q, p) {
 				b.Done += local[q][0]
 				b.Total += local[q][1]
+				for st, n := range localCounts[q] {
+					b.Counts[st] += n
+				}
 			}
 		}
 		b.Parent = parentOf(snap, p)
@@ -257,7 +273,7 @@ func link(snap Snapshot, paths []string) {
 		p := snap.Boards[c.Parent]
 		p.Subs = append(p.Subs, Sub{
 			Path: q, Name: subName(c.Parent, q), Title: c.Title,
-			Done: c.Done, Total: c.Total,
+			Done: c.Done, Total: c.Total, Counts: c.Counts,
 		})
 		snap.Boards[c.Parent] = p
 	}

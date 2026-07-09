@@ -161,6 +161,29 @@ func CountGates(content []byte) (done, total int) {
 	return done, total
 }
 
+// Section returns the trimmed body of the first "## <heading>" section,
+// stopping at the next "## " heading; "" when the section is absent or empty.
+func Section(content []byte, heading string) string {
+	want := "## " + heading
+	inSection := false
+	var b strings.Builder
+	for _, raw := range strings.Split(string(content), "\n") {
+		line := strings.TrimRight(raw, " \t\r")
+		if inSection {
+			if strings.HasPrefix(line, "## ") {
+				break
+			}
+			b.WriteString(line)
+			b.WriteByte('\n')
+			continue
+		}
+		if line == want {
+			inSection = true
+		}
+	}
+	return strings.TrimSpace(b.String())
+}
+
 // Slugify derives a filename slug from a title: lowercased, every run of
 // non-alphanumeric characters collapsed to one hyphen, no leading or trailing
 // hyphen, at most 40 characters. Only ASCII letters and digits survive.

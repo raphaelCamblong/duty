@@ -228,10 +228,18 @@ TUI is the always-on drift surfacer.
 
 **Layout:**
 - **Board view** (one board at a time, breadcrumb of the board path on top): sub-boards
-  first, one line each with live counts computed from files (`backend/  3/7 done`); then
-  sections as headers, one line per task: id, title, colored status (`todo` dim,
-  `in-progress` yellow, `blocked` red, `done` green), gate progress `2/3`, drift badge
-  if any.
+  first, one line each carrying a **per-status rollup** of its subtree computed live from
+  files — compact counts, one per status in that status's color (matching the header bar),
+  zero-count statuses omitted (`backend/  1 in-progress · 2 todo · 4 done`); then sections
+  as headers, one line per task: id, title, colored status (`todo` dim, `in-progress`
+  yellow, `blocked` red, `done` green), gate progress `2/3`, drift badge if any.
+- **Board preview:** a bottom pane (dim rounded border) previews the current selection
+  with zero extra file I/O — the text comes from the same scan snapshot the rows do (each
+  task's `## Goal` is captured while the file is already open during the scan). A task row
+  previews its Goal (2–4 lines, word-wrapped, ellipsis-truncated, adaptive colors); a
+  selected sub-board row previews that board's per-status summary instead. The pane
+  auto-hides when the terminal is too short to keep enough task rows on screen, and
+  resizes with the window.
 - **Detail view** (on a task): the task file rendered as markdown, full screen,
   scrollable (`bubbles/viewport`).
 - **Board header:** breadcrumb + a one-line status-distribution bar (ntcharts) so a

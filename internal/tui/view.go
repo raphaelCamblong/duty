@@ -17,7 +17,18 @@ const (
 	statusColWidth = len(task.StatusInProgress)
 	gatesColWidth  = 5
 	minTitleWidth  = 8
+	// previewLines caps the selected task's Goal preview; extra text is
+	// ellipsis-truncated onto the last line.
+	previewLines = 4
+	// minBodyLines is the fewest task rows the preview pane will leave
+	// visible; below it the pane auto-hides on short terminals.
+	minBodyLines = 3
 )
+
+// rollupOrder is the status sequence for track rollups and previews: active
+// work first, then queued, blocked, and finished — matching the header bar's
+// colors.
+var rollupOrder = []string{task.StatusInProgress, task.StatusTodo, task.StatusBlocked, task.StatusDone}
 
 var (
 	colAccent = lipgloss.AdaptiveColor{Light: "62", Dark: "111"}
@@ -27,6 +38,7 @@ var (
 	colGreen  = lipgloss.AdaptiveColor{Light: "28", Dark: "78"}
 
 	headerBox    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colAccent).Padding(0, 1)
+	previewBox   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colDim).Padding(0, 1)
 	crumbStyle   = lipgloss.NewStyle().Bold(true).Foreground(colAccent)
 	accentStyle  = lipgloss.NewStyle().Foreground(colAccent)
 	sectionStyle = lipgloss.NewStyle().Bold(true).Foreground(colDim)
@@ -80,11 +92,13 @@ func (m Model) View() string {
 // hit-test so both agree on where every row sits.
 type boardGeom struct {
 	header, footer string
+	preview        string
 	lines          []string
 	lineItem       []int
 	selLine        int
 	headerH        int
 	footerH        int
+	previewH       int
 	visible        int
 	total          int
 	maxTop         int
@@ -105,7 +119,11 @@ func (m Model) geom() boardGeom {
 		headerH: lipgloss.Height(header), footerH: lipgloss.Height(footer),
 		total: len(lines),
 	}
-	g.visible = max(h-g.headerH-g.footerH, 1)
+	avail := h - g.headerH - g.footerH
+	if preview := m.preview(w); preview != "" && avail-lipgloss.Height(preview) >= minBodyLines {
+		g.preview, g.previewH = preview, lipgloss.Height(preview)
+	}
+	g.visible = max(avail-g.previewH, 1)
 	g.maxTop = max(g.total-g.visible, 0)
 	g.top = clamp(int(math.Round(m.scroll)), 0, g.maxTop)
 	return g
@@ -116,7 +134,12 @@ func (m Model) geom() boardGeom {
 func (m Model) boardView() string {
 	g := m.geom()
 	body := windowLines(g.lines, g.top, g.visible)
-	return lipgloss.JoinVertical(lipgloss.Left, g.header, strings.Join(body, "\n"), g.footer)
+	parts := []string{g.header, strings.Join(body, "\n")}
+	if g.preview != "" {
+		parts = append(parts, g.preview)
+	}
+	parts = append(parts, g.footer)
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
 // detailView lays out the task header, the glamour-rendered markdown in its
@@ -292,7 +315,8 @@ func windowLines(lines []string, top, visible int) []string {
 	return out
 }
 
-// subLine renders one sub-board: name, title, live counts.
+// subLine renders one sub-board: name, title, and a per-status rollup of its
+// subtree, each count in its status color, zero-count statuses omitted.
 func subLine(s Sub, nameW int, selected bool, w int) string {
 	title := s.Title
 	if selected {
@@ -301,8 +325,75 @@ func subLine(s Sub, nameW int, selected bool, w int) string {
 	line := cursorMark(selected) +
 		accentStyle.Render(pad(s.Name, nameW)) + "  " +
 		title + "  " +
-		dimStyle.Render(fmt.Sprintf("%d/%d done", s.Done, s.Total))
+		rollupOrEmpty(s.Counts)
 	return ansi.Truncate(line, w, "…")
+}
+
+// rollupOrEmpty renders the per-status rollup, or a dim "empty" when the
+// subtree holds no tasks.
+func rollupOrEmpty(counts map[string]int) string {
+	if r := statusRollup(counts); r != "" {
+		return r
+	}
+	return dimStyle.Render("empty")
+}
+
+// statusRollup renders per-status counts in rollupOrder, each colored with its
+// status color, zero counts omitted, joined by a dim middot; "" when empty.
+func statusRollup(counts map[string]int) string {
+	var parts []string
+	for _, st := range rollupOrder {
+		if n := counts[st]; n > 0 {
+			parts = append(parts, statusStyle(st).Render(fmt.Sprintf("%d %s", n, st)))
+		}
+	}
+	return strings.Join(parts, dimStyle.Render(" · "))
+}
+
+// preview builds the bottom pane for the current selection — a task's Goal or
+// a track's per-status summary, in a dim rounded box; "" when nothing is
+// selected (an empty board).
+func (m Model) preview(w int) string {
+	it, ok := m.selected()
+	if !ok {
+		return ""
+	}
+	inner := max(w-4, 1)
+	content := ""
+	if it.sub != nil {
+		content = trackPreview(*it.sub, inner)
+	} else {
+		content = goalPreview(it.row.Goal, inner)
+	}
+	return previewBox.Width(max(w-2, 1)).Render(content)
+}
+
+// goalPreview flattens and word-wraps a task's Goal to at most previewLines
+// dim lines, ellipsis-truncating the overflow; a task with no Goal reads
+// "(no goal)".
+func goalPreview(goal string, w int) string {
+	flat := strings.Join(strings.Fields(goal), " ")
+	if flat == "" {
+		return dimStyle.Render("(no goal)")
+	}
+	lines := strings.Split(ansi.Wordwrap(flat, w, ""), "\n")
+	for i := range lines {
+		lines[i] = ansi.Truncate(lines[i], w, "…")
+	}
+	if len(lines) > previewLines {
+		lines = lines[:previewLines]
+		last := len(lines) - 1
+		lines[last] = ansi.Truncate(lines[last], max(w-1, 1), "") + "…"
+	}
+	return dimStyle.Render(strings.Join(lines, "\n"))
+}
+
+// trackPreview summarizes a selected sub-board: its name and title, then a
+// total and the per-status rollup.
+func trackPreview(s Sub, w int) string {
+	head := accentStyle.Render(s.Name) + "  " + s.Title
+	summary := dimStyle.Render(fmt.Sprintf("%d total", s.Total)) + dimStyle.Render(" · ") + rollupOrEmpty(s.Counts)
+	return ansi.Truncate(head, w, "…") + "\n" + ansi.Truncate(summary, w, "…")
 }
 
 // rowLine renders one task: id, title, colored status, gate progress, drift

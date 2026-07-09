@@ -202,6 +202,114 @@ func TestScanViewModel(t *testing.T) {
 	})
 }
 
+const alphaGoal = "Ship the alpha milestone without regressions."
+
+// fourStatusTree builds a fixture exercising all four statuses with a Goal on
+// T-01: root T-01 (in-progress, goal filled) and T-02 (todo); a "backend"
+// sub-board with T-03 (done) and T-04 (blocked).
+func fourStatusTree(t *testing.T) string {
+	t.Helper()
+	root := initDuty(t)
+	mustDuty(t, root, "create", "Alpha task")
+	mustDuty(t, root, "create", "Beta task")
+	mustDuty(t, root, "board", "backend", "--title", "Backend")
+	mustDuty(t, filepath.Join(root, "backend"), "create", "Gamma task")
+	mustDuty(t, filepath.Join(root, "backend"), "create", "Delta task")
+	mustDuty(t, root, "status", "T-01", "in-progress")
+	mustDuty(t, root, "status", "T-03", "done")
+	mustDuty(t, root, "status", "T-04", "blocked")
+	writeGoal(t, filepath.Join(root, "T-01-alpha-task.md"), alphaGoal)
+	return root
+}
+
+// writeGoal fills the empty "## Goal" section of a task file with text.
+func writeGoal(t *testing.T, path, goal string) {
+	t.Helper()
+	content := strings.Replace(readText(t, path), "## Goal\n", "## Goal\n"+goal+"\n", 1)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write goal: %v", err)
+	}
+}
+
+// sameCounts reports whether two status→count maps agree on every status,
+// treating a missing key as zero.
+func sameCounts(got, want map[string]int) bool {
+	for _, st := range []string{"todo", "in-progress", "blocked", "done"} {
+		if got[st] != want[st] {
+			return false
+		}
+	}
+	return true
+}
+
+func TestGoalAndCountsInSnapshot(t *testing.T) {
+	root := fourStatusTree(t)
+	snap := mustScan(t, root)
+
+	t.Run("goal is extracted once during the scan", func(t *testing.T) {
+		r, ok := scanRow(snap, ".", "T-01")
+		if !ok {
+			t.Fatal("T-01 not in snapshot")
+		}
+		if r.Goal != alphaGoal {
+			t.Errorf("goal = %q, want %q", r.Goal, alphaGoal)
+		}
+		if r2, _ := scanRow(snap, ".", "T-02"); r2.Goal != "" {
+			t.Errorf("empty-goal task = %q, want \"\"", r2.Goal)
+		}
+	})
+
+	t.Run("per-status counts roll up the subtree", func(t *testing.T) {
+		b := snap.Boards["."]
+		wantRoot := map[string]int{"in-progress": 1, "todo": 1, "done": 1, "blocked": 1}
+		if !sameCounts(b.Counts, wantRoot) {
+			t.Errorf("root counts = %v, want %v", b.Counts, wantRoot)
+		}
+		sub := b.Subs[0]
+		wantSub := map[string]int{"done": 1, "blocked": 1}
+		if !sameCounts(sub.Counts, wantSub) {
+			t.Errorf("backend counts = %v, want %v", sub.Counts, wantSub)
+		}
+	})
+}
+
+func TestPreviewPaneAndRollups(t *testing.T) {
+	root := fourStatusTree(t)
+
+	t.Run("track row shows per-status rollup and a summary preview", func(t *testing.T) {
+		m := newTUIModelSize(t, root, 110, 30) // cursor 0: the backend sub-board
+		frame := m.View()
+		if !strings.Contains(frame, "1 blocked") || !strings.Contains(frame, "1 done") {
+			t.Errorf("sub-board rollup counts missing:\n%s", frame)
+		}
+		if strings.Contains(frame, "1/2 done") {
+			t.Errorf("old n/m done format still on the sub-board row:\n%s", frame)
+		}
+		if !strings.Contains(frame, "total") {
+			t.Errorf("track summary preview missing:\n%s", frame)
+		}
+		t.Logf("board view 110x30 (track selected):\n%s", frame)
+	})
+
+	t.Run("task row shows its Goal in the preview pane", func(t *testing.T) {
+		m := newTUIModelSize(t, root, 110, 30)
+		m, _ = press(t, m, "j") // cursor 1: T-01
+		frame := m.View()
+		if !strings.Contains(frame, "Ship the alpha milestone") {
+			t.Errorf("goal preview missing for T-01:\n%s", frame)
+		}
+		t.Logf("board view 110x30 (task selected):\n%s", frame)
+	})
+
+	t.Run("preview hides on a short terminal", func(t *testing.T) {
+		m := newTUIModelSize(t, root, 110, 8)
+		m, _ = press(t, m, "j") // select T-01
+		if frame := m.View(); strings.Contains(frame, "Ship the alpha milestone") {
+			t.Errorf("preview should auto-hide at a short height:\n%s", frame)
+		}
+	})
+}
+
 // newTUIModel builds a model on the fixture tree, sized 100×30.
 func newTUIModel(t *testing.T, root string) tui.Model {
 	t.Helper()
