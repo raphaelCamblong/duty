@@ -8,10 +8,10 @@ Order top-to-bottom is the intended build order.
 | Task | Title | Status |
 |------|-------|--------|
 | [T-01](T-01-bootstrap-module-fsutil-test-harness.md) | Bootstrap module, fsutil, test harness | done |
-| [T-02](T-02-task-file-domain-package.md) | Task file domain package | todo |
-| [T-03](T-03-board-file-domain-package.md) | Board file domain package | todo |
-| [T-04](T-04-tree-discovery-and-id-resolution.md) | Tree discovery and id resolution | todo |
-| [T-05](T-05-toml-config-loading.md) | TOML config loading | todo |
+| [T-02](T-02-task-file-domain-package.md) | Task file domain package | done |
+| [T-03](T-03-board-file-domain-package.md) | Board file domain package | done |
+| [T-04](T-04-tree-discovery-and-id-resolution.md) | Tree discovery and id resolution | done |
+| [T-05](T-05-toml-config-loading.md) | TOML config loading | done |
 | [T-06](T-06-cli-dispatch-init-create-board.md) | CLI dispatch, init, create, board | todo |
 | [T-07](T-07-cli-status-link-report-move.md) | CLI status, link, report, move | todo |
 | [T-08](T-08-cli-archive-delete-list-agent-output.md) | CLI archive, delete, list, agent output | todo |
