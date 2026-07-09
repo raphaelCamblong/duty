@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// scrollTickMsg advances the scroll spring one animation frame.
+// scrollTickMsg advances the preview scroll spring one animation frame.
 type scrollTickMsg struct{}
 
 const (
@@ -22,20 +22,15 @@ func scrollTickCmd() tea.Cmd {
 	return tea.Tick(time.Second/scrollFPS, func(time.Time) tea.Msg { return scrollTickMsg{} })
 }
 
-// handleMouse routes a mouse event: the detail viewport scrolls itself; on the
-// board the wheel spring-scrolls and a left press selects the row under the
-// pointer, a second press on the same row opening it.
+// handleMouse routes a mouse event: the wheel scrolls the hovered panel and
+// a left press selects the entry (left) or focuses the preview (right), a
+// second press on the same entry opening it.
 func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	if m.detailOpen {
-		var cmd tea.Cmd
-		m.detailVP, cmd = m.detailVP.Update(msg)
-		return m, cmd
-	}
 	switch msg.Button {
 	case tea.MouseButtonWheelUp:
-		return m.scrollBy(-wheelStep).startAnim()
+		return m.wheel(msg, -1)
 	case tea.MouseButtonWheelDown:
-		return m.scrollBy(wheelStep).startAnim()
+		return m.wheel(msg, 1)
 	}
 	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
 		return m.click(msg)
@@ -43,81 +38,68 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// scrollBy shifts the scroll target by delta lines, clamped to the content.
-func (m Model) scrollBy(delta int) Model {
-	m.scrollTarget = clamp(m.scrollTarget+delta, 0, m.geom().maxTop)
-	return m
+// wheel scrolls whichever panel the pointer hovers: the preview glides on
+// its spring, the list moves its selection.
+func (m Model) wheel(msg tea.MouseMsg, dir int) (tea.Model, tea.Cmd) {
+	if m.overPreview(msg) {
+		m.scrollTarget = clamp(m.scrollTarget+dir*wheelStep, 0, m.previewMax())
+		return m.startAnim()
+	}
+	return m.moveSelection(dir), nil
 }
 
-// click selects the row under the pointer; a second press on the same row
-// within doubleClick opens it (descend or detail).
+// overPreview reports whether a mouse event targets the preview: inside its
+// zone when both panels show, anywhere while it is the single panel.
+func (m Model) overPreview(msg tea.MouseMsg) bool {
+	if !m.wide() {
+		return m.focus == focusPreview
+	}
+	return m.zones.Get(zonePreview).InBounds(msg)
+}
+
+// click selects the entry under the pointer or focuses the clicked preview;
+// a second press on the same entry within doubleClick opens it.
 func (m Model) click(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	idx, ok := m.itemAt(msg.Y)
-	if !ok {
+	if m.wide() && m.zones.Get(zonePreview).InBounds(msg) {
+		m.focus = focusPreview
 		return m, nil
 	}
-	m.cursors[m.path] = idx
+	for i := range m.list.VisibleItems() {
+		if m.zones.Get(itemZone(i)).InBounds(msg) {
+			return m.clickItem(i), nil
+		}
+	}
+	return m, nil
+}
+
+// clickItem selects the visible entry at index; a double click opens it.
+func (m Model) clickItem(index int) Model {
+	m.focus = focusList
+	m.list.Select(index)
+	m = m.syncPreview(false)
 	now := time.Now()
-	if m.lastClick == idx && now.Sub(m.lastClickAt) < doubleClick {
+	if m.lastClick == index && now.Sub(m.lastClickAt) < doubleClick {
 		m.lastClick = -1
-		return m.open().startAnim()
+		return m.open()
 	}
-	m.lastClick, m.lastClickAt = idx, now
-	return m.ensureVisible().startAnim()
-}
-
-// itemAt maps a screen row to a selectable item index using the same layout
-// the view renders, returning false for the header, footer, blanks and
-// section labels.
-func (m Model) itemAt(y int) (int, bool) {
-	g := m.geom()
-	bodyY := y - g.headerH
-	if bodyY < 0 || bodyY >= g.visible {
-		return 0, false
-	}
-	li := g.top + bodyY
-	if li < 0 || li >= len(g.lineItem) {
-		return 0, false
-	}
-	if it := g.lineItem[li]; it >= 0 {
-		return it, true
-	}
-	return 0, false
-}
-
-// ensureVisible nudges the scroll target so the cursor's line stays within the
-// visible window.
-func (m Model) ensureVisible() Model {
-	g := m.geom()
-	t := m.scrollTarget
-	if g.selLine < t {
-		t = g.selLine
-	} else if g.selLine >= t+g.visible {
-		t = g.selLine - g.visible + 1
-	}
-	m.scrollTarget = clamp(t, 0, g.maxTop)
+	m.lastClick, m.lastClickAt = index, now
 	return m
 }
 
-// resetScroll snaps to the top on a board change, then keeps the remembered
-// cursor visible without animating across boards.
-func (m Model) resetScroll() Model {
-	m.scrollTarget = 0
-	m = m.ensureVisible()
-	m.scroll, m.scrollVel, m.animating = float64(m.scrollTarget), 0, false
-	return m
+// previewMax is the preview's highest top line.
+func (m Model) previewMax() int {
+	return max(m.preview.TotalLineCount()-m.preview.Height, 0)
 }
 
-// clampScroll re-bounds the scroll to the content after a resize or re-scan.
-func (m Model) clampScroll() Model {
-	g := m.geom()
-	m.scrollTarget = clamp(m.scrollTarget, 0, g.maxTop)
-	m.scroll = math.Min(math.Max(m.scroll, 0), float64(g.maxTop))
+// settleAt pins the preview spring at offset, stopping any animation.
+func (m Model) settleAt(offset int) Model {
+	m.scroll, m.scrollVel = float64(offset), 0
+	m.scrollTarget, m.animating = offset, false
 	return m
 }
 
 // startAnim begins the spring animation unless it is already running or the
-// view is already at rest at its target.
+// preview is already at rest at its target.
 func (m Model) startAnim() (tea.Model, tea.Cmd) {
 	if m.animating || m.settled() {
 		return m, nil
@@ -126,14 +108,16 @@ func (m Model) startAnim() (tea.Model, tea.Cmd) {
 	return m, scrollTickCmd()
 }
 
-// stepScroll advances the spring toward the target, snapping and stopping once
-// the motion has settled.
+// stepScroll advances the spring toward the target, moving the preview and
+// snapping once the motion has settled.
 func (m Model) stepScroll() (tea.Model, tea.Cmd) {
 	m.scroll, m.scrollVel = m.spring.Update(m.scroll, m.scrollVel, float64(m.scrollTarget))
 	if m.settled() {
-		m.scroll, m.scrollVel, m.animating = float64(m.scrollTarget), 0, false
+		m = m.settleAt(m.scrollTarget)
+		m.preview.SetYOffset(m.scrollTarget)
 		return m, nil
 	}
+	m.preview.SetYOffset(int(math.Round(m.scroll)))
 	return m, scrollTickCmd()
 }
 

@@ -2,7 +2,8 @@
 
 One file = one task, small enough for one worker (human or agent) in one sitting.
 [BOARD.md](BOARD.md) is the index: order top-to-bottom = build order. The task file is
-the truth; the board is a projection. Full spec: [../task-system-spec.md](../task-system-spec.md).
+the truth; the board is a projection. A track is a folder; its board defines its state
+(`duty track <name>` creates one). Full spec: [../task-system-spec.md](../task-system-spec.md).
 
 ## Task file
 

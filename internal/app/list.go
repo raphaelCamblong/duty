@@ -54,7 +54,7 @@ func (a App) List(cwd, status string) ([]Row, error) {
 }
 
 // boardRows returns one Row per task file directly in board b (its
-// sub-boards are separate entries in the caller's board list), tagged with
+// tracks are separate entries in the caller's board list), tagged with
 // its path relative to root — the board list started from.
 func (a App) boardRows(root, b string) ([]Row, error) {
 	rel, err := filepath.Rel(root, b)

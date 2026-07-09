@@ -177,9 +177,9 @@ func SetArchivedCount(content []byte, n int) ([]byte, error) {
 	return joinLines(lines), nil
 }
 
-// AddBoardBullet appends a sub-board bullet linking name/ to its board index,
+// AddBoardBullet appends a track bullet linking name/ to its board index,
 // with title, to the "## Boards" section, creating the section before the
-// first task section when absent. name is the sub-board folder, without slash.
+// first task section when absent. name is the track folder, without slash.
 func AddBoardBullet(content []byte, name, title string) ([]byte, error) {
 	bullet := "- [" + name + "/](" + name + "/" + names.BoardFile + ") — " + title
 	lines := splitLines(content)

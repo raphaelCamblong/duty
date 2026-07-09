@@ -82,7 +82,7 @@ func newRoot(cwd string, stdin io.Reader, stdout, stderr io.Writer) *cobra.Comma
 	root.AddCommand(
 		newInitCmd(a, cwd),
 		newCreateCmd(a, cwd, stdout),
-		newBoardCmd(a, cwd),
+		newTrackCmd(a, cwd),
 		newStatusCmd(a, cwd),
 		newLinkCmd(a, cwd),
 		newReportCmd(a, cwd, stdin),

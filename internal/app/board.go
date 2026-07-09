@@ -9,7 +9,7 @@ import (
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
-// CreateBoard creates the sub-board name/ under the board containing cwd: a
+// CreateBoard creates the track name/ under the board containing cwd: a
 // skeleton board index (H1 = title, default the name) plus archive/, and the
 // courtesy bullet appended to the parent's "## Boards" section. It refuses
 // when the folder already exists.

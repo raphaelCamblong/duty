@@ -23,7 +23,7 @@ type Snapshot struct {
 	Boards map[string]Board
 }
 
-// Board is one board's view model: identity, its direct sub-boards, and its
+// Board is one board's view model: identity, its direct tracks, and its
 // task rows grouped in board-index section order.
 type Board struct {
 	// Path is the board's slash path relative to the root, "." for the root.
@@ -32,7 +32,7 @@ type Board struct {
 	Title string
 	// Parent is the containing board's path, "" for the root.
 	Parent string
-	// Subs are the direct sub-boards, in lexical path order.
+	// Subs are the direct tracks, in lexical path order.
 	Subs []Sub
 	// Sections are the task sections in board-index order; task files with no
 	// board row are appended to the default section with a drift flag.
@@ -44,17 +44,17 @@ type Board struct {
 	Counts map[string]int
 }
 
-// Sub is one sub-board line of the parent's view, counts live from files.
+// Sub is one track line of the parent's view, counts live from files.
 type Sub struct {
-	// Path is the sub-board's path relative to the root.
+	// Path is the track's path relative to the root.
 	Path string
 	// Name is the folder path relative to the parent, trailing slash.
 	Name string
-	// Title is the sub-board's H1.
+	// Title is the track's H1.
 	Title string
-	// Done and Total count the sub-board's subtree like Board's.
+	// Done and Total count the track's subtree like Board's.
 	Done, Total int
-	// Counts tallies the sub-board's subtree by status, like Board's.
+	// Counts tallies the track's subtree by status, like Board's.
 	Counts map[string]int
 }
 
@@ -77,9 +77,6 @@ type Row struct {
 	File, Path string
 	// GatesDone and GatesTotal count ticked vs all gate checkboxes.
 	GatesDone, GatesTotal int
-	// Goal is the task's "## Goal" section text, read once during the scan
-	// so navigation previews it without reopening the file.
-	Goal string
 	// Drift is "" when file and board agree, else "board says <status>",
 	// "no row", "no file", or "unparsable file".
 	Drift string
@@ -179,7 +176,6 @@ func readTasks(f fsys.FS, dir string) (files map[string]Row, bad map[string][]by
 			ID: t.ID, Title: t.Title, Status: t.Status,
 			File: e.Name(), Path: abs,
 			GatesDone: gd, GatesTotal: gt,
-			Goal:    task.Section(content, "Goal"),
 			Content: content,
 		}
 	}
@@ -300,7 +296,7 @@ func parentOf(snap Snapshot, p string) string {
 	return "."
 }
 
-// subName renders a sub-board's display name: its path relative to the
+// subName renders a track's display name: its path relative to the
 // parent board, with a trailing slash.
 func subName(parent, q string) string {
 	if parent != "." {

@@ -18,7 +18,7 @@ Statuses: `todo | in-progress | done | blocked`.
 | Command | Behavior |
 |---|---|
 | `duty create <title>` | New task in the current board (`--slug`, `--blocked-by`, `--section`). |
-| `duty board <name>` | New sub-board under the current board (`--title`). |
+| `duty track <name>` | New track — a folder with its own board — under the current one (`--title`; `board` is an alias). |
 | `duty status <id> <status>` | Set status in the task file AND its board row. |
 | `duty link <id> <section>` | Move the board row under `## <section>`. |
 | `duty report <id>` | Append stdin under the task's `## Report`. |

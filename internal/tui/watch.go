@@ -16,7 +16,7 @@ const debounce = 100 * time.Millisecond
 
 // Watcher watches every directory under a tree root and coalesces bursts of
 // filesystem events into single notifications on C. Before each notification
-// it re-walks the tree to watch directories that appeared, so new sub-boards
+// it re-walks the tree to watch directories that appeared, so new tracks
 // refresh live too.
 type Watcher struct {
 	// C receives one value per debounced burst of events; it is closed when

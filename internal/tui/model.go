@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/harmonica"
@@ -29,9 +30,18 @@ type snapMsg struct {
 // editedMsg reports that the $EDITOR process finished.
 type editedMsg struct{ err error }
 
-// Model is the Bubble Tea model of the viewer: one board on screen at a
-// time, optionally a task detail on top. Update is a pure transition —
-// filesystem reads happen in commands, writes nowhere.
+// focusArea names the panel holding keyboard focus.
+type focusArea int
+
+const (
+	focusList focusArea = iota
+	focusPreview
+)
+
+// Model is the Bubble Tea model of the viewer: a master-detail workspace on
+// one track at a time — entries left, live preview right, subtree state on
+// top. Update is a pure transition — filesystem reads happen in commands,
+// writes nowhere.
 type Model struct {
 	fsys    fsys.FS
 	root    string
@@ -45,9 +55,15 @@ type Model struct {
 	snap    Snapshot
 	scanErr string
 	path    string
-	cursors map[string]int
+	memory  map[string]int
 	width   int
 	height  int
+
+	list       list.Model
+	focus      focusArea
+	preview    viewport.Model
+	previewKey string
+	mdCache    map[string]string
 
 	spring       harmonica.Spring
 	scroll       float64
@@ -56,20 +72,16 @@ type Model struct {
 	animating    bool
 	lastClick    int
 	lastClickAt  time.Time
-
-	detailOpen bool
-	detailRow  Row
-	detailVP   viewport.Model
 }
 
 // New scans the tree under root and returns a model opened on the root
-// board, styled per cfg.
+// track, styled per cfg.
 func New(f fsys.FS, root string, cfg config.Config) (Model, error) {
 	snap, err := Scan(f, root)
 	if err != nil {
 		return Model{}, err
 	}
-	return Model{
+	m := Model{
 		fsys:      f,
 		root:      root,
 		editor:    cfg.Editor,
@@ -79,10 +91,30 @@ func New(f fsys.FS, root string, cfg config.Config) (Model, error) {
 		zones:     zone.New(),
 		snap:      snap,
 		path:      ".",
-		cursors:   map[string]int{},
+		memory:    map[string]int{},
+		mdCache:   map[string]string{},
+		list:      newList(),
 		spring:    harmonica.NewSpring(harmonica.FPS(scrollFPS), scrollFreq, 1.0),
 		lastClick: -1,
-	}, nil
+	}
+	m, _ = m.rebuildList()
+	return m.fixSelection().layout(), nil
+}
+
+// newList returns the bare bubbles list the left panel wraps: no chrome of
+// its own (the model owns header, footer, and quitting), fuzzy filter on.
+func newList() list.Model {
+	l := list.New(nil, compactDelegate{}, 0, 0)
+	l.SetShowTitle(false)
+	l.SetShowStatusBar(false)
+	l.SetShowHelp(false)
+	l.SetFilteringEnabled(true)
+	l.SetStatusBarItemName("open task", "open tasks")
+	l.DisableQuitKeybindings()
+	l.FilterInput.Prompt = "/ "
+	l.FilterInput.PromptStyle = accentStyle
+	l.Styles.TitleBar = lipgloss.NewStyle()
+	return l
 }
 
 // Close releases the model's zone manager; call it once after the program
@@ -93,24 +125,54 @@ func (m Model) Close() {
 	}
 }
 
-// BoardPath returns the path of the board on screen ("." = root).
+// BoardPath returns the path of the track on screen ("." = root).
 func (m Model) BoardPath() string { return m.path }
 
-// ScrollTarget returns the board's spring target top line (for tests).
+// ScrollTarget returns the preview's spring target top line (for tests).
 func (m Model) ScrollTarget() int { return m.scrollTarget }
 
 // HelpExpanded reports whether the full "?" key grid is showing.
 func (m Model) HelpExpanded() bool { return m.help.ShowAll }
 
-// Cursor returns the selected item index in the board view.
-func (m Model) Cursor() int { return m.cursor() }
+// PreviewFocused reports whether the preview panel holds focus.
+func (m Model) PreviewFocused() bool { return m.focus == focusPreview }
 
-// DetailID returns the id of the task open in the detail view, "" if none.
+// Cursor returns the selected item index — sub-tracks then tasks, section
+// headers not counted.
+func (m Model) Cursor() int {
+	items := m.list.VisibleItems()
+	idx := m.list.Index()
+	c := 0
+	for i := 0; i < idx && i < len(items); i++ {
+		if e, ok := items[i].(entry); ok && e.selectable() {
+			c++
+		}
+	}
+	return c
+}
+
+// SelectedID returns the selection's task id or track path, "" for none.
+func (m Model) SelectedID() string {
+	e, ok := m.selectedEntry()
+	switch {
+	case !ok:
+		return ""
+	case e.track != nil:
+		return e.track.Path
+	default:
+		return e.task.ID
+	}
+}
+
+// DetailID returns the id of the task the focused preview shows, "" if none.
 func (m Model) DetailID() string {
-	if !m.detailOpen {
+	if m.focus != focusPreview {
 		return ""
 	}
-	return m.detailRow.ID
+	if e, ok := m.selectedEntry(); ok && e.task != nil {
+		return e.task.ID
+	}
+	return ""
 }
 
 // Init starts waiting on the watcher when one is attached.
@@ -127,17 +189,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.help.Width = msg.Width
-		if m.detailOpen {
-			m = m.openDetail(m.detailRow, m.detailVP.YOffset)
-		}
-		return m.clampScroll(), nil
+		m.mdCache = map[string]string{}
+		return m.layout(), nil
 	case refreshMsg:
 		if m.refresh == nil {
 			return m, scanCmd(m.fsys, m.root)
 		}
 		return m, tea.Batch(scanCmd(m.fsys, m.root), waitRefresh(m.refresh))
 	case snapMsg:
-		return m.withSnap(msg).clampScroll(), nil
+		return m.withSnap(msg)
 	case editedMsg:
 		return m, scanCmd(m.fsys, m.root)
 	case scrollTickMsg:
@@ -147,155 +207,202 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
-	return m, nil
+	return m.updateList(msg)
 }
 
-// handleKey routes a key press: quit anywhere, detail keys when a task is
-// open, board navigation otherwise.
+// handleKey routes a key press: everything to the filter input while one is
+// being typed, global keys next, then the focused panel.
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if key.Matches(msg, m.keys.Quit) {
-		return m, tea.Quit
+	if m.list.SettingFilter() {
+		if msg.Type == tea.KeyCtrlC {
+			return m, tea.Quit
+		}
+		return m.updateList(msg)
 	}
-	if m.detailOpen {
-		return m.detailKey(msg)
+	switch {
+	case key.Matches(msg, m.keys.Quit):
+		return m, tea.Quit
+	case key.Matches(msg, m.keys.Help):
+		m.help.ShowAll = !m.help.ShowAll
+		return m.layout(), nil
+	case key.Matches(msg, m.keys.Focus):
+		m.focus = otherFocus(m.focus)
+		return m, nil
+	case key.Matches(msg, m.keys.Filter):
+		m.focus = focusList
+		return m.updateList(msg)
+	case key.Matches(msg, m.keys.Edit):
+		if e, ok := m.selectedEntry(); ok && e.task != nil {
+			return m, editCmd(m.editor, e.task.Path)
+		}
+		return m, nil
+	case key.Matches(msg, m.keys.Back):
+		return m.back()
+	case key.Matches(msg, m.keys.Open):
+		if m.focus == focusList {
+			return m.open(), nil
+		}
+		return m, nil
+	}
+	if m.focus == focusPreview {
+		var cmd tea.Cmd
+		m.preview, cmd = m.preview.Update(msg)
+		return m.settleAt(m.preview.YOffset), cmd
 	}
 	switch {
 	case key.Matches(msg, m.keys.Down):
-		return m.moveCursor(1).startAnim()
+		return m.moveSelection(1), nil
 	case key.Matches(msg, m.keys.Up):
-		return m.moveCursor(-1).startAnim()
-	case key.Matches(msg, m.keys.Open):
-		return m.open().startAnim()
-	case key.Matches(msg, m.keys.Back):
-		return m.back().startAnim()
-	case key.Matches(msg, m.keys.Help):
-		m.help.ShowAll = !m.help.ShowAll
-		return m, nil
-	case key.Matches(msg, m.keys.Edit):
-		if it, ok := m.selected(); ok && it.row != nil {
-			return m, editCmd(m.editor, it.row.Path)
-		}
+		return m.moveSelection(-1), nil
 	}
-	return m, nil
+	return m.updateList(msg)
 }
 
-// detailKey handles keys with the detail open: back closes, edit opens the
-// task in $EDITOR, everything else scrolls the viewport.
-func (m Model) detailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keys.Back):
-		m.detailOpen = false
-		return m, nil
-	case key.Matches(msg, m.keys.Edit):
-		return m, editCmd(m.editor, m.detailRow.Path)
-	case key.Matches(msg, m.keys.Help):
-		m.help.ShowAll = !m.help.ShowAll
-		return m.openDetail(m.detailRow, m.detailVP.YOffset), nil
+// otherFocus toggles between the two panels.
+func otherFocus(f focusArea) focusArea {
+	if f == focusList {
+		return focusPreview
 	}
+	return focusList
+}
+
+// updateList forwards a message to the bubbles list, then re-aims the
+// selection and preview.
+func (m Model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	m.detailVP, cmd = m.detailVP.Update(msg)
-	return m, cmd
+	m.list, cmd = m.list.Update(msg)
+	return m.fixSelection().syncPreview(false), cmd
 }
 
-// item is one selectable line of the board view: a sub-board or a task row.
-type item struct {
-	sub *Sub
-	row *Row
+// selectedEntry returns the selected track or task entry; headers and an
+// empty list yield none.
+func (m Model) selectedEntry() (entry, bool) {
+	e, ok := m.list.SelectedItem().(entry)
+	if !ok || !e.selectable() {
+		return entry{}, false
+	}
+	return e, true
 }
 
-// items lists the board's selectable lines: sub-boards first, then every
-// section's rows in board order.
-func (m Model) items() []item {
-	b, ok := m.board()
-	if !ok {
-		return nil
-	}
-	var its []item
-	for i := range b.Subs {
-		its = append(its, item{sub: &b.Subs[i]})
-	}
-	for si := range b.Sections {
-		for ri := range b.Sections[si].Rows {
-			its = append(its, item{row: &b.Sections[si].Rows[ri]})
-		}
-	}
-	return its
-}
-
-// board returns the view model of the board on screen.
+// board returns the view model of the track on screen.
 func (m Model) board() (Board, bool) {
 	b, ok := m.snap.Boards[m.path]
 	return b, ok
 }
 
-// selected returns the item under the cursor.
-func (m Model) selected() (item, bool) {
-	its := m.items()
-	c := m.cursor()
-	if c >= len(its) {
-		return item{}, false
+// moveSelection shifts the selection by delta, skipping section headers and
+// stopping at the list's edges.
+func (m Model) moveSelection(delta int) Model {
+	items := m.list.VisibleItems()
+	for i := m.list.Index() + delta; i >= 0 && i < len(items); i += delta {
+		if e, ok := items[i].(entry); ok && e.selectable() {
+			m.list.Select(i)
+			break
+		}
 	}
-	return its[c], true
+	return m.syncPreview(false)
 }
 
-// cursor returns the current board's cursor, clamped to its items.
-func (m Model) cursor() int {
-	return clamp(m.cursors[m.path], 0, len(m.items())-1)
+// fixSelection nudges a selection off a section header onto the nearest
+// selectable entry below it, or above when the header is last.
+func (m Model) fixSelection() Model {
+	items := m.list.VisibleItems()
+	idx := m.list.Index()
+	if idx < 0 || idx >= len(items) {
+		return m
+	}
+	if e, ok := items[idx].(entry); ok && e.selectable() {
+		return m
+	}
+	for _, delta := range []int{1, -1} {
+		for i := idx + delta; i >= 0 && i < len(items); i += delta {
+			if e, ok := items[i].(entry); ok && e.selectable() {
+				m.list.Select(i)
+				return m
+			}
+		}
+	}
+	return m
 }
 
-// moveCursor shifts the current board's cursor by delta, clamped, and nudges
-// the scroll target to keep the selection on screen.
-func (m Model) moveCursor(delta int) Model {
-	m.cursors[m.path] = clamp(m.cursor()+delta, 0, len(m.items())-1)
-	return m.ensureVisible()
-}
-
-// open descends into the selected sub-board or opens the selected task's
-// detail; rows whose file is missing have nothing to open.
+// open descends into the selected track or focuses the preview on the
+// selected task.
 func (m Model) open() Model {
-	it, ok := m.selected()
+	e, ok := m.selectedEntry()
 	if !ok {
 		return m
 	}
-	if it.sub != nil {
-		m.path = it.sub.Path
-		return m.resetScroll()
+	if e.track != nil {
+		return m.enterBoard(e.track.Path)
 	}
-	if it.row.Path == "" {
-		return m
-	}
-	return m.openDetail(*it.row, 0)
+	m.focus = focusPreview
+	return m.syncPreview(false)
 }
 
-// back climbs to the parent board; a no-op on the root.
-func (m Model) back() Model {
+// back unfocuses the preview, clears an applied filter, or climbs to the
+// parent track; a no-op on an unfiltered root list.
+func (m Model) back() (tea.Model, tea.Cmd) {
+	if m.focus == focusPreview {
+		m.focus = focusList
+		return m, nil
+	}
+	if m.list.IsFiltered() {
+		m.list.ResetFilter()
+		return m.fixSelection().syncPreview(false), nil
+	}
 	if b, ok := m.board(); ok && b.Parent != "" {
-		m.path = b.Parent
-		return m.resetScroll()
+		return m.enterBoard(b.Parent), nil
+	}
+	return m, nil
+}
+
+// enterBoard switches the view to the track at path, remembering the old
+// selection and restoring any previous one on the target.
+func (m Model) enterBoard(path string) Model {
+	m.memory[m.path] = m.Cursor()
+	m.path = path
+	m.list.ResetFilter()
+	m, _ = m.rebuildList()
+	m = m.selectNth(m.memory[path]).fixSelection()
+	m.focus = focusList
+	return m.syncPreview(false)
+}
+
+// selectNth selects the nth selectable entry (headers not counted).
+func (m Model) selectNth(n int) Model {
+	c := 0
+	for i, it := range m.list.VisibleItems() {
+		e, ok := it.(entry)
+		if !ok || !e.selectable() {
+			continue
+		}
+		if c == n {
+			m.list.Select(i)
+			return m
+		}
+		c++
 	}
 	return m
 }
 
-// openDetail (re)builds the detail view for row at the current size,
-// restoring the scroll offset. The viewport is sized around the live header
-// and footer heights so toggling help never overlaps the markdown.
-func (m Model) openDetail(row Row, offset int) Model {
-	w, h := m.dims()
-	chrome := lipgloss.Height(m.detailHeader(row, w)) + 1 + lipgloss.Height(m.helpView(w))
-	vp := viewport.New(w, max(h-chrome, 1))
-	vp.SetContent(renderMarkdown(row.Content, w, m.theme))
-	vp.SetYOffset(offset)
-	m.detailOpen, m.detailRow, m.detailVP = true, row, vp
-	return m
+// rebuildList reloads the left panel's entries and column widths from the
+// snapshot; the returned command re-runs an active filter.
+func (m Model) rebuildList() (Model, tea.Cmd) {
+	b, ok := m.board()
+	m.list.SetDelegate(newDelegate(m.zones, b))
+	if !ok {
+		return m, m.list.SetItems(nil)
+	}
+	return m, m.list.SetItems(boardEntries(b))
 }
 
 // withSnap applies a re-scan: on error the last good snapshot stays on
-// screen with the error in the footer; on success the view — including an
-// open detail — re-renders from the new truth.
-func (m Model) withSnap(msg snapMsg) Model {
+// screen with the error in the footer; on success every panel re-renders
+// from the new truth, keeping selection, filter, and preview scroll.
+func (m Model) withSnap(msg snapMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
 		m.scanErr = msg.err.Error()
-		return m
+		return m, nil
 	}
 	m.scanErr = ""
 	m.snap = msg.snap
@@ -305,29 +412,9 @@ func (m Model) withSnap(msg snapMsg) Model {
 		}
 		m.path = textualParent(m.path)
 	}
-	if m.detailOpen {
-		row, ok := m.findRow(m.detailRow.ID)
-		if !ok {
-			m.detailOpen = false
-			return m
-		}
-		m = m.openDetail(row, m.detailVP.YOffset)
-	}
-	return m
-}
-
-// findRow locates a task by id anywhere in the snapshot.
-func (m Model) findRow(id string) (Row, bool) {
-	for _, b := range m.snap.Boards {
-		for _, s := range b.Sections {
-			for _, r := range s.Rows {
-				if r.ID == id && r.Path != "" {
-					return r, true
-				}
-			}
-		}
-	}
-	return Row{}, false
+	m.mdCache = map[string]string{}
+	m, cmd := m.rebuildList()
+	return m.fixSelection().syncPreview(true), cmd
 }
 
 // dims returns the terminal size, defaulting to 80×24 before the first
@@ -337,6 +424,12 @@ func (m Model) dims() (w, h int) {
 		return 80, 24
 	}
 	return m.width, m.height
+}
+
+// wide reports whether the terminal fits the two-panel layout.
+func (m Model) wide() bool {
+	w, _ := m.dims()
+	return w >= twoPanelMinWidth
 }
 
 // waitRefresh blocks on the watcher channel and turns one notification into

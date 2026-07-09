@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/raphaelCamblong/duty/internal/board"
 	"github.com/raphaelCamblong/duty/internal/config"
@@ -242,70 +244,178 @@ func sameCounts(got, want map[string]int) bool {
 	return true
 }
 
-func TestGoalAndCountsInSnapshot(t *testing.T) {
+func TestCountsRollUpInSnapshot(t *testing.T) {
 	root := fourStatusTree(t)
 	snap := mustScan(t, root)
+	b := snap.Boards["."]
+	wantRoot := map[string]int{"in-progress": 1, "todo": 1, "done": 1, "blocked": 1}
+	if !sameCounts(b.Counts, wantRoot) {
+		t.Errorf("root counts = %v, want %v", b.Counts, wantRoot)
+	}
+	sub := b.Subs[0]
+	wantSub := map[string]int{"done": 1, "blocked": 1}
+	if !sameCounts(sub.Counts, wantSub) {
+		t.Errorf("backend counts = %v, want %v", sub.Counts, wantSub)
+	}
+}
 
-	t.Run("goal is extracted once during the scan", func(t *testing.T) {
-		r, ok := scanRow(snap, ".", "T-01")
-		if !ok {
-			t.Fatal("T-01 not in snapshot")
+func TestMasterDetailLayout(t *testing.T) {
+	root := fourStatusTree(t)
+
+	t.Run("track selection previews its summary card", func(t *testing.T) {
+		m := newTUIModelSize(t, root, 120, 35) // cursor 0: the backend track
+		frame := m.View()
+		for _, want := range []string{"1 blocked", "1 done", "2 tasks · 1 done", "Sections", "█"} {
+			if !strings.Contains(frame, want) {
+				t.Errorf("frame missing %q:\n%s", want, frame)
+			}
 		}
-		if r.Goal != alphaGoal {
-			t.Errorf("goal = %q, want %q", r.Goal, alphaGoal)
-		}
-		if r2, _ := scanRow(snap, ".", "T-02"); r2.Goal != "" {
-			t.Errorf("empty-goal task = %q, want \"\"", r2.Goal)
-		}
+		t.Logf("board view 120x35 (track summary variant):\n%s", frame)
 	})
 
-	t.Run("per-status counts roll up the subtree", func(t *testing.T) {
-		b := snap.Boards["."]
-		wantRoot := map[string]int{"in-progress": 1, "todo": 1, "done": 1, "blocked": 1}
-		if !sameCounts(b.Counts, wantRoot) {
-			t.Errorf("root counts = %v, want %v", b.Counts, wantRoot)
+	t.Run("task selection previews its glamour-rendered body", func(t *testing.T) {
+		m := newTUIModelSize(t, root, 120, 35)
+		m, _ = press(t, m, "j") // cursor 1: T-01
+		frame := m.View()
+		if !strings.Contains(frame, "Ship the alpha milestone") {
+			t.Errorf("task body preview missing for T-01:\n%s", frame)
 		}
-		sub := b.Subs[0]
-		wantSub := map[string]int{"done": 1, "blocked": 1}
-		if !sameCounts(sub.Counts, wantSub) {
-			t.Errorf("backend counts = %v, want %v", sub.Counts, wantSub)
+		if !strings.Contains(frame, "in-progress") {
+			t.Errorf("preview title missing the task status:\n%s", frame)
+		}
+		t.Logf("board view 120x35 (task preview variant):\n%s", frame)
+	})
+
+	t.Run("narrow terminal falls back to a single panel", func(t *testing.T) {
+		m := newTUIModelSize(t, root, 70, 20)
+		frame := m.View()
+		if strings.Contains(frame, "Ship the alpha milestone") || strings.Contains(frame, "Sections") {
+			t.Errorf("70x20 still renders a preview panel:\n%s", frame)
+		}
+		if !strings.Contains(frame, "T-01") {
+			t.Errorf("70x20 list missing its rows:\n%s", frame)
+		}
+		t.Logf("board view 70x20 (single panel):\n%s", frame)
+
+		m, _ = press(t, m, "j")
+		m, _ = press(t, m, "enter")
+		full := m.View()
+		if !m.PreviewFocused() || !strings.Contains(full, "Ship the alpha milestone") {
+			t.Fatalf("enter did not open the full-screen preview:\n%s", full)
+		}
+		if strings.Contains(full, "T-02") {
+			t.Errorf("full-screen preview still shows the list:\n%s", full)
+		}
+		t.Logf("board view 70x20 (full-screen preview):\n%s", full)
+
+		m, _ = press(t, m, "esc")
+		if m.PreviewFocused() {
+			t.Error("esc did not close the full-screen preview")
 		}
 	})
 }
 
-func TestPreviewPaneAndRollups(t *testing.T) {
+// pump executes a command a keypress returned and feeds any filter-match
+// message back into the model, mirroring the program loop just enough for
+// the list's asynchronous fuzzy filter.
+func pump(t *testing.T, m tui.Model, cmd tea.Cmd) tui.Model {
+	t.Helper()
+	if cmd == nil {
+		return m
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			m = pump(t, m, c)
+		}
+		return m
+	}
+	if _, ok := msg.(list.FilterMatchesMsg); ok {
+		nm, _ := m.Update(msg)
+		return nm.(tui.Model)
+	}
+	return m
+}
+
+func TestPanelFocusAndFilter(t *testing.T) {
 	root := fourStatusTree(t)
 
-	t.Run("track row shows per-status rollup and a summary preview", func(t *testing.T) {
-		m := newTUIModelSize(t, root, 110, 30) // cursor 0: the backend sub-board
-		frame := m.View()
-		if !strings.Contains(frame, "1 blocked") || !strings.Contains(frame, "1 done") {
-			t.Errorf("sub-board rollup counts missing:\n%s", frame)
+	t.Run("tab toggles panel focus, esc unfocuses", func(t *testing.T) {
+		m := newTUIModelSize(t, root, 120, 35)
+		if m.PreviewFocused() {
+			t.Fatal("preview focused at start")
 		}
-		if strings.Contains(frame, "1/2 done") {
-			t.Errorf("old n/m done format still on the sub-board row:\n%s", frame)
+		m, _ = press(t, m, "tab")
+		if !m.PreviewFocused() {
+			t.Fatal("tab did not focus the preview")
 		}
-		if !strings.Contains(frame, "total") {
-			t.Errorf("track summary preview missing:\n%s", frame)
+		m, _ = press(t, m, "esc")
+		if m.PreviewFocused() || m.BoardPath() != "." {
+			t.Fatalf("esc: focused=%v path=%q, want list focus on .", m.PreviewFocused(), m.BoardPath())
 		}
-		t.Logf("board view 110x30 (track selected):\n%s", frame)
 	})
 
-	t.Run("task row shows its Goal in the preview pane", func(t *testing.T) {
-		m := newTUIModelSize(t, root, 110, 30)
-		m, _ = press(t, m, "j") // cursor 1: T-01
-		frame := m.View()
-		if !strings.Contains(frame, "Ship the alpha milestone") {
-			t.Errorf("goal preview missing for T-01:\n%s", frame)
+	t.Run("enter focuses the preview on a task, esc returns", func(t *testing.T) {
+		m := newTUIModelSize(t, root, 120, 35)
+		m, _ = press(t, m, "j")
+		m, _ = press(t, m, "enter")
+		if !m.PreviewFocused() || m.DetailID() != "T-01" {
+			t.Fatalf("enter: focused=%v detail=%q, want preview on T-01", m.PreviewFocused(), m.DetailID())
 		}
-		t.Logf("board view 110x30 (task selected):\n%s", frame)
+		m, _ = press(t, m, "esc")
+		if m.PreviewFocused() || m.Cursor() != 1 {
+			t.Errorf("esc: focused=%v cursor=%d, want list focus on 1", m.PreviewFocused(), m.Cursor())
+		}
 	})
 
-	t.Run("preview hides on a short terminal", func(t *testing.T) {
-		m := newTUIModelSize(t, root, 110, 8)
-		m, _ = press(t, m, "j") // select T-01
-		if frame := m.View(); strings.Contains(frame, "Ship the alpha milestone") {
-			t.Errorf("preview should auto-hide at a short height:\n%s", frame)
+	t.Run("filter narrows fuzzily and esc clears it", func(t *testing.T) {
+		m := newTUIModelSize(t, root, 120, 35)
+		var cmd tea.Cmd
+		for _, k := range []string{"/", "b", "e", "t", "a"} {
+			m, cmd = press(t, m, k)
+			m = pump(t, m, cmd)
+		}
+		m, _ = press(t, m, "enter")
+		if m.SelectedID() != "T-02" || m.Cursor() != 0 {
+			t.Fatalf("filtered selection = %q at %d, want T-02 at 0", m.SelectedID(), m.Cursor())
+		}
+		if frame := m.View(); strings.Contains(frame, "Alpha task") {
+			t.Errorf("filtered list still shows T-01:\n%s", frame)
+		}
+		m, _ = press(t, m, "esc")
+		if frame := m.View(); !strings.Contains(frame, "Alpha task") {
+			t.Errorf("esc did not clear the filter:\n%s", frame)
+		}
+		if m.BoardPath() != "." {
+			t.Errorf("esc while filtered climbed to %q", m.BoardPath())
+		}
+	})
+
+	t.Run("slash pulls focus back to the list", func(t *testing.T) {
+		m := newTUIModelSize(t, root, 120, 35)
+		m, _ = press(t, m, "tab")
+		m, _ = press(t, m, "/")
+		if m.PreviewFocused() {
+			t.Error("/ left the preview focused")
+		}
+	})
+
+	t.Run("descending resets filter and remembers selection per track", func(t *testing.T) {
+		m := newTUIModelSize(t, root, 120, 35)
+		m, _ = press(t, m, "j") // T-01
+		m, _ = press(t, m, "k") // back to backend/
+		m, _ = press(t, m, "enter")
+		if m.BoardPath() != "backend" || m.SelectedID() != "T-03" {
+			t.Fatalf("descend: path=%q selected=%q, want backend / T-03", m.BoardPath(), m.SelectedID())
+		}
+		m, _ = press(t, m, "j") // T-04
+		m, _ = press(t, m, "esc")
+		if m.BoardPath() != "." || m.SelectedID() != "backend" {
+			t.Fatalf("climb: path=%q selected=%q, want . / backend", m.BoardPath(), m.SelectedID())
+		}
+		m, _ = press(t, m, "enter")
+		if m.SelectedID() != "T-04" {
+			t.Errorf("re-descend selection = %q, want the remembered T-04", m.SelectedID())
 		}
 	})
 }
@@ -336,14 +446,37 @@ func clickAt(m tui.Model, x, y int) tui.Model {
 	return nm.(tui.Model)
 }
 
-// wheel sends one wheel-up or wheel-down event.
-func wheel(m tui.Model, down bool) tui.Model {
+// wheelAt sends one wheel event at screen cell (x, y).
+func wheelAt(m tui.Model, down bool, x, y int) tui.Model {
 	b := tea.MouseButtonWheelUp
 	if down {
 		b = tea.MouseButtonWheelDown
 	}
-	nm, _ := m.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: b})
+	nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: b})
 	return nm.(tui.Model)
+}
+
+// render draws one frame and gives the BubbleZone worker time to index the
+// hit-zones the frame registered, so the next mouse event lands.
+func render(t *testing.T, m tui.Model) string {
+	t.Helper()
+	frame := m.View()
+	time.Sleep(100 * time.Millisecond)
+	return frame
+}
+
+// lineWith returns the screen row of the first frame line showing s within
+// the left panel (its first maxX columns), so right-panel echoes don't match.
+func lineWith(t *testing.T, frame, s string, maxX int) int {
+	t.Helper()
+	for i, l := range strings.Split(frame, "\n") {
+		plain := ansi.Strip(l)
+		if at := strings.Index(plain, s); at >= 0 && ansi.StringWidth(plain[:at]) < maxX {
+			return i
+		}
+	}
+	t.Fatalf("frame has no line containing %q before column %d:\n%s", s, maxX, frame)
+	return -1
 }
 
 // press sends one key to the model. Board items on the fixture root:
@@ -356,6 +489,8 @@ func press(t *testing.T, m tui.Model, k string) (tui.Model, tea.Cmd) {
 		msg = tea.KeyMsg{Type: tea.KeyEnter}
 	case "esc":
 		msg = tea.KeyMsg{Type: tea.KeyEsc}
+	case "tab":
+		msg = tea.KeyMsg{Type: tea.KeyTab}
 	default:
 		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
 	}
@@ -459,66 +594,91 @@ func TestModelTransitions(t *testing.T) {
 }
 
 func TestMouseTransitions(t *testing.T) {
-	root := tuiTree(t)
+	root := fourStatusTree(t)
 
 	t.Run("click selects the row under the pointer", func(t *testing.T) {
 		m := newTUIModel(t, root)
-		m = clickAt(m, 4, 7) // T-01 row
+		frame := render(t, m)
+		m = clickAt(m, 6, lineWith(t, frame, "T-01", 38))
 		if m.Cursor() != 1 || m.DetailID() != "" {
 			t.Fatalf("click T-01: cursor=%d detail=%q, want 1 / no detail", m.Cursor(), m.DetailID())
 		}
-		m = clickAt(m, 4, 8) // T-02 row
+		frame = render(t, m)
+		m = clickAt(m, 6, lineWith(t, frame, "T-02", 38))
 		if m.Cursor() != 2 {
 			t.Errorf("click T-02: cursor=%d, want 2", m.Cursor())
 		}
 	})
 
-	t.Run("double-click a task opens its detail", func(t *testing.T) {
+	t.Run("double-click a task focuses its preview", func(t *testing.T) {
 		m := newTUIModel(t, root)
-		m = clickAt(m, 4, 7)
-		m = clickAt(m, 4, 7)
+		y := lineWith(t, render(t, m), "T-01", 38)
+		m = clickAt(m, 6, y)
+		m = clickAt(m, 6, y)
 		if m.DetailID() != "T-01" || m.BoardPath() != "." {
 			t.Fatalf("double-click T-01: detail=%q path=%q, want T-01 on .", m.DetailID(), m.BoardPath())
 		}
 	})
 
-	t.Run("double-click a sub-board descends", func(t *testing.T) {
+	t.Run("double-click a track descends", func(t *testing.T) {
 		m := newTUIModel(t, root)
-		m = clickAt(m, 4, 4) // backend row
+		y := lineWith(t, render(t, m), "backend/", 38)
+		m = clickAt(m, 6, y)
 		if m.Cursor() != 0 {
 			t.Fatalf("click backend: cursor=%d, want 0", m.Cursor())
 		}
-		m = clickAt(m, 4, 4)
+		m = clickAt(m, 6, y)
 		if m.BoardPath() != "backend" {
 			t.Errorf("double-click backend: path=%q, want backend", m.BoardPath())
 		}
 	})
 
-	t.Run("a click above the rows changes nothing", func(t *testing.T) {
+	t.Run("click on the right panel focuses the preview", func(t *testing.T) {
+		m := newTUIModel(t, root) // 100 wide: left panel ends at column 38
+		render(t, m)
+		m = clickAt(m, 80, 10)
+		if !m.PreviewFocused() {
+			t.Error("preview click did not focus it")
+		}
+	})
+
+	t.Run("a click on the header changes nothing", func(t *testing.T) {
 		m := newTUIModel(t, root)
-		m = clickAt(m, 4, 0) // inside the header box
-		if m.Cursor() != 0 || m.DetailID() != "" {
+		render(t, m)
+		m = clickAt(m, 6, 1)
+		if m.Cursor() != 0 || m.DetailID() != "" || m.PreviewFocused() {
 			t.Errorf("header click: cursor=%d detail=%q, want 0 / none", m.Cursor(), m.DetailID())
 		}
 	})
 
-	t.Run("wheel moves the scroll target and clamps to content", func(t *testing.T) {
-		m := newTUIModelSize(t, root, 100, 7) // one visible body line: content overflows
+	t.Run("wheel over the preview springs its scroll and clamps", func(t *testing.T) {
+		m := newTUIModelSize(t, root, 120, 16) // shallow preview: the body overflows
+		m, _ = press(t, m, "j")                // select T-01, preview shows its body
+		render(t, m)
 		if m.ScrollTarget() != 0 {
 			t.Fatalf("initial scroll target = %d, want 0", m.ScrollTarget())
 		}
-		m = wheel(m, true)
+		m = wheelAt(m, true, 100, 8)
 		if m.ScrollTarget() != 3 {
 			t.Fatalf("one wheel down: target = %d, want 3", m.ScrollTarget())
 		}
-		m = wheel(m, true)
-		if m.ScrollTarget() != 4 {
-			t.Fatalf("two wheel down: target = %d, want 4 (clamped)", m.ScrollTarget())
-		}
-		m = wheel(m, false)
-		m = wheel(m, false)
+		m = wheelAt(m, false, 100, 8)
+		m = wheelAt(m, false, 100, 8)
 		if m.ScrollTarget() != 0 {
-			t.Errorf("two wheel up: target = %d, want 0", m.ScrollTarget())
+			t.Errorf("two wheel up: target = %d, want 0 (clamped)", m.ScrollTarget())
+		}
+	})
+
+	t.Run("wheel over the list moves the selection", func(t *testing.T) {
+		m := newTUIModel(t, root)
+		render(t, m)
+		m = wheelAt(m, true, 10, 8)
+		if m.Cursor() != 1 {
+			t.Fatalf("wheel down: cursor = %d, want 1", m.Cursor())
+		}
+		m = wheelAt(m, false, 10, 8)
+		if m.Cursor() != 0 {
+			t.Errorf("wheel up: cursor = %d, want 0", m.Cursor())
 		}
 	})
 }

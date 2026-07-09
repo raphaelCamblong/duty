@@ -33,7 +33,7 @@ func (a App) Archive(cwd string) error {
 }
 
 // archiveBoard archives every done task filed directly in b (not in a
-// sub-board) into b's own archive/ directory.
+// track) into b's own archive/ directory.
 func (a App) archiveBoard(b string) error {
 	done, err := a.doneTasks(b)
 	if err != nil {

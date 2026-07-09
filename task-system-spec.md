@@ -10,7 +10,7 @@ the TUI watches.
 - **One file = one task.** A task is a markdown file small enough to hand to one worker
   (human or agent) for one sitting. Plain text, greppable, diffable, no database.
 - **Boards nest by convention, not registration.** Any directory containing a `BOARD.md`
-  is a board; a subdirectory with its own `BOARD.md` is a sub-board, recursively. Tooling
+  is a board; a subdirectory with its own `BOARD.md` is a track, recursively. Tooling
   discovers the tree by scanning — the filesystem is the registry, so structure can't drift.
 - **The task file is the source of truth; the board is a projection.** `BOARD.md` exists
   for ordering and grouping, but when they disagree, the file wins — and the tooling
@@ -36,16 +36,16 @@ duty/
   BOARD.md                 — this board's index: one row per open task
   T-NN-<slug>.md           — one open task each
   archive/                 — this board's completed tasks, moved here verbatim
-  backend/                 — a sub-board: same shape, all the way down
+  backend/                 — a track: same shape, all the way down
     BOARD.md
     T-NN-<slug>.md
     archive/
 ```
 
 Every board is self-contained: its own tasks, its own `archive/`. The tree is discovered
-by walking directories for `BOARD.md` files — no manifest, no registration. There are
-**no tracks**: the grouping a track prefix used to carry lives in the folder structure —
-one area of work = one sub-board.
+by walking directories for `BOARD.md` files — no manifest, no registration. **A track is
+a folder; its board defines its state.** The grouping a task-prefix used to carry lives
+in the folder structure — one area of work = one track.
 
 The binary is `duty` (single Go module, `package main`). The **current board** is the
 nearest ancestor of cwd containing a `BOARD.md` (git-style walk-up; from outside the
@@ -127,18 +127,18 @@ Order top-to-bottom is the intended build order.
 Completed tasks (12) archived: [archive/](archive/).
 ```
 
-- The H1 is the board's **title** (root default `Board`; sub-boards get theirs from
-  `duty board`). It's the truth for the TUI breadcrumb and sub-board rows; the parent's
+- The H1 is the board's **title** (root default `Board`; tracks get theirs from
+  `duty track`). It's the truth for the TUI breadcrumb and track rows; the parent's
   `## Boards` bullet text is cosmetic.
 - The Task cell is a link: text = bare id, href = the filename. Row lookup keys on the
   `(filename)` substring — unambiguous and section-agnostic.
 - The board stays **3 columns**. Status is duplicated here (the one denormalization, kept
   honest by the sync invariant); everything else — `blocked-by`, gate progress — is read
   from the files by whoever needs it. No column creep.
-- **`## Boards`** lists sub-boards, one bullet each (`- [name/](name/BOARD.md) — Title`).
-  It exists purely for humans browsing the markdown: `duty board` appends the bullet as a
-  courtesy, but tooling **never reads it** — sub-board discovery is by scan, so a stale
-  bullet is cosmetic, never a correctness problem. Omitted when there are no sub-boards.
+- **`## Boards`** lists tracks, one bullet each (`- [name/](name/BOARD.md) — Title`).
+  It exists purely for humans browsing the markdown: `duty track` appends the bullet as a
+  courtesy, but tooling **never reads it** — track discovery is by scan, so a stale
+  bullet is cosmetic, never a correctness problem. Omitted when there are no tracks.
 - **Sections** are `## <Name>` headers, each followed by its own table. `## Open tasks`
   is the default and always exists; other sections are created on demand and **pruned
   automatically** when their last row leaves (empty sections are noise).
@@ -168,14 +168,14 @@ one shot). Exit codes: `0` ok, `≠0` error with a one-line stderr message.
 |---|---|
 | `duty init [title]` | Bootstrap: create `duty/` in cwd with skeleton `BOARD.md` (H1 = title, default `Board`), `README.md`, `archive/`. Refuse if already inside a tree. |
 | `duty create <title> [--slug S] [--blocked-by ID…] [--section NAME]` | Create in the **current board**. Validate that every `--blocked-by` id exists (anywhere in the tree). Next NN scans the whole tree. Write the template file (frontmatter + section skeleton). Append the board row (`todo`) to the section's table — default `Open tasks`, section created if absent. Print the created path. |
-| `duty board <name> [--title T]` | Create sub-board `<name>/` (validated `[a-z0-9-]+`) under the current board: skeleton `BOARD.md` (H1 = title, default: the name) + `archive/`. Append its bullet to the parent's `## Boards` section (created if absent). Refuse if the folder already exists. |
+| `duty track <name> [--title T]` | Create track `<name>/` (validated `[a-z0-9-]+`) under the current board: skeleton `BOARD.md` (H1 = title, default: the name) + `archive/`. Append its bullet to the parent's `## Boards` section (created if absent). Refuse if the folder already exists. `board` is a working alias. |
 | `duty status <id> <status>` | Rewrite the frontmatter `status:` line + the row's status cell. Reject unknown statuses. |
 | `duty link <id> <section>` | Move the row under `## <section>` (created if absent, inserted above the footer); prune any section left empty. |
 | `duty move <id> <board-path>` | Move a task to another board. `board-path` is relative to the tree root (`.` = root board). Rename the file into the target folder (same filename — ids don't encode boards), drop the source row (prune), append to the target's `Open tasks` (or `--section`), status preserved. |
 | `duty report <id>` | Append stdin under `## Report` (heading created once, content accumulates). Refuse empty stdin. |
 | `duty archive` | For every open task with `status: done`, in the current board and every board below it: `os.Rename` → its own board's `archive/`, drop its row, prune empty sections, rewrite that board's footer count. Idempotent; "nothing to archive" is a clean no-op. |
 | `duty delete <id> [--force]` | Refuse on `done` without `--force` (that's `archive`'s job). Remove the file, drop the row, prune. |
-| `duty list [--status S]` | Recursive from the current board. One line per open task **from the files**: `id  status  title`, prefixed with the sub-board path when not local (`backend/ T-12 …`). If the board row's status disagrees (or the row is missing), append a `⚠ board says …` drift flag. |
+| `duty list [--status S]` | Recursive from the current board. One line per open task **from the files**: `id  status  title`, prefixed with the track path when not local (`backend/ T-12 …`). If the board row's status disagrees (or the row is missing), append a `⚠ board says …` drift flag. |
 | `duty tui` | Launch the live board viewer (§8). |
 
 **Agent output.** Reading commands accept `--agent` (long-only, no shorthand): stable,
@@ -204,7 +204,7 @@ TOML, read-only, two locations merged over built-in defaults:
    tree root explicitly (the walk-up otherwise stops at the topmost `BOARD.md`).
 
 Project overrides user overrides defaults. Missing files are fine — everything works
-with zero config. Only the root `duty.toml` is read; one inside a sub-board is an error
+with zero config. Only the root `duty.toml` is read; one inside a track is an error
 (it would declare a second root).
 
 ```toml
@@ -226,33 +226,37 @@ row order; parse every task file's frontmatter for status/title/blocked-by and c
 gate checkboxes. Files win; a board/file mismatch renders as a `⚠` badge on the row — the
 TUI is the always-on drift surfacer.
 
-**Layout:**
-- **Board view** (one board at a time, breadcrumb of the board path on top): sub-boards
-  first, one line each carrying a **per-status rollup** of its subtree computed live from
-  files — compact counts, one per status in that status's color (matching the header bar),
-  zero-count statuses omitted (`backend/  1 in-progress · 2 todo · 4 done`); then sections
-  as headers, one line per task: id, title, colored status (`todo` dim, `in-progress`
-  yellow, `blocked` red, `done` green), gate progress `2/3`, drift badge if any.
-- **Board preview:** a bottom pane (dim rounded border) previews the current selection
-  with zero extra file I/O — the text comes from the same scan snapshot the rows do (each
-  task's `## Goal` is captured while the file is already open during the scan). A task row
-  previews its Goal (2–4 lines, word-wrapped, ellipsis-truncated, adaptive colors); a
-  selected sub-board row previews that board's per-status summary instead. The pane
-  auto-hides when the terminal is too short to keep enough task rows on screen, and
-  resizes with the window.
-- **Detail view** (on a task): the task file rendered as markdown, full screen,
-  scrollable (`bubbles/viewport`).
-- **Board header:** breadcrumb + a one-line status-distribution bar (ntcharts) so a
-  board's health reads at a glance. Breadcrumb and sub-board rows show each board's H1
-  title (§4), never the folder name alone.
+**Layout — a master-detail workspace** (lipgloss layout, adaptive colors everywhere):
+- **Header:** breadcrumb of the track path — each board's H1 title (§4), never the
+  folder name alone — plus the current track's **subtree** state: per-status counts,
+  one per status in that status's color, and a one-line status-distribution bar
+  (ntcharts), so a track's health reads at a glance.
+- **Left panel** (~38% of the width, min 30 cols): a `bubbles/list` with a custom
+  compact delegate. Sub-tracks first, one line each carrying a **per-status rollup**
+  of its subtree computed live from files — compact counts in status colors, zero-count
+  statuses omitted (`backend/  1 in-progress · 2 todo · 4 done`); then tasks under
+  their section headers, one line each: id, title, colored status (`todo` dim,
+  `in-progress` yellow, `blocked` red, `done` green), gate progress `2/3`, drift badge
+  if any. The list's built-in fuzzy filter opens on `/`. The selection drives the
+  preview.
+- **Right panel:** a live preview of the selection with zero extra file I/O — the
+  content comes from the same scan snapshot the rows do. A task previews as its file
+  rendered by glamour in a `bubbles/viewport`, rendered lazily on selection change and
+  cached until the next re-scan; a track previews as a summary card: title, per-status
+  counts, distribution bar, its sections with row counts, and its subtree drift count.
+- **Footer:** key-hint bar (`bubbles/help`; `?` toggles the full grid).
+- **Responsive:** below ~80 columns the view falls back to a single panel — the list
+  alone, with `enter` opening the preview full-screen. Resizing re-flows gracefully.
 
-**Keys:** `j/k` move, `enter` open (descend into a sub-board / open a task's detail),
-`esc` back (up one board / close detail), `e` open the selected task in `$EDITOR`
-(suspend TUI, resume on exit), `?` key-hint footer (`bubbles/help`), `q` quit.
+**Keys:** `j/k` move, `enter` open (descend into a track / focus the preview on a
+task), `esc` back (unfocus the preview / clear the filter / up one track), `tab`
+toggle panel focus, `/` filter, `e` open the selected task in `$EDITOR` (suspend TUI,
+resume on exit), `?` key-hint footer, `q` quit.
 
-**Mouse:** rows are BubbleZone hit-zones — click selects, double-click opens, wheel
-scrolls. Scrolling is spring-smoothed with Harmonica; motion stays subtle, never slower
-than the keyboard.
+**Mouse:** panels and rows are BubbleZone hit-zones — a click selects a row (left
+panel) or focuses the preview (right panel), a double-click opens/descends, and the
+wheel scrolls the hovered panel. Preview scrolling is spring-smoothed with Harmonica;
+motion stays subtle, never slower than the keyboard.
 
 **Live refresh:** watch every directory in the tree with fsnotify. On any event, debounce
 ~100 ms, then **re-scan everything** — the tree is dozens of small files, so a full
@@ -261,7 +265,7 @@ command in another terminal updates the view within a blink; no polling, no IPC.
 (Folder-watching is the right idea: it's the standard mechanism, and re-scan-on-event
 keeps the TUI stateless.) fsnotify watches are per-directory, not recursive: add one per
 directory on the initial walk, and re-walk to pick up watches when a directory event
-arrives (a new sub-board appears live).
+arrives (a new track appears live).
 
 **Read-only by design:** no status-cycling keybindings, no in-TUI forms. `$EDITOR` +
 the CLI already cover every mutation, and the watcher makes them appear instantly.
@@ -282,8 +286,9 @@ Add TUI mutations only if that round-trip proves too slow in practice.
   frontmatter robustly (lists!), `fsnotify/fsnotify` (watcher), and the Charm stack for the TUI — one
   ecosystem, not six separate deps to vet:
   - `bubbletea` — the TUI runtime (Elm-style update loop).
-  - `bubbles` — stock components: `viewport` (detail scroll), `help` (key hints). Never
-    hand-roll a component bubbles already ships.
+  - `bubbles` — stock components: `list` (left panel, fuzzy filter), `viewport`
+    (preview scroll), `help` (key hints). Never hand-roll a component bubbles already
+    ships.
   - `lipgloss` — all styling and layout; no raw ANSI anywhere.
   - `glamour` — detail-view markdown render.
   - `bubblezone` — mouse hit-zones for clickable rows.
@@ -329,7 +334,7 @@ Add TUI mutations only if that round-trip proves too slow in practice.
   cosmetic anyway (tooling scans, never reads it).
 - **No locking** — concurrent CLI writers can race on a `BOARD.md`. In practice: one
   human, agents run commands serially. Add an flock on the root when it actually hurts.
-- **No stored rollups** — sub-board counts (`3/7 done`) are computed live from files by
-  the TUI, written nowhere. Anything derived and stored is future drift.
+- **No stored rollups** — track counts (`1 in-progress · 2 todo`) are computed live from
+  files by the TUI, written nowhere. Anything derived and stored is future drift.
 - **No semantic config** — `duty.toml` tunes presentation (§7); statuses, naming, and
   board structure stay convention. A config key that changes file formats is a bug.

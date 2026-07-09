@@ -2,7 +2,7 @@ package tui
 
 import (
 	"fmt"
-	"math"
+	"strconv"
 	"strings"
 
 	"github.com/NimbleMarkets/ntcharts/barchart"
@@ -17,18 +17,25 @@ const (
 	statusColWidth = len(task.StatusInProgress)
 	gatesColWidth  = 5
 	minTitleWidth  = 8
-	// previewLines caps the selected task's Goal preview; extra text is
-	// ellipsis-truncated onto the last line.
-	previewLines = 4
-	// minBodyLines is the fewest task rows the preview pane will leave
-	// visible; below it the pane auto-hides on short terminals.
-	minBodyLines = 3
+	// twoPanelMinWidth is the narrowest terminal that fits the master-detail
+	// layout; below it the view falls back to a single panel.
+	twoPanelMinWidth = 80
+	// minLeftWidth floors the left panel so entries stay readable.
+	minLeftWidth = 30
+	// minBarWidth is the shortest distribution bar worth drawing.
+	minBarWidth = 8
 )
 
-// rollupOrder is the status sequence for track rollups and previews: active
+// rollupOrder is the status sequence for track rollups and summaries: active
 // work first, then queued, blocked, and finished — matching the header bar's
 // colors.
 var rollupOrder = []string{task.StatusInProgress, task.StatusTodo, task.StatusBlocked, task.StatusDone}
+
+// zoneList and zonePreview are the BubbleZone names of the two panels.
+const (
+	zoneList    = "panel-list"
+	zonePreview = "panel-preview"
+)
 
 var (
 	colAccent = lipgloss.AdaptiveColor{Light: "62", Dark: "111"}
@@ -38,7 +45,8 @@ var (
 	colGreen  = lipgloss.AdaptiveColor{Light: "28", Dark: "78"}
 
 	headerBox    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colAccent).Padding(0, 1)
-	previewBox   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colDim).Padding(0, 1)
+	focusedBox   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colAccent).Padding(0, 1)
+	blurredBox   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colDim).Padding(0, 1)
 	crumbStyle   = lipgloss.NewStyle().Bold(true).Foreground(colAccent)
 	accentStyle  = lipgloss.NewStyle().Foreground(colAccent)
 	sectionStyle = lipgloss.NewStyle().Bold(true).Foreground(colDim)
@@ -65,8 +73,8 @@ func statusStyle(status string) lipgloss.Style {
 	return dimStyle
 }
 
-// statusColor is the fill for a status's segment of the header distribution
-// bar, matching statusStyle's foregrounds.
+// statusColor is the fill for a status's segment of a distribution bar,
+// matching statusStyle's foregrounds.
 func statusColor(status string) lipgloss.TerminalColor {
 	switch status {
 	case task.StatusInProgress:
@@ -79,105 +87,103 @@ func statusColor(status string) lipgloss.TerminalColor {
 	return colDim
 }
 
-// View renders the current frame: the open detail, or the board. The zone
-// manager's Scan registers the row hit-zones and strips their markers.
+// panelBox is a panel's border style: accent when focused, dim otherwise.
+func panelBox(focused bool) lipgloss.Style {
+	if focused {
+		return focusedBox
+	}
+	return blurredBox
+}
+
+// View renders the current frame: header, the two panels (or the single
+// narrow-terminal panel), and the help footer. The zone manager's Scan
+// registers the hit-zones and strips their markers.
 func (m Model) View() string {
-	if m.detailOpen {
-		return m.zones.Scan(m.detailView())
-	}
-	return m.zones.Scan(m.boardView())
-}
-
-// boardGeom is one frame's board layout, shared by the view and the mouse
-// hit-test so both agree on where every row sits.
-type boardGeom struct {
-	header, footer string
-	preview        string
-	lines          []string
-	lineItem       []int
-	selLine        int
-	headerH        int
-	footerH        int
-	previewH       int
-	visible        int
-	total          int
-	maxTop         int
-	top            int
-}
-
-// geom computes the board layout at the current size: header, footer, body
-// lines with their item indices, and the scroll window derived from the
-// spring position.
-func (m Model) geom() boardGeom {
-	w, h := m.dims()
-	header := m.boardHeader(w)
-	footer := m.boardFooter(w)
-	lines, lineItem, selLine := m.bodyLines(w)
-	g := boardGeom{
-		header: header, footer: footer,
-		lines: lines, lineItem: lineItem, selLine: selLine,
-		headerH: lipgloss.Height(header), footerH: lipgloss.Height(footer),
-		total: len(lines),
-	}
-	avail := h - g.headerH - g.footerH
-	if preview := m.preview(w); preview != "" && avail-lipgloss.Height(preview) >= minBodyLines {
-		g.preview, g.previewH = preview, lipgloss.Height(preview)
-	}
-	g.visible = max(avail-g.previewH, 1)
-	g.maxTop = max(g.total-g.visible, 0)
-	g.top = clamp(int(math.Round(m.scroll)), 0, g.maxTop)
-	return g
-}
-
-// boardView lays out header, the scroll window of the board's lines, and the
-// footer, padded so the footer sits on the bottom row.
-func (m Model) boardView() string {
-	g := m.geom()
-	body := windowLines(g.lines, g.top, g.visible)
-	parts := []string{g.header, strings.Join(body, "\n")}
-	if g.preview != "" {
-		parts = append(parts, g.preview)
-	}
-	parts = append(parts, g.footer)
-	return lipgloss.JoinVertical(lipgloss.Left, parts...)
-}
-
-// detailView lays out the task header, the glamour-rendered markdown in its
-// viewport, and a scroll-position footer with key hints.
-func (m Model) detailView() string {
 	w, _ := m.dims()
-	scroll := " " + dimStyle.Render(fmt.Sprintf("%3.0f%%", m.detailVP.ScrollPercent()*100))
-	footer := lipgloss.JoinVertical(lipgloss.Left, scroll, m.helpView(w))
-	return lipgloss.JoinVertical(lipgloss.Left, m.detailHeader(m.detailRow, w), m.detailVP.View(), footer)
+	var body string
+	switch {
+	case m.wide():
+		body = lipgloss.JoinHorizontal(lipgloss.Top, m.leftPanel(), m.rightPanel())
+	case m.focus == focusPreview:
+		title := ansi.Truncate(" "+m.previewTitle(), max(w-1, 1), "…")
+		body = lipgloss.JoinVertical(lipgloss.Left, title, m.preview.View())
+	default:
+		body = m.list.View()
+	}
+	frame := lipgloss.JoinVertical(lipgloss.Left, m.headerView(w), body, m.footerView(w))
+	return m.zones.Scan(frame)
 }
 
-// detailHeader is the boxed breadcrumb + status/gates line above a task's
-// rendered markdown.
-func (m Model) detailHeader(r Row, w int) string {
-	crumb := crumbStyle.Render(m.breadcrumb()+" › "+r.ID) + "  " +
-		statusStyle(r.Status).Render(r.Status) + "  " +
-		dimStyle.Render(gatesCell(r))
-	return headerBox.Width(max(w-2, 1)).Render(ansi.Truncate(crumb, max(w-4, 1), "…"))
+// layout sizes the list and preview to the current terminal and chrome
+// heights, then re-renders the preview at the new width.
+func (m Model) layout() Model {
+	w, h := m.dims()
+	bodyH := max(h-lipgloss.Height(m.headerView(w))-lipgloss.Height(m.footerView(w)), 3)
+	if m.wide() {
+		lw := leftWidth(w)
+		m.list.SetSize(lw-4, bodyH-2)
+		m.preview.Width = max(w-lw-4, 1)
+		m.preview.Height = max(bodyH-3, 1)
+	} else {
+		m.list.SetSize(w, bodyH)
+		m.preview.Width = max(w-2, 1)
+		m.preview.Height = max(bodyH-1, 1)
+	}
+	return m.syncPreview(true)
 }
 
-// boardHeader is the rounded box holding the breadcrumb and the one-line
-// status-distribution bar (§8).
-func (m Model) boardHeader(w int) string {
+// leftWidth is the left panel's total width: ~38% of the terminal, floored.
+func leftWidth(w int) int {
+	return max(w*38/100, minLeftWidth)
+}
+
+// leftPanel is the entry list in its focus-colored border, a full-panel
+// mouse zone.
+func (m Model) leftPanel() string {
+	box := panelBox(m.focus == focusList).Width(m.list.Width() + 2).Height(m.list.Height())
+	return m.zones.Mark(zoneList, box.Render(m.list.View()))
+}
+
+// rightPanel is the preview — pinned title line over the viewport — in its
+// focus-colored border, a full-panel mouse zone.
+func (m Model) rightPanel() string {
+	title := ansi.Truncate(m.previewTitle(), m.preview.Width, "…")
+	box := panelBox(m.focus == focusPreview).Width(m.preview.Width + 2).Height(m.preview.Height + 1)
+	content := lipgloss.JoinVertical(lipgloss.Left, title, m.preview.View())
+	return m.zones.Mark(zonePreview, box.Render(content))
+}
+
+// headerView is the rounded box holding the breadcrumb and the current
+// track's subtree state: per-status counts plus the distribution bar (§8).
+func (m Model) headerView(w int) string {
 	inner := max(w-4, 1)
+	b, _ := m.board()
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		ansi.Truncate(crumbStyle.Render(m.breadcrumb()), inner, "…"),
-		m.statusBar(inner),
+		stateLine(b, inner),
 	)
 	return headerBox.Width(max(w-2, 1)).Render(content)
 }
 
-// statusBar renders the current board's task statuses as one horizontal
-// ntcharts bar w cells wide; an empty board shows a faint rule.
-func (m Model) statusBar(w int) string {
-	b, ok := m.board()
-	counts := statusCounts(b)
-	total := counts[task.StatusTodo] + counts[task.StatusInProgress] + counts[task.StatusBlocked] + counts[task.StatusDone]
-	if !ok || total == 0 {
+// stateLine renders a board's subtree per-status counts in status colors,
+// with the ntcharts distribution bar filling the rest of the line.
+func stateLine(b Board, w int) string {
+	rollup := rollupOrEmpty(b.Counts)
+	barW := w - lipgloss.Width(rollup) - 2
+	if barW < minBarWidth {
+		return ansi.Truncate(rollup, w, "…")
+	}
+	return rollup + "  " + statusBar(b.Counts, barW)
+}
+
+// statusBar renders per-status counts as one horizontal ntcharts bar w cells
+// wide; no tasks shows a faint rule.
+func statusBar(counts map[string]int, w int) string {
+	total := 0
+	for _, st := range rollupOrder {
+		total += counts[st]
+	}
+	if total == 0 {
 		return dimStyle.Render(strings.Repeat("╌", w))
 	}
 	bar := barchart.New(w, 1,
@@ -207,37 +213,14 @@ func barData(counts map[string]int) barchart.BarData {
 	}}
 }
 
-// statusCounts tallies the board's direct task rows by status.
-func statusCounts(b Board) map[string]int {
-	c := map[string]int{}
-	for _, s := range b.Sections {
-		for _, r := range s.Rows {
-			c[r.Status]++
-		}
+// footerView is the bubbles/help hint bar, topped by the last scan error
+// when one is pending.
+func (m Model) footerView(w int) string {
+	if m.scanErr == "" {
+		return m.helpView(w)
 	}
-	return c
-}
-
-// boardFooter is the subtle status line — subtree counts and drift total, or
-// the last scan error — above the "?" key hints.
-func (m Model) boardFooter(w int) string {
-	return lipgloss.JoinVertical(lipgloss.Left, m.statusLine(w), m.helpView(w))
-}
-
-// statusLine summarizes the board: done/total, drift, or the last scan error.
-func (m Model) statusLine(w int) string {
-	if m.scanErr != "" {
-		return " " + errStyle.Render(ansi.Truncate(m.scanErr, max(w-2, 1), "…"))
-	}
-	b, ok := m.board()
-	if !ok {
-		return " " + dimStyle.Render("no board")
-	}
-	s := fmt.Sprintf("%d/%d done", b.Done, b.Total)
-	if n := driftCount(b); n > 0 {
-		s += fmt.Sprintf(" · %d drift", n)
-	}
-	return " " + dimStyle.Render(s)
+	err := " " + errStyle.Render(ansi.Truncate(m.scanErr, max(w-2, 1), "…"))
+	return lipgloss.JoinVertical(lipgloss.Left, err, m.helpView(w))
 }
 
 // helpView renders the bubbles/help hint bar (short, or the full grid after
@@ -248,85 +231,123 @@ func (m Model) helpView(w int) string {
 	return " " + h.View(m.keys)
 }
 
-// bodyLines renders the board's lines — sub-boards, then each section header
-// and its rows, each row wrapped as a zone — and returns, per line, the
-// selectable item index (-1 for blanks and section labels) plus the selected
-// line.
-func (m Model) bodyLines(w int) (lines []string, lineItem []int, sel int) {
-	b, ok := m.board()
-	if !ok {
-		return []string{" " + dimStyle.Render("no boards found")}, []int{-1}, 0
-	}
-	add := func(line string, item int) {
-		lines = append(lines, line)
-		lineItem = append(lineItem, item)
-	}
-	cursor := m.cursor()
-	idx := 0
-	nameW := maxSubNameWidth(b.Subs)
-	for i := range b.Subs {
-		if idx == cursor {
-			sel = len(lines)
+// previewTitle is the pinned line above the preview: id, status, gates, and
+// drift for a task; name and title for a track.
+func (m Model) previewTitle() string {
+	e, ok := m.selectedEntry()
+	switch {
+	case !ok:
+		return dimStyle.Render("nothing selected")
+	case e.track != nil:
+		return accentStyle.Render(e.track.Name) + "  " + selStyle.Render(e.track.Title)
+	default:
+		t := accentStyle.Render(e.task.ID) + "  " + statusStyle(e.task.Status).Render(e.task.Status)
+		if g := gatesCell(*e.task); g != "" {
+			t += "  " + dimStyle.Render(g)
 		}
-		add(m.zone(idx, subLine(b.Subs[i], nameW, idx == cursor, w)), idx)
-		idx++
+		if e.task.Drift != "" {
+			t += "  " + driftStyle.Render("⚠ "+e.task.Drift)
+		}
+		return t
 	}
-	idW := maxIDWidth(b.Sections)
-	driftW := maxDriftWidth(b.Sections)
-	for _, s := range b.Sections {
-		add("", -1)
-		add(" "+sectionStyle.Render(s.Name), -1)
-		for ri := range s.Rows {
-			if idx == cursor {
-				sel = len(lines)
-			}
-			add(m.zone(idx, rowLine(s.Rows[ri], idW, driftW, idx == cursor, w)), idx)
-			idx++
+}
+
+// selectionKey identifies what the preview should show for the selection.
+func (m Model) selectionKey() string {
+	e, ok := m.selectedEntry()
+	switch {
+	case !ok:
+		return ""
+	case e.track != nil:
+		return "track:" + e.track.Path
+	default:
+		return "task:" + e.task.ID
+	}
+}
+
+// syncPreview re-renders the preview when the selection changed (or force),
+// keeping the scroll offset while the subject stays the same.
+func (m Model) syncPreview(force bool) Model {
+	key := m.selectionKey()
+	if key == m.previewKey && !force {
+		return m
+	}
+	off := 0
+	if key == m.previewKey {
+		off = m.preview.YOffset
+	}
+	m.preview.SetContent(m.previewBody())
+	m.preview.SetYOffset(off)
+	m.previewKey = key
+	return m.settleAt(m.preview.YOffset)
+}
+
+// previewBody builds the preview content from the snapshot alone: the
+// glamour-rendered task body, or a track's summary card.
+func (m Model) previewBody() string {
+	w := max(m.preview.Width, 1)
+	e, ok := m.selectedEntry()
+	switch {
+	case !ok:
+		return dimStyle.Render("nothing selected")
+	case e.track != nil:
+		return m.trackCard(*e.track, w)
+	case e.task.Path == "":
+		return dimStyle.Render("no file — the board row points nowhere")
+	default:
+		return m.taskBody(*e.task, w)
+	}
+}
+
+// taskBody returns the task's markdown rendered at the preview width,
+// cached per id until the next re-scan or resize.
+func (m Model) taskBody(r Row, w int) string {
+	if s, ok := m.mdCache[r.ID]; ok {
+		return s
+	}
+	s := renderMarkdown(r.Content, w, m.theme)
+	m.mdCache[r.ID] = s
+	return s
+}
+
+// trackCard summarizes a selected track: totals, per-status counts, its
+// distribution bar, sections with row counts, and the subtree drift count.
+func (m Model) trackCard(s Sub, w int) string {
+	lines := []string{
+		dimStyle.Render(fmt.Sprintf("%d tasks · %d done", s.Total, s.Done)),
+		rollupOrEmpty(s.Counts),
+		"",
+		statusBar(s.Counts, min(w, 40)),
+		"",
+	}
+	if b, ok := m.snap.Boards[s.Path]; ok && len(b.Sections) > 0 {
+		lines = append(lines, sectionStyle.Render("Sections"))
+		for _, sec := range b.Sections {
+			lines = append(lines, " "+sec.Name+"  "+dimStyle.Render(strconv.Itoa(len(sec.Rows))))
+		}
+		lines = append(lines, "")
+	}
+	if n := m.subtreeDrift(s.Path); n > 0 {
+		lines = append(lines, driftStyle.Render(fmt.Sprintf("⚠ %d drift", n)))
+	} else {
+		lines = append(lines, dimStyle.Render("no drift"))
+	}
+	for i := range lines {
+		lines[i] = ansi.Truncate(lines[i], w, "…")
+	}
+	return strings.Join(lines, "\n")
+}
+
+// subtreeDrift tallies drift-flagged rows on the track at path and every
+// track below it.
+func (m Model) subtreeDrift(path string) int {
+	n := 0
+	for p, b := range m.snap.Boards {
+		if within(p, path) {
+			n += driftCount(b)
 		}
 	}
-	if idx == 0 {
-		add(" "+dimStyle.Render("no open tasks"), -1)
-	}
-	return lines, lineItem, sel
-}
-
-// zone wraps a rendered row in a bubblezone marker so it is a clickable
-// hit-zone in the terminal.
-func (m Model) zone(idx int, line string) string {
-	return m.zones.Mark(rowZoneID(idx), line)
-}
-
-// rowZoneID is the stable zone name for the item at idx on the current board.
-func rowZoneID(idx int) string {
-	return fmt.Sprintf("row-%d", idx)
-}
-
-// windowLines slices lines to the visible window, padding short pages so the
-// footer stays pinned to the bottom.
-func windowLines(lines []string, top, visible int) []string {
-	out := make([]string, 0, visible)
-	for i := 0; i < visible; i++ {
-		if top+i < len(lines) {
-			out = append(out, lines[top+i])
-			continue
-		}
-		out = append(out, "")
-	}
-	return out
-}
-
-// subLine renders one sub-board: name, title, and a per-status rollup of its
-// subtree, each count in its status color, zero-count statuses omitted.
-func subLine(s Sub, nameW int, selected bool, w int) string {
-	title := s.Title
-	if selected {
-		title = selStyle.Render(title)
-	}
-	line := cursorMark(selected) +
-		accentStyle.Render(pad(s.Name, nameW)) + "  " +
-		title + "  " +
-		rollupOrEmpty(s.Counts)
-	return ansi.Truncate(line, w, "…")
+	return n
 }
 
 // rollupOrEmpty renders the per-status rollup, or a dim "empty" when the
@@ -350,76 +371,7 @@ func statusRollup(counts map[string]int) string {
 	return strings.Join(parts, dimStyle.Render(" · "))
 }
 
-// preview builds the bottom pane for the current selection — a task's Goal or
-// a track's per-status summary, in a dim rounded box; "" when nothing is
-// selected (an empty board).
-func (m Model) preview(w int) string {
-	it, ok := m.selected()
-	if !ok {
-		return ""
-	}
-	inner := max(w-4, 1)
-	content := ""
-	if it.sub != nil {
-		content = trackPreview(*it.sub, inner)
-	} else {
-		content = goalPreview(it.row.Goal, inner)
-	}
-	return previewBox.Width(max(w-2, 1)).Render(content)
-}
-
-// goalPreview flattens and word-wraps a task's Goal to at most previewLines
-// dim lines, ellipsis-truncating the overflow; a task with no Goal reads
-// "(no goal)".
-func goalPreview(goal string, w int) string {
-	flat := strings.Join(strings.Fields(goal), " ")
-	if flat == "" {
-		return dimStyle.Render("(no goal)")
-	}
-	lines := strings.Split(ansi.Wordwrap(flat, w, ""), "\n")
-	for i := range lines {
-		lines[i] = ansi.Truncate(lines[i], w, "…")
-	}
-	if len(lines) > previewLines {
-		lines = lines[:previewLines]
-		last := len(lines) - 1
-		lines[last] = ansi.Truncate(lines[last], max(w-1, 1), "") + "…"
-	}
-	return dimStyle.Render(strings.Join(lines, "\n"))
-}
-
-// trackPreview summarizes a selected sub-board: its name and title, then a
-// total and the per-status rollup.
-func trackPreview(s Sub, w int) string {
-	head := accentStyle.Render(s.Name) + "  " + s.Title
-	summary := dimStyle.Render(fmt.Sprintf("%d total", s.Total)) + dimStyle.Render(" · ") + rollupOrEmpty(s.Counts)
-	return ansi.Truncate(head, w, "…") + "\n" + ansi.Truncate(summary, w, "…")
-}
-
-// rowLine renders one task: id, title, colored status, gate progress, drift
-// badge. driftW is the board's widest badge, so the title column yields room
-// for badges to stay visible and aligned.
-func rowLine(r Row, idW, driftW int, selected bool, w int) string {
-	fixed := 2 + idW + 2 + 2 + statusColWidth + 2 + gatesColWidth
-	if driftW > 0 {
-		fixed += 2 + driftW
-	}
-	title := pad(r.Title, max(w-fixed, minTitleWidth))
-	if selected {
-		title = selStyle.Render(title)
-	}
-	line := cursorMark(selected) +
-		accentStyle.Render(pad(r.ID, idW)) + "  " +
-		title + "  " +
-		statusStyle(r.Status).Render(pad(r.Status, statusColWidth)) + "  " +
-		dimStyle.Render(pad(gatesCell(r), gatesColWidth))
-	if r.Drift != "" {
-		line += "  " + driftStyle.Render(pad("⚠ "+r.Drift, driftW))
-	}
-	return ansi.Truncate(line, w, "…")
-}
-
-// breadcrumb joins the H1 titles from the root down to the board on screen.
+// breadcrumb joins the H1 titles from the root down to the track on screen.
 func (m Model) breadcrumb() string {
 	var parts []string
 	p := m.path
@@ -440,10 +392,10 @@ func (m Model) breadcrumb() string {
 	return strings.Join(parts, " › ")
 }
 
-// renderMarkdown renders a task file for the detail view: frontmatter
-// stripped (the header line already shows it), glamour sized to width,
-// styled per the configured theme (auto detects the terminal). On any
-// renderer error the raw markdown shows instead.
+// renderMarkdown renders a task file for the preview: frontmatter stripped
+// (the title line already shows it), glamour sized to width, styled per the
+// configured theme (auto detects the terminal). On any renderer error the
+// raw markdown shows instead.
 func renderMarkdown(content []byte, width int, theme string) string {
 	content = task.Body(content)
 	opts := []glamour.TermRendererOption{glamour.WithWordWrap(max(width-2, 20))}
@@ -502,7 +454,7 @@ func driftCount(b Board) int {
 	return n
 }
 
-// maxSubNameWidth sizes the sub-board name column.
+// maxSubNameWidth sizes the track name column.
 func maxSubNameWidth(subs []Sub) int {
 	w := 0
 	for _, s := range subs {

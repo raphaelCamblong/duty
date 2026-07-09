@@ -329,6 +329,25 @@ func TestBoardCommand(t *testing.T) {
 		}
 	})
 
+	t.Run("track is the primary name, board the alias", func(t *testing.T) {
+		root := initDuty(t)
+		for _, tt := range []struct{ cmd, name, title string }{
+			{cmd: "track", name: "x", title: "X"},
+			{cmd: "board", name: "y", title: "Y"},
+		} {
+			code, stdout, stderr := runDuty(t, root, tt.cmd, tt.name, "--title", tt.title)
+			if code != 0 || stdout != "" || stderr != "" {
+				t.Fatalf("%s: code=%d stdout=%q stderr=%q", tt.cmd, code, stdout, stderr)
+			}
+			if got := readText(t, filepath.Join(root, tt.name, "BOARD.md")); !strings.HasPrefix(got, "# "+tt.title+"\n") {
+				t.Errorf("%s H1 = %q, want # %s", tt.cmd, got[:min(len(got), 10)], tt.title)
+			}
+			if info, err := os.Stat(filepath.Join(root, tt.name, "archive")); err != nil || !info.IsDir() {
+				t.Errorf("%s/%s/archive not a directory: %v", tt.cmd, tt.name, err)
+			}
+		}
+	})
+
 	t.Run("title defaults to the name", func(t *testing.T) {
 		root := initDuty(t)
 		if code, _, stderr := runDuty(t, root, "board", "api"); code != 0 {

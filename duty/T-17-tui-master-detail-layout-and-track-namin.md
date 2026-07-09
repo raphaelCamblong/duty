@@ -1,7 +1,7 @@
 ---
 id: T-17
 title: TUI master-detail layout and track naming
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -49,14 +49,40 @@ File-format or CLI-output changes (list TSV etc. untouched); any mutation path;
 renaming `BOARD.md` itself; touching `future.md`.
 
 ## Gates
-- [ ] View-model/update tests: panel focus transitions, filter, descend/up,
+- [x] View-model/update tests: panel focus transitions, filter, descend/up,
   preview content for both a task and a track selection.
-- [ ] Headless `View()` recorded in the report: 120×35 shows header state + two
+- [x] Headless `View()` recorded in the report: 120×35 shows header state + two
   panels (task preview and track summary variants); 70×20 falls back to single
   panel.
-- [ ] `duty track x --title X` and `duty board y --title Y` both create tracks
+- [x] `duty track x --title X` and `duty board y --title Y` both create tracks
   (alias covered by a test).
-- [ ] Full suite green (`go test ./tests/... -coverpkg=./internal/... -count=1`);
+- [x] Full suite green (`go test ./tests/... -coverpkg=./internal/... -count=1`);
   `gofmt -l .` empty; `go vet ./...` clean; `go build -o bin/duty ./cmd/duty` ok.
 
 ## Report
+
+**T-17 report (master-detail TUI + track naming).**
+
+Files changed:
+- `internal/tui/entry.go` (new): `entry` list items (track/task/section-header), `boardEntries`, `compactDelegate` — 1-line bubbles/list delegate with per-column widths, BubbleZone marks per selectable row, and fuzzy-match rune underlining via `lipgloss.StyleRunes` + `MatchesForItem`.
+- `internal/tui/model.go` (rewritten): master-detail `Model` — bubbles `list` (left) + `viewport` preview (right), `focusArea` toggle, filter routing (all keys to the list while typing), header-skipping selection, per-track selection memory, snapshot rebuild keeping filter/selection/scroll, glamour cache per task id cleared on re-scan/resize. New accessors: `PreviewFocused`, `SelectedID`.
+- `internal/tui/view.go` (rewritten): header box = breadcrumb + SUBTREE per-status counts + ntcharts bar; left/right bordered panels (accent = focused, dim = blurred); track summary card (totals, rollup, bar, sections with counts, subtree drift); glamour task body; T-15 bottom pane deleted (`preview`/`goalPreview`/`trackPreview`/`geom`/`bodyLines` gone). Single-panel fallback below 80 cols; `enter` opens the preview full-screen.
+- `internal/tui/mouse.go` (rewritten): wheel scrolls the hovered panel (BubbleZone `InBounds`; preview glides on the harmonica spring, list moves selection), left click selects a row / focuses the preview, double-click opens/descends.
+- `internal/tui/keys.go`: added `tab` (panel) and `/` (filter) bindings; short + full help via bubbles/help.
+- `internal/tui/scan.go`: dropped the now-unused `Row.Goal` (T-15 pane plumbing); comment sweep sub-board→track.
+- `internal/cli/track.go` (renamed from board.go): `duty track <name> [--title T]` primary, `board` kept via cobra `Aliases`; behavior and exit codes unchanged.
+- Naming sweep: `task-system-spec.md` (§1/§2 definition line "A track is a folder; its board defines its state", §4, §6 table row, §7, §8 rewritten for the master-detail layout/keys/mouse/responsive fallback, §9/§10), `internal/app/readme.md.tmpl` + `tests/testdata/readme.md` golden, `duty/README.md`, comments in app/board packages. Package/API identifiers untouched.
+- Tests: `tests/tui_test.go` — new `TestMasterDetailLayout` (120×35 track-card + task-preview variants, 70×20 single-panel fallback), `TestPanelFocusAndFilter` (tab/enter/esc focus transitions, fuzzy filter + clear, descend/up with per-track selection memory), mouse tests rewritten to hit BubbleZone zones located from the rendered frame, wheel-over-preview spring test; `tests/cli_test.go` — track/board alias subtest.
+
+Gate tails:
+- `go test ./tests/... -coverpkg=./internal/... -count=1` → `ok  github.com/raphaelCamblong/duty/tests  4.6s  coverage: 83.3% of statements in ./internal/...`
+- `gofmt -l .` empty; `go vet ./...` clean; `go build -o bin/duty ./cmd/duty` ok.
+
+Headless `View()` observations:
+- 120×35: header box shows `Board` + `1 in-progress · 1 todo · 1 blocked · 1 done` + stacked ntcharts bar; left panel lists `❯ backend/  Backend  1 blocked · 1 done`, then `Open tasks` with T-01/T-02 rows (status colored, gates column); right panel (track selected) shows the summary card `2 tasks · 1 done`, rollup, bar, `Sections / Open tasks 2`, `no drift`; with T-01 selected the right panel shows `T-01  in-progress` over the glamour-rendered body (Goal text visible).
+- 70×20: single panel — header + list only, no preview; `enter` on T-01 replaces the list with the full-screen preview (`T-01  in-progress` + glamour body); `esc` returns. Footer help bar present in all variants.
+
+Deviations:
+- Spec §8 updated in the same change (per CLAUDE.md): board-view/bottom-pane/detail-view layout replaced by the master-detail description; wheel smoothing now applies to the preview panel (the list is bubbles-paginated), harmonica retained there.
+- `Row.Goal` removed from the scan snapshot — it existed only to feed the deleted T-15 bottom pane; the preview renders the full cached file content instead (still zero file opens on navigation).
+- New indirect deps pulled by bubbles/list: `sahilm/fuzzy`, `atotto/clipboard` (go.mod/go.sum).

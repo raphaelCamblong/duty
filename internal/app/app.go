@@ -22,7 +22,7 @@ func New(f fsys.FS) App {
 	return App{fs: f}
 }
 
-// nameRE validates sub-board folder names and task filename slugs.
+// nameRE validates track folder names and task filename slugs.
 var nameRE = regexp.MustCompile(`^[a-z0-9-]+$`)
 
 // unknownStatusErr is the one-line error every use-case rejecting an unknown
