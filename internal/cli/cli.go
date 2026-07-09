@@ -66,6 +66,8 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		err = runDelete(cwd, args[1:])
 	case "list":
 		err = runList(cwd, args[1:], stdout)
+	case "tui":
+		err = runTUI(cwd, args[1:])
 	default:
 		fmt.Fprintf(stderr, "unknown command %q\n", cmd)
 		return 2

@@ -64,6 +64,15 @@ func Parse(content []byte) (Task, error) {
 	return t, nil
 }
 
+// Body returns the markdown below the frontmatter block; content without
+// frontmatter is returned whole.
+func Body(content []byte) []byte {
+	if loc := frontmatterRE.FindIndex(content); loc != nil {
+		return content[loc[1]:]
+	}
+	return content
+}
+
 // Render produces a brand-new task file: frontmatter (status todo) plus the
 // full section skeleton from the spec. Gates starts as an empty checklist,
 // so a fresh task counts 0/0 gates.

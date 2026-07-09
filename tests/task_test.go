@@ -481,3 +481,27 @@ func TestValidStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestBody(t *testing.T) {
+	tests := []struct {
+		name, content, want string
+	}{
+		{
+			name:    "frontmatter stripped",
+			content: "---\nid: T-01\nstatus: todo\n---\n\n# T-01 — Title\n\n## Goal\n",
+			want:    "\n# T-01 — Title\n\n## Goal\n",
+		},
+		{
+			name:    "no frontmatter returned whole",
+			content: "# Just markdown\n",
+			want:    "# Just markdown\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := string(task.Body([]byte(tt.content))); got != tt.want {
+				t.Errorf("Body() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

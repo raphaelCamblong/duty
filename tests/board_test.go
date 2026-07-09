@@ -601,3 +601,33 @@ func TestSurgicalRoundTrip(t *testing.T) {
 		t.Errorf("round trip diverged:\ngot:\n%s\nwant:\n%s", b, start)
 	}
 }
+
+func TestSections(t *testing.T) {
+	got := board.Sections(joinBoard(boardFixture()))
+	want := []board.Section{
+		{Name: "Open tasks", Rows: []board.Row{
+			{ID: "T-01", File: "T-01-first-task.md", Title: "First task", Status: "todo"},
+			{ID: "T-02", File: "T-02-weird-spacing.md", Title: "Weird   spacing kept", Status: "in-progress"},
+			{ID: "T-03", File: "T-03-third-task.md", Title: "Third task", Status: "blocked"},
+		}},
+		{Name: "Later", Rows: []board.Row{
+			{ID: "T-04", File: "T-04-someday.md", Title: "Someday", Status: "todo"},
+		}},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("Sections() = %d sections, want %d: %+v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i].Name != want[i].Name {
+			t.Errorf("section %d name = %q, want %q", i, got[i].Name, want[i].Name)
+		}
+		if len(got[i].Rows) != len(want[i].Rows) {
+			t.Fatalf("section %q = %d rows, want %d", want[i].Name, len(got[i].Rows), len(want[i].Rows))
+		}
+		for j, r := range want[i].Rows {
+			if got[i].Rows[j] != r {
+				t.Errorf("section %q row %d = %+v, want %+v", want[i].Name, j, got[i].Rows[j], r)
+			}
+		}
+	}
+}
