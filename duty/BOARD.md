@@ -7,7 +7,7 @@ Order top-to-bottom is the intended build order.
 
 | Task | Title | Status |
 |------|-------|--------|
-| [T-01](T-01-bootstrap-module-fsutil-test-harness.md) | Bootstrap module, fsutil, test harness | todo |
+| [T-01](T-01-bootstrap-module-fsutil-test-harness.md) | Bootstrap module, fsutil, test harness | done |
 | [T-02](T-02-task-file-domain-package.md) | Task file domain package | todo |
 | [T-03](T-03-board-file-domain-package.md) | Board file domain package | todo |
 | [T-04](T-04-tree-discovery-and-id-resolution.md) | Tree discovery and id resolution | todo |
