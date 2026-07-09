@@ -6,11 +6,13 @@ package task
 
 import (
 	"bytes"
+	_ "embed"
 	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
+	"text/template"
 
 	"gopkg.in/yaml.v3"
 )
@@ -73,17 +75,21 @@ func Body(content []byte) []byte {
 	return content
 }
 
+//go:embed task.md.tmpl
+var skeletonTmplText string
+
+// skeletonTmpl renders a fresh task file from its embedded template.
+var skeletonTmpl = template.Must(template.New("task").Funcs(template.FuncMap{
+	"yamlTitle": yamlScalar,
+	"blockedBy": func(ids []string) string { return strings.Join(ids, ", ") },
+}).Parse(skeletonTmplText))
+
 // Render produces a brand-new task file: frontmatter (status todo) plus the
 // full section skeleton from the spec. Gates starts as an empty checklist,
 // so a fresh task counts 0/0 gates.
 func Render(id, title string, blockedBy []string) []byte {
 	var b bytes.Buffer
-	fmt.Fprintf(&b, "---\nid: %s\ntitle: %s\nstatus: %s\nblocked-by: [%s]\n---\n\n",
-		id, yamlScalar(title), StatusTodo, strings.Join(blockedBy, ", "))
-	fmt.Fprintf(&b, "# %s — %s\n", id, title)
-	for _, section := range []string{"Goal", "Read first", "Scope", "Out of scope", "Gates", "Report"} {
-		fmt.Fprintf(&b, "\n## %s\n", section)
-	}
+	_ = skeletonTmpl.Execute(&b, Task{ID: id, Title: title, Status: StatusTodo, BlockedBy: blockedBy})
 	return b.Bytes()
 }
 

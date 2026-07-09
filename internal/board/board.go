@@ -6,10 +6,13 @@
 package board
 
 import (
+	"bytes"
+	_ "embed"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
+	"text/template"
 
 	"github.com/raphaelCamblong/duty/internal/names"
 )
@@ -29,20 +32,27 @@ var (
 	separatorRe = regexp.MustCompile(`^\|[-: |]+\|$`)
 )
 
+//go:embed board.md.tmpl
+var skeletonTmplText string
+
+// skeletonTmpl renders a fresh board index from its embedded template.
+var skeletonTmpl = template.Must(template.New("board").Parse(skeletonTmplText))
+
 // Render returns a skeleton board index: H1 = title, the convention line, an
 // empty "## Open tasks" table, and the zero-count archive footer.
 func Render(title string) []byte {
-	return []byte("# " + title + "\n" +
-		"\n" +
-		"Convention: [" + names.ReadmeFile + "](" + names.ReadmeFile + "). Workers update their row's status via the CLI.\n" +
-		"Order top-to-bottom is the intended build order.\n" +
-		"\n" +
-		"## " + DefaultSection + "\n" +
-		"\n" +
-		tableHeader + "\n" +
-		tableSeparator + "\n" +
-		"\n" +
-		"Completed tasks (0) archived: [" + names.ArchiveDir + "/](" + names.ArchiveDir + "/).\n")
+	var b bytes.Buffer
+	_ = skeletonTmpl.Execute(&b, struct {
+		Title, Readme, Section, Header, Separator, Archive string
+	}{
+		Title:     title,
+		Readme:    names.ReadmeFile,
+		Section:   DefaultSection,
+		Header:    tableHeader,
+		Separator: tableSeparator,
+		Archive:   names.ArchiveDir,
+	})
+	return b.Bytes()
 }
 
 // Title returns the board's H1 text, or "" when the board has no H1.

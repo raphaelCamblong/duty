@@ -306,6 +306,9 @@ Add TUI mutations only if that round-trip proves too slow in practice.
 - Companion agent-facing doc (`duty/README.md`, one page): the command table, the
   lifecycle→command mapping, and what stays the worker's judgment (filling
   Goal/Scope/Gates, ticking gates honestly, authoring report prose, respecting blocked-by).
+- Generated skeletons (task file, board index, `duty/README.md`) are `go:embed`ed
+  `.md.tmpl` files rendered with `text/template` in their owning package — readable
+  templates, not string-building code; the domain stays pure (embed is compile-time).
 
 ## 10. Deliberately not built (YAGNI — add only when it hurts)
 

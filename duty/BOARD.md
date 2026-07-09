@@ -22,6 +22,6 @@ Order top-to-bottom is the intended build order.
 | [T-13](T-13-application-layer-and-cobra-cli.md) | Application layer and cobra CLI | done |
 | [T-14](T-14-comment-hygiene-and-final-cleanup.md) | Comment hygiene and final cleanup | done |
 | [T-15](T-15-tui-goal-preview-and-track-status-rollup.md) | TUI goal preview and track status rollups | done |
-| [T-16](T-16-templated-markdown-rendering.md) | Templated markdown rendering | todo |
+| [T-16](T-16-templated-markdown-rendering.md) | Templated markdown rendering | done |
 
 Completed tasks (0) archived: [archive/](archive/).
