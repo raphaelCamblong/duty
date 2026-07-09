@@ -201,8 +201,14 @@ func TestScanViewModel(t *testing.T) {
 	})
 }
 
-// newTUIModel builds a model on the fixture tree with a fixed theme.
+// newTUIModel builds a model on the fixture tree, sized 100×30.
 func newTUIModel(t *testing.T, root string) tui.Model {
+	t.Helper()
+	return newTUIModelSize(t, root, 100, 30)
+}
+
+// newTUIModelSize builds a model on the fixture tree at a given terminal size.
+func newTUIModelSize(t *testing.T, root string, w, h int) tui.Model {
 	t.Helper()
 	cfg := config.Config{Editor: "vi"}
 	cfg.TUI.Theme = "dark"
@@ -210,7 +216,24 @@ func newTUIModel(t *testing.T, root string) tui.Model {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	return nm.(tui.Model)
+}
+
+// clickAt sends one left button press at screen cell (x, y).
+func clickAt(m tui.Model, x, y int) tui.Model {
+	msg := tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}
+	nm, _ := m.Update(msg)
+	return nm.(tui.Model)
+}
+
+// wheel sends one wheel-up or wheel-down event.
+func wheel(m tui.Model, down bool) tui.Model {
+	b := tea.MouseButtonWheelUp
+	if down {
+		b = tea.MouseButtonWheelDown
+	}
+	nm, _ := m.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: b})
 	return nm.(tui.Model)
 }
 
@@ -324,6 +347,101 @@ func TestModelTransitions(t *testing.T) {
 			t.Error("e on a task row returned no command")
 		}
 	})
+}
+
+func TestMouseTransitions(t *testing.T) {
+	root := tuiTree(t)
+
+	t.Run("click selects the row under the pointer", func(t *testing.T) {
+		m := newTUIModel(t, root)
+		m = clickAt(m, 4, 7) // T-01 row
+		if m.Cursor() != 1 || m.DetailID() != "" {
+			t.Fatalf("click T-01: cursor=%d detail=%q, want 1 / no detail", m.Cursor(), m.DetailID())
+		}
+		m = clickAt(m, 4, 8) // T-02 row
+		if m.Cursor() != 2 {
+			t.Errorf("click T-02: cursor=%d, want 2", m.Cursor())
+		}
+	})
+
+	t.Run("double-click a task opens its detail", func(t *testing.T) {
+		m := newTUIModel(t, root)
+		m = clickAt(m, 4, 7)
+		m = clickAt(m, 4, 7)
+		if m.DetailID() != "T-01" || m.BoardPath() != "." {
+			t.Fatalf("double-click T-01: detail=%q path=%q, want T-01 on .", m.DetailID(), m.BoardPath())
+		}
+	})
+
+	t.Run("double-click a sub-board descends", func(t *testing.T) {
+		m := newTUIModel(t, root)
+		m = clickAt(m, 4, 4) // backend row
+		if m.Cursor() != 0 {
+			t.Fatalf("click backend: cursor=%d, want 0", m.Cursor())
+		}
+		m = clickAt(m, 4, 4)
+		if m.BoardPath() != "backend" {
+			t.Errorf("double-click backend: path=%q, want backend", m.BoardPath())
+		}
+	})
+
+	t.Run("a click above the rows changes nothing", func(t *testing.T) {
+		m := newTUIModel(t, root)
+		m = clickAt(m, 4, 0) // inside the header box
+		if m.Cursor() != 0 || m.DetailID() != "" {
+			t.Errorf("header click: cursor=%d detail=%q, want 0 / none", m.Cursor(), m.DetailID())
+		}
+	})
+
+	t.Run("wheel moves the scroll target and clamps to content", func(t *testing.T) {
+		m := newTUIModelSize(t, root, 100, 7) // one visible body line: content overflows
+		if m.ScrollTarget() != 0 {
+			t.Fatalf("initial scroll target = %d, want 0", m.ScrollTarget())
+		}
+		m = wheel(m, true)
+		if m.ScrollTarget() != 3 {
+			t.Fatalf("one wheel down: target = %d, want 3", m.ScrollTarget())
+		}
+		m = wheel(m, true)
+		if m.ScrollTarget() != 4 {
+			t.Fatalf("two wheel down: target = %d, want 4 (clamped)", m.ScrollTarget())
+		}
+		m = wheel(m, false)
+		m = wheel(m, false)
+		if m.ScrollTarget() != 0 {
+			t.Errorf("two wheel up: target = %d, want 0", m.ScrollTarget())
+		}
+	})
+}
+
+func TestHeaderBarAndHelpFooter(t *testing.T) {
+	root := tuiTree(t)
+	m := newTUIModel(t, root)
+
+	frame := m.View()
+	if !strings.Contains(frame, "█") {
+		t.Errorf("header status-distribution bar missing from view:\n%s", frame)
+	}
+	if !strings.Contains(frame, "quit") || !strings.Contains(frame, " • ") {
+		t.Errorf("short help hint footer missing from view:\n%s", frame)
+	}
+	if m.HelpExpanded() {
+		t.Fatal("help should start collapsed")
+	}
+
+	m, _ = press(t, m, "?")
+	if !m.HelpExpanded() {
+		t.Fatal("? did not expand the help footer")
+	}
+	if full := m.View(); strings.Contains(full, " • ") {
+		t.Errorf("help still showing the short bar after ?:\n%s", full)
+	}
+
+	m, _ = press(t, m, "?")
+	if m.HelpExpanded() {
+		t.Error("second ? did not collapse the help footer")
+	}
+	t.Logf("board view with header bar + help footer 100x30:\n%s", frame)
 }
 
 func TestViewRendersHeadless(t *testing.T) {

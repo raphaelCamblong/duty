@@ -17,6 +17,6 @@ Order top-to-bottom is the intended build order.
 | [T-08](T-08-cli-archive-delete-list-agent-output.md) | CLI archive, delete, list, agent output | done |
 | [T-09](T-09-spec-invariants-test-suite.md) | Spec invariants test suite | done |
 | [T-10](T-10-tui-live-board-viewer.md) | TUI live board viewer | done |
-| [T-11](T-11-tui-mouse-motion-charts-polish.md) | TUI mouse, motion, charts polish | todo |
+| [T-11](T-11-tui-mouse-motion-charts-polish.md) | TUI mouse, motion, charts polish | done |
 
 Completed tasks (0) archived: [archive/](archive/).

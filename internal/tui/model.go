@@ -3,10 +3,15 @@ package tui
 import (
 	"os/exec"
 	"strings"
+	"time"
 
+	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/harmonica"
+	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/raphaelCamblong/duty/internal/config"
 )
@@ -31,6 +36,8 @@ type Model struct {
 	editor  string
 	theme   string
 	keys    keyMap
+	help    help.Model
+	zones   *zone.Manager
 	refresh <-chan struct{}
 
 	snap    Snapshot
@@ -39,6 +46,14 @@ type Model struct {
 	cursors map[string]int
 	width   int
 	height  int
+
+	spring       harmonica.Spring
+	scroll       float64
+	scrollVel    float64
+	scrollTarget int
+	animating    bool
+	lastClick    int
+	lastClickAt  time.Time
 
 	detailOpen bool
 	detailRow  Row
@@ -53,18 +68,36 @@ func New(root string, cfg config.Config) (Model, error) {
 		return Model{}, err
 	}
 	return Model{
-		root:    root,
-		editor:  cfg.Editor,
-		theme:   cfg.TUI.Theme,
-		keys:    defaultKeys(),
-		snap:    snap,
-		path:    ".",
-		cursors: map[string]int{},
+		root:      root,
+		editor:    cfg.Editor,
+		theme:     cfg.TUI.Theme,
+		keys:      defaultKeys(),
+		help:      help.New(),
+		zones:     zone.New(),
+		snap:      snap,
+		path:      ".",
+		cursors:   map[string]int{},
+		spring:    harmonica.NewSpring(harmonica.FPS(scrollFPS), scrollFreq, 1.0),
+		lastClick: -1,
 	}, nil
+}
+
+// Close releases the model's zone manager; call it once after the program
+// exits.
+func (m Model) Close() {
+	if m.zones != nil {
+		m.zones.Close()
+	}
 }
 
 // BoardPath returns the path of the board on screen ("." = root).
 func (m Model) BoardPath() string { return m.path }
+
+// ScrollTarget returns the board's spring target top line (for tests).
+func (m Model) ScrollTarget() int { return m.scrollTarget }
+
+// HelpExpanded reports whether the full "?" key grid is showing.
+func (m Model) HelpExpanded() bool { return m.help.ShowAll }
 
 // Cursor returns the selected item index in the board view.
 func (m Model) Cursor() int { return m.cursor() }
@@ -90,19 +123,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		m.help.Width = msg.Width
 		if m.detailOpen {
 			m = m.openDetail(m.detailRow, m.detailVP.YOffset)
 		}
-		return m, nil
+		return m.clampScroll(), nil
 	case refreshMsg:
 		if m.refresh == nil {
 			return m, scanCmd(m.root)
 		}
 		return m, tea.Batch(scanCmd(m.root), waitRefresh(m.refresh))
 	case snapMsg:
-		return m.withSnap(msg), nil
+		return m.withSnap(msg).clampScroll(), nil
 	case editedMsg:
 		return m, scanCmd(m.root)
+	case scrollTickMsg:
+		return m.stepScroll()
+	case tea.MouseMsg:
+		return m.handleMouse(msg)
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -120,13 +158,16 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	switch {
 	case key.Matches(msg, m.keys.Down):
-		return m.moveCursor(1), nil
+		return m.moveCursor(1).startAnim()
 	case key.Matches(msg, m.keys.Up):
-		return m.moveCursor(-1), nil
+		return m.moveCursor(-1).startAnim()
 	case key.Matches(msg, m.keys.Open):
-		return m.open(), nil
+		return m.open().startAnim()
 	case key.Matches(msg, m.keys.Back):
-		return m.back(), nil
+		return m.back().startAnim()
+	case key.Matches(msg, m.keys.Help):
+		m.help.ShowAll = !m.help.ShowAll
+		return m, nil
 	case key.Matches(msg, m.keys.Edit):
 		if it, ok := m.selected(); ok && it.row != nil {
 			return m, editCmd(m.editor, it.row.Path)
@@ -144,6 +185,9 @@ func (m Model) detailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, m.keys.Edit):
 		return m, editCmd(m.editor, m.detailRow.Path)
+	case key.Matches(msg, m.keys.Help):
+		m.help.ShowAll = !m.help.ShowAll
+		return m.openDetail(m.detailRow, m.detailVP.YOffset), nil
 	}
 	var cmd tea.Cmd
 	m.detailVP, cmd = m.detailVP.Update(msg)
@@ -196,10 +240,11 @@ func (m Model) cursor() int {
 	return clamp(m.cursors[m.path], 0, len(m.items())-1)
 }
 
-// moveCursor shifts the current board's cursor by delta, clamped.
+// moveCursor shifts the current board's cursor by delta, clamped, and nudges
+// the scroll target to keep the selection on screen.
 func (m Model) moveCursor(delta int) Model {
 	m.cursors[m.path] = clamp(m.cursor()+delta, 0, len(m.items())-1)
-	return m
+	return m.ensureVisible()
 }
 
 // open descends into the selected sub-board or opens the selected task's
@@ -211,7 +256,7 @@ func (m Model) open() Model {
 	}
 	if it.sub != nil {
 		m.path = it.sub.Path
-		return m
+		return m.resetScroll()
 	}
 	if it.row.Path == "" {
 		return m
@@ -223,15 +268,18 @@ func (m Model) open() Model {
 func (m Model) back() Model {
 	if b, ok := m.board(); ok && b.Parent != "" {
 		m.path = b.Parent
+		return m.resetScroll()
 	}
 	return m
 }
 
 // openDetail (re)builds the detail view for row at the current size,
-// restoring the scroll offset.
+// restoring the scroll offset. The viewport is sized around the live header
+// and footer heights so toggling help never overlaps the markdown.
 func (m Model) openDetail(row Row, offset int) Model {
 	w, h := m.dims()
-	vp := viewport.New(w, max(h-detailChrome, 1))
+	chrome := lipgloss.Height(m.detailHeader(row, w)) + 1 + lipgloss.Height(m.helpView(w))
+	vp := viewport.New(w, max(h-chrome, 1))
 	vp.SetContent(renderMarkdown(row.Content, w, m.theme))
 	vp.SetYOffset(offset)
 	m.detailOpen, m.detailRow, m.detailVP = true, row, vp

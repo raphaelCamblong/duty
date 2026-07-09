@@ -27,13 +27,14 @@ func Run(cwd string) error {
 	if err != nil {
 		return err
 	}
+	defer m.Close()
 	w, err := NewWatcher(root)
 	if err != nil {
 		return err
 	}
 	defer w.Close()
 	m.refresh = w.C
-	_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()
+	_, err = tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
 	return err
 }
 
