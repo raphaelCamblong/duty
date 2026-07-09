@@ -16,33 +16,39 @@ spec wins on behavior, this file wins on style and structure.
 
 ## Architecture
 
-Layered, dependency rule points inward (clean architecture adapted to a Go CLI — the
-same shape as `gh`/`hugo`: `cmd/` entrypoint, domain and infra under `internal/`).
+Ports-and-adapters around a pure domain (clean architecture; dependencies point
+inward). `gh`/`hugo`-shaped on the outside: `cmd/` entrypoint, everything under
+`internal/`.
 
 ```
-cmd/duty/main.go     — entrypoint only: wire deps, dispatch, map error → exit code. ≤50 lines.
+cmd/duty/main.go     — entrypoint only: wire fsys.OS into the app, delegate to cli. ≤50 lines.
 internal/
-  task/              — domain, PURE (bytes in → bytes out): frontmatter parse, task
-                       template render, targeted edits (status line, append report),
-                       gate counting. Imports stdlib + yaml only.
-  board/             — domain, PURE: BOARD.md model — row find/edit/add/drop, sections,
-                       pruning, footer count, Boards bullets. Imports stdlib only.
-  tree/              — infra: root & current-board resolution (walk-up), board discovery
-                       (WalkDir, skip archive/), id → path, next NN.
-  config/            — infra: TOML load, user < project precedence, root-only check.
-  fsutil/            — infra: atomic write (temp + rename in same dir). Tiny.
-  cli/               — presentation: subcommand dispatch (stdlib flag), handlers. The
-                       sync invariant lives HERE: each mutating handler = task edit +
-                       board edit, both through fsutil.
-  tui/               — presentation: bubbletea program (model/update/view), fsnotify
-                       watcher, tree-scan → view model.
+  names/             — leaf vocabulary: the convention's file/dir names (BOARD.md,
+                       duty.toml, README.md, archive, duty). Zero deps; imported by all.
+                       A filename literal outside this package is a bug.
+  task/              — domain, PURE (bytes in → bytes out): frontmatter, template,
+                       targeted edits, gate counting, slugs. stdlib + yaml + names only.
+  board/             — domain, PURE: BOARD.md model, line-surgical. stdlib + names only.
+  fsys/              — the filesystem PORT: FS interface (read, atomic write, rename,
+                       remove, mkdir, readdir, walk) + adapters: OS (real, atomic
+                       temp+rename writes) and Mem (in-memory test double).
+  tree/              — repository: discovery, walk-up, id resolution, numbering —
+                       queries over an injected fsys.FS.
+  config/            — TOML load over fsys.FS; user < project precedence.
+  app/               — application services: one use-case per verb (Init, CreateTask,
+                       CreateBoard, SetStatus, Link, Report, Move, Archive, Delete,
+                       List). App{FS} constructor-injected; returns data — never
+                       prints, never parses flags. The sync invariant lives HERE.
+  cli/               — presentation: cobra commands, thin — parse flags, call app,
+                       format output (human or --agent TSV), map errors → exit codes.
+  tui/               — presentation: bubbletea program over the same scan/app layers.
 tests/               — ALL test files. No _test.go anywhere else.
 ```
 
-Dependency rule: `task` and `board` import no other internal package and touch no
-filesystem — they transform bytes. `cli` and `tui` may import everything; nothing
-imports `cli` or `tui`. If a change needs `task` to read a file, the change is in the
-wrong layer.
+Dependency rule (inward only): `names` ← domain ← {`fsys`, `tree`, `config`} ← `app` ←
+{`cli`, `tui`}. Nothing imports `cli` or `tui` (main delegates; `cli` launches `tui`).
+If code outside `internal/fsys` calls `os.*` file APIs, the change is in the wrong
+layer — it goes through the port.
 
 ## Code rules (mandatory)
 
@@ -54,13 +60,18 @@ wrong layer.
   codes are the API).
 - Quiet on success. Stdout is output, stderr is errors — never mix.
 - Naming: no package stutter (`task.Task` yes, `task.TaskFile` no), short receivers,
-  every exported symbol has a godoc comment starting with its name.
+  every exported symbol has a godoc comment starting with its name — exactly one terse
+  line. NO narrating inline comments: if a block needs explanation, extract a named
+  function; comment only a constraint the code cannot express.
 - Small functions, guard clauses, early return, no `else` after `return`.
 - No package-level mutable state, no `init()`. Dependencies enter through constructors
   (`New…`) or parameters.
 - **Line-surgical file edits** (spec invariant): find the target line, change only it,
   write back. Never parse-and-re-render a whole file. Never re-serialize YAML.
-- Every write goes through `fsutil` (atomic). No raw `os.WriteFile` outside it.
+- Every filesystem touch goes through `fsys.FS` (writes atomic). No `os.*` file calls
+  outside `internal/fsys`.
+- CLI commands are cobra and stay thin: parse → app service → format. Business logic
+  in a cobra `RunE` is a wrong-layer bug.
 - Concurrency exists only in the TUI watcher. Everything else is synchronous.
 - TUI: all styling through lipgloss (no raw ANSI); use bubbles components before
   hand-rolling; keep `update` logic pure so it's testable without a terminal.

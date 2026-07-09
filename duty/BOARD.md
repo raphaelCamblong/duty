@@ -18,5 +18,8 @@ Order top-to-bottom is the intended build order.
 | [T-09](T-09-spec-invariants-test-suite.md) | Spec invariants test suite | done |
 | [T-10](T-10-tui-live-board-viewer.md) | TUI live board viewer | done |
 | [T-11](T-11-tui-mouse-motion-charts-polish.md) | TUI mouse, motion, charts polish | done |
+| [T-12](T-12-convention-names-and-filesystem-port.md) | Convention names and filesystem port | todo |
+| [T-13](T-13-application-layer-and-cobra-cli.md) | Application layer and cobra CLI | todo |
+| [T-14](T-14-comment-hygiene-and-final-cleanup.md) | Comment hygiene and final cleanup | todo |
 
 Completed tasks (0) archived: [archive/](archive/).

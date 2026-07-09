@@ -261,15 +261,17 @@ Add TUI mutations only if that round-trip proves too slow in practice.
 
 ## 9. Implementation notes (Go)
 
-- **One module, layered packages** — the layout and code rules live in `CLAUDE.md`:
-  `cmd/duty` entrypoint; pure domain packages `internal/task`, `internal/board` (bytes
-  in → bytes out, no filesystem); infra `internal/tree`, `internal/config`,
-  `internal/fsutil`; presentation `internal/cli`, `internal/tui`; all tests in `tests/`.
-  Still no interfaces with a single implementation.
-- **Subcommands via stdlib:** `flag.NewFlagSet` per command, dispatched in `internal/cli`.
-  No cobra — ten commands don't need a framework.
-- **Deps:** `BurntSushi/toml` (config), `gopkg.in/yaml.v3` to *read* frontmatter robustly
-  (lists!), `fsnotify/fsnotify` (watcher), and the Charm stack for the TUI — one
+- **One module, ports-and-adapters** — the layout and code rules live in `CLAUDE.md`:
+  `cmd/duty` entrypoint; leaf `internal/names` (convention filenames, defined once);
+  pure domain `internal/task`, `internal/board`; a filesystem port `internal/fsys`
+  (OS + in-memory adapters); `internal/tree`/`internal/config` as queries over it;
+  application services in `internal/app` (use-cases, sync invariant, never prints);
+  presentation `internal/cli`, `internal/tui`; all tests in `tests/`.
+- **Subcommands via `spf13/cobra`** — per-command help and usage for free; commands
+  stay thin (parse → app service → format). Cobra's own printing is silenced so the
+  contract holds: quiet on success, one lowercase stderr line + non-zero exit on error.
+- **Deps:** `spf13/cobra` (CLI), `BurntSushi/toml` (config), `gopkg.in/yaml.v3` to *read*
+  frontmatter robustly (lists!), `fsnotify/fsnotify` (watcher), and the Charm stack for the TUI — one
   ecosystem, not six separate deps to vet:
   - `bubbletea` — the TUI runtime (Elm-style update loop).
   - `bubbles` — stock components: `viewport` (detail scroll), `help` (key hints). Never
