@@ -171,6 +171,31 @@ func TestFindRow(t *testing.T) {
 	}
 }
 
+func TestRowStatus(t *testing.T) {
+	fixture := boardFixture()
+	tests := []struct {
+		name       string
+		row        string
+		wantStatus string
+		wantOK     bool
+	}{
+		{name: "plain row", row: fixture[17], wantStatus: "todo", wantOK: true},
+		{name: "unusual spacing kept in the row still yields a trimmed status", row: fixture[18], wantStatus: "in-progress", wantOK: true},
+		{name: "not a table row", row: "not a row at all", wantOK: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status, ok := board.RowStatus(tt.row)
+			if ok != tt.wantOK {
+				t.Fatalf("RowStatus() ok = %v, want %v", ok, tt.wantOK)
+			}
+			if status != tt.wantStatus {
+				t.Errorf("RowStatus() = %q, want %q", status, tt.wantStatus)
+			}
+		})
+	}
+}
+
 func TestAddRow(t *testing.T) {
 	fixture := boardFixture()
 	newRow := "| [T-05](T-05-new-task.md) | New task | todo |"

@@ -17,6 +17,12 @@ import (
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
+// unknownStatusErr is the one-line error every command rejecting an unknown
+// status string returns.
+func unknownStatusErr(status string) error {
+	return fmt.Errorf("unknown status %q: want todo, in-progress, done or blocked", status)
+}
+
 // boardFile is the index file every board directory holds. internal/tree
 // owns the filename convention; every other package references it from
 // there, never repeating the literal.
@@ -54,6 +60,12 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		err = runReport(cwd, args[1:], stdin)
 	case "move":
 		err = runMove(cwd, args[1:])
+	case "archive":
+		err = runArchive(cwd, args[1:])
+	case "delete":
+		err = runDelete(cwd, args[1:])
+	case "list":
+		err = runList(cwd, args[1:], stdout)
 	default:
 		fmt.Fprintf(stderr, "unknown command %q\n", cmd)
 		return 2

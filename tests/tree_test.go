@@ -336,6 +336,27 @@ func TestResolveTask(t *testing.T) {
 	}
 }
 
+func TestIsTaskFile(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{name: "T-01-bootstrap.md", want: true},
+		{name: "T-120-big.md", want: true},
+		{name: "BOARD.md", want: false},
+		{name: "README.md", want: false},
+		{name: "T-01-bootstrap.txt", want: false},
+		{name: "T-bootstrap.md", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tree.IsTaskFile(tt.name); got != tt.want {
+				t.Errorf("IsTaskFile(%q) = %v, want %v", tt.name, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNextNN(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -29,7 +29,7 @@ func runStatus(cwd string, args []string) error {
 	}
 	id, status := pos[0], pos[1]
 	if !task.ValidStatus(status) {
-		return fmt.Errorf("unknown status %q: want todo, in-progress, done or blocked", status)
+		return unknownStatusErr(status)
 	}
 
 	taskPath, err := resolveOpen(cwd, id)

@@ -92,6 +92,16 @@ func SetRowStatus(content []byte, filename, status string) ([]byte, error) {
 	return joinLines(lines), nil
 }
 
+// RowStatus returns the status cell of a table row as returned by FindRow,
+// and whether row parsed as one (at least three "|"-separated cells).
+func RowStatus(row string) (string, bool) {
+	cells := strings.Split(row, "|")
+	if len(cells) < 3 {
+		return "", false
+	}
+	return strings.TrimSpace(cells[len(cells)-2]), true
+}
+
 // MoveRow relocates the row targeting filename to the end of the named
 // section's table, creating the section above the footer when absent. The row
 // line moves byte-identical. A section left empty is not removed here; callers

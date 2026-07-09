@@ -137,6 +137,11 @@ func ResolveTask(root, id string) (string, error) {
 	return found, nil
 }
 
+// IsTaskFile reports whether name is a task filename: T-NN-<slug>.md.
+func IsTaskFile(name string) bool {
+	return taskNN.MatchString(name)
+}
+
 // NextNN walks every task filename under root — open and archived, every
 // board — and returns the next task number, zero-padded to two digits
 // minimum.
