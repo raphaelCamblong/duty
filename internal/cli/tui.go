@@ -2,7 +2,8 @@ package cli
 
 import (
 	"errors"
-	"flag"
+
+	"github.com/spf13/cobra"
 
 	"github.com/raphaelCamblong/duty/internal/fsys"
 	"github.com/raphaelCamblong/duty/internal/tui"
@@ -10,15 +11,16 @@ import (
 
 const tuiUsage = "usage: duty tui"
 
-// runTUI launches the live board viewer on the tree containing cwd.
-func runTUI(f fsys.FS, cwd string, args []string) error {
-	set := flag.NewFlagSet("tui", flag.ContinueOnError)
-	pos, err := positionals(set, args, tuiUsage)
-	if err != nil {
-		return err
+// newTUICmd builds the tui command: launch the live board viewer.
+func newTUICmd(f fsys.FS, cwd string) *cobra.Command {
+	return &cobra.Command{
+		Use:   "tui",
+		Short: "launch the live board viewer",
+		RunE: func(_ *cobra.Command, args []string) error {
+			if len(args) != 0 {
+				return errors.New(tuiUsage)
+			}
+			return tui.Run(f, cwd)
+		},
 	}
-	if len(pos) != 0 {
-		return errors.New(tuiUsage)
-	}
-	return tui.Run(f, cwd)
 }

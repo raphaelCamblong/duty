@@ -2,64 +2,27 @@ package cli
 
 import (
 	"errors"
-	"flag"
-	"fmt"
-	"path/filepath"
 
-	"github.com/raphaelCamblong/duty/internal/board"
-	"github.com/raphaelCamblong/duty/internal/fsys"
-	"github.com/raphaelCamblong/duty/internal/names"
-	"github.com/raphaelCamblong/duty/internal/tree"
+	"github.com/spf13/cobra"
+
+	"github.com/raphaelCamblong/duty/internal/app"
 )
 
 const boardUsage = "usage: duty board <name> [--title T]"
 
-// runBoard creates the sub-board <name>/ under the current board: a skeleton
-// board index (H1 = title, default the name) plus archive/, and appends the
-// courtesy bullet to the parent's "## Boards" section. It refuses when the
-// folder already exists.
-func runBoard(f fsys.FS, cwd string, args []string) error {
-	set := flag.NewFlagSet("board", flag.ContinueOnError)
-	title := set.String("title", "", "board title (default: the name)")
-	pos, err := positionals(set, args, boardUsage)
-	if err != nil {
-		return err
+// newBoardCmd builds the board command: new sub-board under the current one.
+func newBoardCmd(a app.App, cwd string) *cobra.Command {
+	var title string
+	cmd := &cobra.Command{
+		Use:   "board <name>",
+		Short: "create a sub-board under the current board",
+		RunE: func(_ *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return errors.New(boardUsage)
+			}
+			return a.CreateBoard(cwd, args[0], title)
+		},
 	}
-	if len(pos) != 1 {
-		return errors.New(boardUsage)
-	}
-	name := pos[0]
-	if !nameRE.MatchString(name) {
-		return fmt.Errorf("invalid board name %q: must match [a-z0-9-]+", name)
-	}
-
-	parentDir, err := tree.CurrentBoard(f, cwd)
-	if err != nil {
-		return err
-	}
-	sub := filepath.Join(parentDir, name)
-	if _, err := f.Stat(sub); err == nil {
-		return fmt.Errorf("cannot create board: %s already exists", sub)
-	}
-	parentPath := filepath.Join(parentDir, names.BoardFile)
-	parent, err := f.ReadFile(parentPath)
-	if err != nil {
-		return err
-	}
-	t := *title
-	if t == "" {
-		t = name
-	}
-	withBullet, err := board.AddBoardBullet(parent, name, t)
-	if err != nil {
-		return err
-	}
-
-	if err := f.MkdirAll(filepath.Join(sub, names.ArchiveDir)); err != nil {
-		return fmt.Errorf("create board: %w", err)
-	}
-	if err := f.WriteFile(filepath.Join(sub, names.BoardFile), board.Render(t)); err != nil {
-		return err
-	}
-	return f.WriteFile(parentPath, withBullet)
+	cmd.Flags().StringVar(&title, "title", "", "board title (default: the name)")
+	return cmd
 }

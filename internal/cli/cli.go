@@ -1,31 +1,33 @@
-// Package cli dispatches duty's subcommands: one flag.FlagSet per command,
-// no framework. The sync invariant lives here — every mutating handler edits
-// the task file AND its board row in the same command — and every write goes
-// through the injected fsys.FS (atomic). Commands are quiet on success; errors
-// are one lowercase line on stderr and a non-zero exit code.
+// Package cli is duty's presentation layer: thin cobra subcommands that
+// parse flags, delegate to the app services, and format output. Cobra's own
+// error and usage printing is silenced to keep the contract: quiet on
+// success, one lowercase stderr line per error, exit 0/1, and 2 on a missing
+// or unknown command.
 package cli
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 	"strings"
 
+	"github.com/spf13/cobra"
+
+	"github.com/raphaelCamblong/duty/internal/app"
 	"github.com/raphaelCamblong/duty/internal/fsys"
-	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
-// unknownStatusErr is the one-line error every command rejecting an unknown
-// status string returns.
-func unknownStatusErr(status string) error {
-	return fmt.Errorf("unknown status %q: want todo, in-progress, done or blocked", status)
-}
+// errNoCommand reports an invocation naming no command; it maps to exit 2.
+var errNoCommand = errors.New("usage: duty <command> [args]")
 
-// nameRE validates sub-board folder names and task filename slugs.
-var nameRE = regexp.MustCompile(`^[a-z0-9-]+$`)
+// unknownCommandError names a command Run does not know; it maps to exit 2.
+type unknownCommandError string
+
+// Error renders the one-line unknown-command message.
+func (e unknownCommandError) Error() string {
+	return fmt.Sprintf("unknown command %q", string(e))
+}
 
 // Run executes one duty command over the real filesystem. args is the command
 // line without the program name; stdin feeds commands that read input; stdout
@@ -34,7 +36,7 @@ var nameRE = regexp.MustCompile(`^[a-z0-9-]+$`)
 // any other error.
 func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: duty <command> [args]")
+		fmt.Fprintln(stderr, errNoCommand)
 		return 2
 	}
 	cwd, err := os.Getwd()
@@ -42,82 +44,65 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	var f fsys.FS = fsys.OS{}
-	switch cmd := args[0]; cmd {
-	case "init":
-		err = runInit(f, cwd, args[1:])
-	case "create":
-		err = runCreate(f, cwd, args[1:], stdout)
-	case "board":
-		err = runBoard(f, cwd, args[1:])
-	case "status":
-		err = runStatus(f, cwd, args[1:])
-	case "link":
-		err = runLink(f, cwd, args[1:])
-	case "report":
-		err = runReport(f, cwd, args[1:], stdin)
-	case "move":
-		err = runMove(f, cwd, args[1:])
-	case "archive":
-		err = runArchive(f, cwd, args[1:])
-	case "delete":
-		err = runDelete(f, cwd, args[1:])
-	case "list":
-		err = runList(f, cwd, args[1:], stdout)
-	case "tui":
-		err = runTUI(f, cwd, args[1:])
-	default:
-		fmt.Fprintf(stderr, "unknown command %q\n", cmd)
-		return 2
-	}
-	if err != nil {
+	root := newRoot(cwd, stdin, stdout, stderr)
+	root.SetArgs(args)
+	if err := root.Execute(); err != nil {
 		fmt.Fprintln(stderr, err)
+		var unknown unknownCommandError
+		if errors.Is(err, errNoCommand) || errors.As(err, &unknown) {
+			return 2
+		}
 		return 1
 	}
 	return 0
 }
 
-// positionals parses args against fs and returns the positional arguments.
-// Flags may appear before, between, and after positionals (the spec's usage
-// lines put the title first, flags after). A help request surfaces as an
-// error carrying the command's usage line.
-func positionals(fs *flag.FlagSet, args []string, usage string) ([]string, error) {
-	fs.SetOutput(io.Discard)
-	var pos []string
-	for {
-		if err := fs.Parse(args); err != nil {
-			if errors.Is(err, flag.ErrHelp) {
-				return nil, errors.New(usage)
+// newRoot assembles the duty command tree over the real filesystem, rooted
+// at cwd, with cobra's own error and usage printing silenced.
+func newRoot(cwd string, stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
+	var f fsys.FS = fsys.OS{}
+	a := app.New(f)
+	root := &cobra.Command{
+		Use:           "duty <command> [args]",
+		Short:         "file-based task system: markdown tasks + board indexes",
+		Args:          cobra.ArbitraryArgs,
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(_ *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return errNoCommand
 			}
-			return nil, err
-		}
-		if fs.NArg() == 0 {
-			return pos, nil
-		}
-		pos = append(pos, fs.Arg(0))
-		args = fs.Args()[1:]
+			return unknownCommandError(args[0])
+		},
 	}
-}
-
-// resolveOpen resolves id to its open task file anywhere in the tree
-// containing cwd. Archived ids fail with tree.ErrArchived in the chain:
-// archived tasks are read-only.
-func resolveOpen(f fsys.FS, cwd, id string) (string, error) {
-	root, err := tree.FindRoot(f, cwd)
-	if err != nil {
-		return "", err
-	}
-	return tree.ResolveTask(f, root, id)
+	root.SetIn(stdin)
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.CompletionOptions.DisableDefaultCmd = true
+	root.AddCommand(
+		newInitCmd(a, cwd),
+		newCreateCmd(a, cwd, stdout),
+		newBoardCmd(a, cwd),
+		newStatusCmd(a, cwd),
+		newLinkCmd(a, cwd),
+		newReportCmd(a, cwd, stdin),
+		newMoveCmd(a, cwd),
+		newArchiveCmd(a, cwd),
+		newDeleteCmd(a, cwd),
+		newListCmd(a, cwd, stdout),
+		newTUICmd(f, cwd),
+	)
+	return root
 }
 
 // stringList is a repeatable string flag; each occurrence may also carry
 // several comma-separated values.
 type stringList []string
 
-// String renders the collected values, satisfying flag.Value.
+// String renders the collected values, satisfying pflag.Value.
 func (l *stringList) String() string { return strings.Join(*l, ",") }
 
-// Set appends the comma-separated values in v, satisfying flag.Value.
+// Set appends the comma-separated values in v, satisfying pflag.Value.
 func (l *stringList) Set(v string) error {
 	for _, s := range strings.Split(v, ",") {
 		if s = strings.TrimSpace(s); s != "" {
@@ -126,3 +111,6 @@ func (l *stringList) Set(v string) error {
 	}
 	return nil
 }
+
+// Type names the flag's value in help output, satisfying pflag.Value.
+func (l *stringList) Type() string { return "id" }

@@ -1,7 +1,7 @@
 ---
 id: T-13
 title: Application layer and cobra CLI
-status: todo
+status: done
 blocked-by: [T-12]
 ---
 
@@ -37,14 +37,34 @@ New features or format changes; TUI internals (only its dispatch moves to cobra)
 comment sweep (T-14).
 
 ## Gates
-- [ ] `internal/cli` contains no direct `internal/task`/`internal/board` orchestration —
+- [x] `internal/cli` contains no direct `internal/task`/`internal/board` orchestration —
   commands only parse, call `app`, and format; the sync invariant is enforced in
   `internal/app` (grep: no `board.AddRow`/`task.Render` outside `internal/app`).
-- [ ] Full suite green unchanged (esp. `tests/roundtrip_test.go`); exit codes 0/1/2
+- [x] Full suite green unchanged (esp. `tests/roundtrip_test.go`); exit codes 0/1/2
   verified by the existing dispatch tests.
-- [ ] `duty --help` and `duty create --help` render cobra usage; unknown command still
+- [x] `duty --help` and `duty create --help` render cobra usage; unknown command still
   exits 2 with one stderr line.
-- [ ] `go mod tidy` leaves `go.mod` stable (all deps imported); `gofmt -l .` empty;
+- [x] `go mod tidy` leaves `go.mod` stable (all deps imported); `gofmt -l .` empty;
   `go vet ./...` clean; `go build -o bin/duty ./cmd/duty` ok.
 
 ## Report
+
+Refactor complete: all orchestration moved into a new `internal/app` service layer; `internal/cli` rewritten as thin spf13/cobra commands.
+
+Files changed
+- New `internal/app` (one file per verb + app.go): `App{fs fsys.FS}`, `New(fs)`; methods `Init`, `CreateTask` (returns the created path), `CreateBoard`, `SetStatus`, `Link`, `Report`, `Move`, `Archive`, `Delete`, `List` (returns `[]Row{ID, Title, Status, Board, RowMissing, RowStatus}`). The sync invariant, slug/board-name validation (`nameRE`), status validation, section defaulting, the init readme, and the drift computation all live here. Methods never print and take no flag types; `Report` takes an `io.Reader` so the id still resolves before stdin is consumed (frozen ordering).
+- `internal/cli` rewritten on cobra v1.10.2: `cli.go` (Run + newRoot + stringList pflag value) and one `new<Verb>Cmd` file per command — parse args/flags, call app, format. `list.go` keeps the human line and the 5-field `--agent` TSV rendering byte-identical. cli no longer imports task/board/tree at all; its only os call is `os.Getwd`.
+- Contract preserved: `Run(args, stdin, stdout, stderr) int`; root `SilenceErrors`/`SilenceUsage` + `RunE` returning a typed `unknownCommandError` map missing/unknown command to exit 2 with the exact old one-line messages; every other error is one lowercase stderr line + exit 1; quiet success. `duty --help` / `duty <cmd> --help` now render cobra usage (exit 0); completion command disabled.
+- `go get spf13/cobra` + one `go mod tidy`: go.mod now pins all deps as imported (charm/tui stack survived as direct requires); tidy is idempotent.
+- `cmd/duty/main.go` unchanged (thin delegate).
+
+Gates (all green)
+- grep: no `board.AddRow`/`task.Render` outside internal/app; no task/board/tree imports in internal/cli.
+- `go test ./tests/... -coverpkg=./internal/... -count=1` ok, 82.2% (also green with -race); roundtrip suite untouched and passing — zero test edits needed.
+- `duty --help`, `duty create --help` render cobra usage; `duty nope` -> `unknown command "nope"` exit 2; bare `duty` -> usage line exit 2; end-to-end lifecycle smoke (init/create/board/status/link/report/move/list/archive/delete) exercised on a scratch tree.
+- `go mod tidy` stable; `gofmt -l .` empty; `go vet ./...` clean; build ok.
+
+Deviations / notes
+- Help requests changed from "usage error, exit 1" to cobra help on stdout, exit 0 — the explicit point of this task; no test asserted the old behavior.
+- Flag-parse error wording is now pflag's (e.g. `unknown flag: --nope`), still one lowercase line, exit 1.
+- Comment sweep deliberately left to T-14.

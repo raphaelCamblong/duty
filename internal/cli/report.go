@@ -1,45 +1,27 @@
 package cli
 
 import (
-	"bytes"
 	"errors"
-	"flag"
-	"fmt"
 	"io"
 
-	"github.com/raphaelCamblong/duty/internal/fsys"
-	"github.com/raphaelCamblong/duty/internal/task"
+	"github.com/spf13/cobra"
+
+	"github.com/raphaelCamblong/duty/internal/app"
 )
 
 const reportUsage = "usage: duty report <id>"
 
-// runReport appends stdin under the task's "## Report" heading, creating the
-// heading once at the end of the file. Reports accumulate — nothing already
-// in the file is rewritten. Empty (or blank) stdin is refused.
-func runReport(f fsys.FS, cwd string, args []string, stdin io.Reader) error {
-	set := flag.NewFlagSet("report", flag.ContinueOnError)
-	pos, err := positionals(set, args, reportUsage)
-	if err != nil {
-		return err
+// newReportCmd builds the report command: append stdin under the task's
+// "## Report" heading.
+func newReportCmd(a app.App, cwd string, stdin io.Reader) *cobra.Command {
+	return &cobra.Command{
+		Use:   "report <id>",
+		Short: "append stdin to a task's report",
+		RunE: func(_ *cobra.Command, args []string) error {
+			if len(args) != 1 || args[0] == "" {
+				return errors.New(reportUsage)
+			}
+			return a.Report(cwd, args[0], stdin)
+		},
 	}
-	if len(pos) != 1 || pos[0] == "" {
-		return errors.New(reportUsage)
-	}
-
-	taskPath, err := resolveOpen(f, cwd, pos[0])
-	if err != nil {
-		return err
-	}
-	text, err := io.ReadAll(stdin)
-	if err != nil {
-		return fmt.Errorf("read stdin: %w", err)
-	}
-	if len(bytes.TrimSpace(text)) == 0 {
-		return errors.New("empty report: pipe the report text on stdin")
-	}
-	content, err := f.ReadFile(taskPath)
-	if err != nil {
-		return err
-	}
-	return f.WriteFile(taskPath, task.AppendReport(content, text))
 }
