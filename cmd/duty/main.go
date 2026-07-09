@@ -1,14 +1,14 @@
 // Command duty is a file-based task system: markdown task files plus nested
-// board indexes, driven by one binary. Real dispatch lands in a later task;
-// for now it only prints usage.
+// board indexes, kept in sync by one binary. main is a thin delegate — all
+// dispatch, flag parsing, and error rendering live in internal/cli.
 package main
 
 import (
-	"fmt"
 	"os"
+
+	"github.com/raphaelCamblong/duty/internal/cli"
 )
 
 func main() {
-	fmt.Fprintln(os.Stderr, "usage: duty <command> [args]")
-	os.Exit(2)
+	os.Exit(cli.Run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
