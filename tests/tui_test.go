@@ -261,6 +261,81 @@ func TestCountsRollUpInSnapshot(t *testing.T) {
 	}
 }
 
+func TestTrackBarCells(t *testing.T) {
+	statuses := []string{"todo", "in-progress", "blocked", "done"}
+
+	t.Run("proportional, every non-zero status visible, fixed width", func(t *testing.T) {
+		cells := tui.BarCells(map[string]int{"done": 10, "todo": 2, "in-progress": 1, "blocked": 1}, 14)
+		sum := 0
+		for _, st := range statuses {
+			if cells[st] < 1 {
+				t.Errorf("status %q got %d cells, want >=1 (non-zero stays visible)", st, cells[st])
+			}
+			sum += cells[st]
+		}
+		if sum != 14 {
+			t.Errorf("bar cells sum = %d, want 14 (fixed width)", sum)
+		}
+		if cells["done"] <= cells["todo"] {
+			t.Errorf("dominant done=%d not wider than todo=%d (not proportional)", cells["done"], cells["todo"])
+		}
+	})
+
+	t.Run("single status fills the whole bar", func(t *testing.T) {
+		if cells := tui.BarCells(map[string]int{"in-progress": 3}, 14); cells["in-progress"] != 14 {
+			t.Errorf("single-status cells = %v, want in-progress: 14", cells)
+		}
+	})
+
+	t.Run("empty subtree yields no bar", func(t *testing.T) {
+		if cells := tui.BarCells(map[string]int{}, 14); cells != nil {
+			t.Errorf("empty counts = %v, want nil", cells)
+		}
+	})
+}
+
+func TestTracksHeaderAndInlineBar(t *testing.T) {
+	root := fourStatusTree(t) // root has a backend track (T-03 done, T-04 blocked)
+	m := newTUIModelSize(t, root, 120, 35)
+	frame := m.View()
+
+	if !strings.Contains(frame, "Tracks") {
+		t.Errorf("Tracks section header missing:\n%s", frame)
+	}
+	trackRow := strings.Split(frame, "\n")[lineWith(t, frame, "backend/", 38)]
+	if !strings.Contains(trackRow, "█") {
+		t.Errorf("track row missing the inline state bar: %q", trackRow)
+	}
+
+	if m.SelectedID() != "backend" {
+		t.Fatalf("initial selection = %q, want backend (Tracks header skipped)", m.SelectedID())
+	}
+	m, _ = press(t, m, "k") // at the top: the header above must not be selectable
+	if m.SelectedID() != "backend" {
+		t.Errorf("k at the top: selection = %q, want backend (header not selectable)", m.SelectedID())
+	}
+	for _, want := range []string{"T-01", "T-02", "T-02"} {
+		m, _ = press(t, m, "j")
+		if m.SelectedID() != want {
+			t.Fatalf("j lands on %q, want %q (section headers skipped)", m.SelectedID(), want)
+		}
+	}
+
+	m = newTUIModelSize(t, root, 120, 35)
+	var cmd tea.Cmd
+	for _, k := range []string{"/", "b", "a", "c", "k"} {
+		m, cmd = press(t, m, k)
+		m = pump(t, m, cmd)
+	}
+	filtered := m.View()
+	if strings.Contains(filtered, "Tracks") {
+		t.Errorf("Tracks header still shown while filtering:\n%s", filtered)
+	}
+	if !strings.Contains(filtered, "backend/") {
+		t.Errorf("filter dropped the matching track:\n%s", filtered)
+	}
+}
+
 func TestMasterDetailLayout(t *testing.T) {
 	root := fourStatusTree(t)
 

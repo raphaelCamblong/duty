@@ -24,6 +24,8 @@ const (
 	minLeftWidth = 30
 	// minBarWidth is the shortest distribution bar worth drawing.
 	minBarWidth = 8
+	// trackBarWidth is the fixed cell width of a track row's inline state bar.
+	trackBarWidth = 14
 )
 
 // rollupOrder is the status sequence for track rollups and summaries: active
@@ -207,11 +209,7 @@ func stateLine(b Board, w int) string {
 // statusBar renders per-status counts as one horizontal ntcharts bar w cells
 // wide; no tasks shows a faint rule.
 func statusBar(counts map[string]int, w int) string {
-	total := 0
-	for _, st := range rollupOrder {
-		total += counts[st]
-	}
-	if total == 0 {
+	if totalCount(counts) == 0 {
 		return dimStyle.Render(strings.Repeat("╌", w))
 	}
 	bar := barchart.New(w, 1,
@@ -413,6 +411,90 @@ func statusRollup(counts map[string]int) string {
 		}
 	}
 	return strings.Join(parts, dimStyle.Render(" · "))
+}
+
+// totalCount sums a status→count map over the lifecycle statuses.
+func totalCount(counts map[string]int) int {
+	n := 0
+	for _, st := range rollupOrder {
+		n += counts[st]
+	}
+	return n
+}
+
+// BarCells splits width cells across the non-zero statuses in counts,
+// proportional to each status's share, every non-zero status guaranteed at
+// least one cell and leftover cells given to the largest remainders; an empty
+// subtree yields nil. width must be at least the number of non-zero statuses.
+func BarCells(counts map[string]int, width int) map[string]int {
+	total := totalCount(counts)
+	if total == 0 {
+		return nil
+	}
+	var active []string
+	for _, st := range rollupOrder {
+		if counts[st] > 0 {
+			active = append(active, st)
+		}
+	}
+	cells := make(map[string]int, len(active))
+	rem := make(map[string]float64, len(active))
+	spare := width - len(active)
+	sum := 0
+	for _, st := range active {
+		exact := float64(counts[st]) / float64(total) * float64(spare)
+		c := 1 + int(exact)
+		cells[st] = c
+		rem[st] = exact - float64(int(exact))
+		sum += c
+	}
+	for sum < width {
+		st := maxRemainder(active, rem)
+		cells[st]++
+		rem[st]--
+		sum++
+	}
+	return cells
+}
+
+// maxRemainder is the status with the largest fractional remainder, ties
+// broken by lifecycle order.
+func maxRemainder(active []string, rem map[string]float64) string {
+	best := active[0]
+	for _, st := range active[1:] {
+		if rem[st] > rem[best] {
+			best = st
+		}
+	}
+	return best
+}
+
+// trackBar renders a fixed-width inline status-distribution bar: colored
+// block runs proportional to the subtree per-status counts in lifecycle
+// order, the header bar's palette, "" when the subtree holds no tasks.
+func trackBar(counts map[string]int, width int) string {
+	cells := BarCells(counts, width)
+	if cells == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, st := range rollupOrder {
+		if c := cells[st]; c > 0 {
+			b.WriteString(lipgloss.NewStyle().Foreground(statusColor(st)).Render(strings.Repeat("█", c)))
+		}
+	}
+	return b.String()
+}
+
+// trackBarCell is a track row's trailing state: a fixed-width inline
+// status-distribution bar and a dim total count, or a dim "empty" when the
+// subtree holds no tasks.
+func trackBarCell(counts map[string]int) string {
+	bar := trackBar(counts, trackBarWidth)
+	if bar == "" {
+		return dimStyle.Render("empty")
+	}
+	return bar + "  " + dimStyle.Render(strconv.Itoa(totalCount(counts)))
 }
 
 // breadcrumb joins the H1 titles from the root down to the track on screen,

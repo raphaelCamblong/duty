@@ -47,10 +47,18 @@ func anySelectable(items []list.Item) bool {
 	return false
 }
 
-// boardEntries lists a board as left-panel entries: sub-tracks first, then
-// every section header followed by its task rows in board order.
+// tracksSection is the label of the header above the sub-track rows; like a
+// task section header it is non-selectable and filters away.
+const tracksSection = "Tracks"
+
+// boardEntries lists a board as left-panel entries: a "Tracks" header over the
+// sub-track rows, then every section header followed by its task rows in board
+// order.
 func boardEntries(b Board) []list.Item {
 	var items []list.Item
+	if len(b.Subs) > 0 {
+		items = append(items, entry{section: tracksSection})
+	}
 	for i := range b.Subs {
 		items = append(items, entry{track: &b.Subs[i]})
 	}
@@ -142,8 +150,9 @@ func styleMatches(s string, matches []int, base lipgloss.Style) string {
 	return lipgloss.StyleRunes(s, matches, base.Underline(true), base)
 }
 
-// trackLine renders one sub-track: name, title, and a per-status rollup of
-// its subtree, each count in its status color, zero-count statuses omitted.
+// trackLine renders one sub-track: name, title, and a fixed-width inline
+// status-distribution bar of its subtree with a dim total count (dim "empty"
+// when the subtree holds no tasks).
 func (d compactDelegate) trackLine(s Sub, selected bool, w int, nameM, titleM []int) string {
 	title := lipgloss.NewStyle()
 	if selected {
@@ -152,7 +161,7 @@ func (d compactDelegate) trackLine(s Sub, selected bool, w int, nameM, titleM []
 	line := cursorMark(selected) +
 		pad(styleMatches(s.Name, nameM, accentStyle), d.nameW) + "  " +
 		styleMatches(s.Title, titleM, title) + "  " +
-		rollupOrEmpty(s.Counts)
+		trackBarCell(s.Counts)
 	return ansi.Truncate(line, w, "…")
 }
 

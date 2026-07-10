@@ -315,12 +315,17 @@ func (m Model) moveSelection(delta int) Model {
 }
 
 // fixSelection nudges a selection off a section header onto the nearest
-// selectable entry below it, or above when the header is last.
+// selectable entry below it, or above when the header is last, first pulling
+// an out-of-range cursor back onto the visible list (filtering can strand it).
 func (m Model) fixSelection() Model {
 	items := m.list.VisibleItems()
+	if len(items) == 0 {
+		return m
+	}
 	idx := m.list.Index()
 	if idx < 0 || idx >= len(items) {
-		return m
+		idx = clamp(idx, 0, len(items)-1)
+		m.list.Select(idx)
 	}
 	if e, ok := items[idx].(entry); ok && e.selectable() {
 		return m

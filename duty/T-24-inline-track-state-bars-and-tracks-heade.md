@@ -1,7 +1,7 @@
 ---
 id: T-24
 title: Inline track state bars and tracks header
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -39,12 +39,67 @@ Header bar, task rows, preview card layout, CLI output (`get tracks` keeps its
 textual counts).
 
 ## Gates
-- [ ] Update/view tests: track row renders the bar segments proportionally
+- [x] Update/view tests: track row renders the bar segments proportionally
   (fixture with mixed statuses), non-zero statuses always visible, "Tracks"
   header present, skipped by j/k navigation and absent while filtering.
-- [ ] Headless frames at 120×35 and 70×20 recorded in the report; nothing ragged.
-- [ ] `TestStartupPerformance` green; full suite green
+- [x] Headless frames at 120×35 and 70×20 recorded in the report; nothing ragged.
+- [x] `TestStartupPerformance` green; full suite green
   (`go test ./tests/... -coverpkg=./internal/... -count=1`); `gofmt -l .` empty;
   `go vet ./...` clean; `go build -o bin/duty ./cmd/duty` ok.
 
 ## Report
+
+
+### T-24 — Inline track state bars and tracks header
+
+**Files changed**
+- internal/tui/entry.go — "Tracks" section header above sub-track rows; trackLine now renders the inline bar cell instead of the textual rollup.
+- internal/tui/view.go — BarCells (proportional allocation, min-1 per non-zero status, largest-remainder fill), trackBar, trackBarCell, totalCount; statusBar deduped onto totalCount; trackBarWidth=14.
+- internal/tui/model.go — fixSelection now clamps an out-of-range cursor back onto the visible list (filtering can strand it once a header shifts the initial index).
+- task-system-spec.md — §8 left-panel track-row sentence updated (Tracks header + inline bar + dim total, rollup moved to preview card).
+- tests/tui_test.go — TestTrackBarCells (pure allocation) + TestTracksHeaderAndInlineBar (header present, bar segments, nav-skip, filter-absence).
+
+**Gate tails**
+- gofmt -l internal/ tests/ : clean
+- go vet ./... : clean
+- go build -o bin/duty ./cmd/duty : ok
+- go test ./tests/... -coverpkg=./internal/... -count=1 : ok, coverage 85.3%
+- TestStartupPerformance : green, best of 5 = 2.48ms (< 100ms; no glamour/terminal query on the browse path)
+
+**Headless frame 120x35 (browse)**
+```
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Board                                                                                                                │
+│ 1 in-progress · 1 todo · 1 blocked · 1 done  █████████████████▊█████████████████▌█████████████████▎█████████████████ │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│  Tracks                                                                                                              │
+│ ❯ backend/  Backend services  ██████████████  2                                                                      │
+│  Open tasks                                                                                                          │
+│   T-01  Alpha task                                                                                in-progress        │
+│   T-02  Beta task                                                                                 todo               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ k/↑ up • j/↓ down • ↵ open • esc back • tab panel • / filter • e edit • r refresh • ? keys • q quit
+```
+
+**Headless frame 70x20 (browse)**
+```
+╭────────────────────────────────────────────────────────────────────╮
+│ Board                                                              │
+│ 1 in-progress · 1 todo · 1 blocked · 1 done  █████▎████▌████▊█████ │
+╰────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────────╮
+│  Tracks                                                            │
+│ ❯ backend/  Backend services  ██████████████  2                    │
+│  Open tasks                                                        │
+│   T-01  Alpha task                              in-progress        │
+│   T-02  Beta task                               todo               │
+╰────────────────────────────────────────────────────────────────────╯
+ k/↑ up • j/↓ down • ↵ open • esc back • tab panel • / filter • e edi…
+```
+Both frames non-ragged (asserted by TestFrameAudit across 120x35..60x16).
+
+**Deviations**
+- Row bar drawn as lipgloss colored "█" runs (not the ntcharts header renderer): ntcharts floor-rounding drops small segments, which conflicts with the "every non-zero status ≥ 1 cell" rule — the task's stated fallback. Same palette (statusColor) either way.
+- BarCells was exported so the proportionality / min-1 rounding is unit-tested directly: lipgloss strips color in the headless test profile, so per-status segments are indistinguishable in a rendered frame.
+- Bonus fix in fixSelection (out-of-range cursor clamp) needed because the new "Tracks" header shifts the initial selection index, exposing a latent bubbles quirk (FilterMatchesMsg does not re-clamp the cursor).

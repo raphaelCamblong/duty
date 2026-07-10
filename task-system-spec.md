@@ -260,10 +260,14 @@ selection change:
   **subtree** state: per-status counts, one per status in that status's color, and a
   one-line status-distribution bar (ntcharts), so a track's health reads at a glance.
 - **Left panel** (the whole width while browsing; ~38%, min 30 cols, once a preview is
-  open): a `bubbles/list` with a custom compact delegate. Sub-tracks first, one line
-  each carrying a **per-status rollup** of its subtree computed live from files —
-  compact counts in status colors, zero-count statuses omitted (`backend/  1
-  in-progress · 2 todo · 4 done`); then tasks under their section headers, one line
+  open): a `bubbles/list` with a custom compact delegate. Sub-tracks first under a
+  **"Tracks" header** (non-selectable, skipped by navigation, hidden while filtering,
+  like the task section headers), one line each carrying a fixed-width **inline
+  status-distribution bar** of its subtree computed live from files — proportional
+  colored segments in the header bar's palette, every non-zero status at least one
+  cell, a dim total count trailing (`backend/  Title  ▰▰▰▰▰▰▱▱  7`), a dim `empty`
+  for a track with no tasks; the textual per-status rollup lives in the track's
+  preview card. Then tasks under their section headers, one line
   each: id, title, colored status (`todo` dim, `in-progress` yellow, `blocked` red,
   `done` green), gate progress `2/3`, drift badge if any. The list's built-in fuzzy
   filter opens on `/`. **Empty states are intentional:** a board with no tracks or
