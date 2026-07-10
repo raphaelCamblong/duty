@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -262,8 +263,13 @@ func TestCountsRollUpInSnapshot(t *testing.T) {
 func TestMasterDetailLayout(t *testing.T) {
 	root := fourStatusTree(t)
 
-	t.Run("track selection previews its summary card", func(t *testing.T) {
-		m := newTUIModelSize(t, root, 120, 35) // cursor 0: the backend track
+	t.Run("opening a track with the preview open shows its summary card", func(t *testing.T) {
+		m := newTUIModelSize(t, root, 120, 35)
+		m, _ = press(t, m, "j")     // cursor 1: T-01
+		m, _ = press(t, m, "enter") // open the preview so tracks summarize
+		m, _ = press(t, m, "tab")   // focus the list
+		m, _ = press(t, m, "k")     // cursor 0: the backend track
+		m, _ = press(t, m, "enter") // open its summary card
 		frame := m.View()
 		for _, want := range []string{"1 blocked", "1 done", "2 tasks · 1 done", "Sections", "█"} {
 			if !strings.Contains(frame, want) {
@@ -273,9 +279,10 @@ func TestMasterDetailLayout(t *testing.T) {
 		t.Logf("board view 120x35 (track summary variant):\n%s", frame)
 	})
 
-	t.Run("task selection previews its glamour-rendered body", func(t *testing.T) {
+	t.Run("opening a task previews its glamour-rendered body", func(t *testing.T) {
 		m := newTUIModelSize(t, root, 120, 35)
-		m, _ = press(t, m, "j") // cursor 1: T-01
+		m, _ = press(t, m, "j")     // cursor 1: T-01
+		m, _ = press(t, m, "enter") // open its preview
 		frame := m.View()
 		if !strings.Contains(frame, "Ship the alpha milestone") {
 			t.Errorf("task body preview missing for T-01:\n%s", frame)
@@ -315,6 +322,104 @@ func TestMasterDetailLayout(t *testing.T) {
 	})
 }
 
+// perfTree builds a realistic fixture: three tracks and twenty tasks spread
+// across the root and the tracks, for the startup-timing measurement.
+func perfTree(t *testing.T) string {
+	t.Helper()
+	root := initDuty(t)
+	tracks := []string{"backend", "frontend", "infra"}
+	for _, tr := range tracks {
+		mustDuty(t, root, "board", tr, "--title", tr)
+	}
+	dirs := []string{root,
+		filepath.Join(root, "backend"),
+		filepath.Join(root, "frontend"),
+		filepath.Join(root, "infra"),
+	}
+	for i := 0; i < 20; i++ {
+		mustDuty(t, dirs[i%len(dirs)], "create", fmt.Sprintf("Task %d does something useful", i))
+	}
+	return root
+}
+
+func TestStartupPerformance(t *testing.T) {
+	root := perfTree(t)
+	cfg := config.Config{Editor: "vi"}
+	cfg.TUI.Theme = "dark"
+
+	var best time.Duration
+	for i := 0; i < 5; i++ {
+		start := time.Now()
+		m, err := tui.New(fsys.OS{}, root, cfg)
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+		nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 35})
+		m = nm.(tui.Model)
+		_ = m.View()
+		if d := time.Since(start); best == 0 || d < best {
+			best = d
+		}
+		if m.PreviewOpen() {
+			t.Fatal("preview open at startup; browsing must be a full-width list")
+		}
+	}
+	t.Logf("startup (New + WindowSize + View) on a 20-task/3-track fixture, best of 5: %s", best)
+	if best > 100*time.Millisecond {
+		t.Errorf("startup too slow: %s > 100ms (no terminal query, no glamour on this path)", best)
+	}
+}
+
+func TestPreviewOnOpen(t *testing.T) {
+	root := fourStatusTree(t)
+	m := newTUIModelSize(t, root, 120, 35)
+
+	browse := m.View()
+	if m.PreviewOpen() {
+		t.Fatal("a preview is open while browsing")
+	}
+	if strings.Contains(browse, "Ship the alpha milestone") {
+		t.Errorf("browsing frame shows a task body:\n%s", browse)
+	}
+	for _, want := range []string{"backend/", "T-01", "T-02"} {
+		if !strings.Contains(browse, want) {
+			t.Errorf("browsing list missing %q:\n%s", want, browse)
+		}
+	}
+	t.Logf("browsing 120x35 (full-width list, no preview):\n%s", browse)
+
+	m, _ = press(t, m, "j")     // T-01
+	m, _ = press(t, m, "enter") // open it
+	if !m.PreviewOpen() || m.DetailID() != "T-01" {
+		t.Fatalf("enter did not open the task: open=%v detail=%q", m.PreviewOpen(), m.DetailID())
+	}
+	open := m.View()
+	if !strings.Contains(open, "Ship the alpha milestone") {
+		t.Errorf("opened frame missing the task body:\n%s", open)
+	}
+	if !strings.Contains(open, "T-02") {
+		t.Errorf("the split dropped the left list:\n%s", open)
+	}
+	t.Logf("task open 120x35 (split: list left, rendered task right):\n%s", open)
+
+	m, _ = press(t, m, "esc") // close back to browsing
+	if m.PreviewOpen() {
+		t.Fatal("esc did not close the preview")
+	}
+	if strings.Contains(m.View(), "Ship the alpha milestone") {
+		t.Errorf("closed frame still shows the task body:\n%s", m.View())
+	}
+
+	m, _ = press(t, m, "k") // the backend track
+	if m.SelectedID() != "backend" {
+		t.Fatalf("selection = %q, want the backend track", m.SelectedID())
+	}
+	m, _ = press(t, m, "enter") // enter on a track descends, no panel
+	if m.BoardPath() != "backend" || m.PreviewOpen() {
+		t.Fatalf("enter on a track: path=%q open=%v, want descend into backend with no preview", m.BoardPath(), m.PreviewOpen())
+	}
+}
+
 // pump executes a command a keypress returned and feeds any filter-match
 // message back into the model, mirroring the program loop just enough for
 // the list's asynchronous fuzzy filter.
@@ -340,18 +445,31 @@ func pump(t *testing.T, m tui.Model, cmd tea.Cmd) tui.Model {
 func TestPanelFocusAndFilter(t *testing.T) {
 	root := fourStatusTree(t)
 
-	t.Run("tab toggles panel focus, esc unfocuses", func(t *testing.T) {
+	t.Run("tab toggles focus only while a preview is open", func(t *testing.T) {
 		m := newTUIModelSize(t, root, 120, 35)
-		if m.PreviewFocused() {
-			t.Fatal("preview focused at start")
+		if m.PreviewFocused() || m.PreviewOpen() {
+			t.Fatal("a preview is showing at start")
 		}
-		m, _ = press(t, m, "tab")
+		m, _ = press(t, m, "tab") // browsing: nothing to toggle
+		if m.PreviewFocused() || m.PreviewOpen() {
+			t.Fatal("tab opened a preview while browsing")
+		}
+		m, _ = press(t, m, "j")
+		m, _ = press(t, m, "enter") // open T-01
 		if !m.PreviewFocused() {
-			t.Fatal("tab did not focus the preview")
+			t.Fatal("enter did not focus the preview")
 		}
-		m, _ = press(t, m, "esc")
-		if m.PreviewFocused() || m.BoardPath() != "." {
-			t.Fatalf("esc: focused=%v path=%q, want list focus on .", m.PreviewFocused(), m.BoardPath())
+		m, _ = press(t, m, "tab") // focus the list, split stays open
+		if m.PreviewFocused() || !m.PreviewOpen() {
+			t.Fatalf("tab: focused=%v open=%v, want list focus with the split open", m.PreviewFocused(), m.PreviewOpen())
+		}
+		m, _ = press(t, m, "tab") // back to the preview
+		if !m.PreviewFocused() {
+			t.Fatal("tab did not return focus to the preview")
+		}
+		m, _ = press(t, m, "esc") // close to full-width browsing
+		if m.PreviewFocused() || m.PreviewOpen() || m.BoardPath() != "." {
+			t.Fatalf("esc: focused=%v open=%v path=%q, want browsing on .", m.PreviewFocused(), m.PreviewOpen(), m.BoardPath())
 		}
 	})
 
@@ -393,7 +511,8 @@ func TestPanelFocusAndFilter(t *testing.T) {
 
 	t.Run("slash pulls focus back to the list", func(t *testing.T) {
 		m := newTUIModelSize(t, root, 120, 35)
-		m, _ = press(t, m, "tab")
+		m, _ = press(t, m, "j")
+		m, _ = press(t, m, "enter") // open the preview, focus it
 		m, _ = press(t, m, "/")
 		if m.PreviewFocused() {
 			t.Error("/ left the preview focused")
@@ -635,6 +754,9 @@ func TestMouseTransitions(t *testing.T) {
 
 	t.Run("click on the right panel focuses the preview", func(t *testing.T) {
 		m := newTUIModel(t, root) // 100 wide: left panel ends at column 38
+		m, _ = press(t, m, "j")
+		m, _ = press(t, m, "enter") // open the split
+		m, _ = press(t, m, "tab")   // hand focus to the list
 		render(t, m)
 		m = clickAt(m, 80, 10)
 		if !m.PreviewFocused() {
@@ -653,7 +775,8 @@ func TestMouseTransitions(t *testing.T) {
 
 	t.Run("wheel over the preview springs its scroll and clamps", func(t *testing.T) {
 		m := newTUIModelSize(t, root, 120, 16) // shallow preview: the body overflows
-		m, _ = press(t, m, "j")                // select T-01, preview shows its body
+		m, _ = press(t, m, "j")                // select T-01
+		m, _ = press(t, m, "enter")            // open its preview
 		render(t, m)
 		if m.ScrollTarget() != 0 {
 			t.Fatalf("initial scroll target = %d, want 0", m.ScrollTarget())

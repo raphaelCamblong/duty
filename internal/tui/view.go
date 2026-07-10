@@ -95,41 +95,45 @@ func panelBox(focused bool) lipgloss.Style {
 	return blurredBox
 }
 
-// View renders the current frame: header, the two panels (or the single
-// narrow-terminal panel), and the help footer. The zone manager's Scan
-// registers the hit-zones and strips their markers.
+// View renders the current frame: header, the body (a full-width browsing
+// list, the open split, or the narrow full-screen preview), and the help
+// footer. The zone manager's Scan registers the hit-zones and strips markers.
 func (m Model) View() string {
 	w, _ := m.dims()
 	var body string
 	switch {
-	case m.wide():
+	case m.split():
 		body = lipgloss.JoinHorizontal(lipgloss.Top, m.leftPanel(), m.rightPanel())
-	case m.focus == focusPreview:
+	case m.previewOpen:
 		title := ansi.Truncate(" "+m.previewTitle(), max(w-1, 1), "…")
 		body = lipgloss.JoinVertical(lipgloss.Left, title, m.preview.View())
 	default:
-		body = m.list.View()
+		body = m.leftPanel()
 	}
 	frame := lipgloss.JoinVertical(lipgloss.Left, m.headerView(w), body, m.footerView(w))
 	return m.zones.Scan(frame)
 }
 
 // layout sizes the list and preview to the current terminal and chrome
-// heights, then re-renders the preview at the new width.
+// heights, then re-renders the open preview at the new width. Browsing gives
+// the list the full width; a narrow open preview takes over the body.
 func (m Model) layout() Model {
 	w, h := m.dims()
 	bodyH := max(h-lipgloss.Height(m.headerView(w))-lipgloss.Height(m.footerView(w)), 3)
-	if m.wide() {
+	switch {
+	case m.split():
 		lw := leftWidth(w)
 		m.list.SetSize(lw-4, bodyH-2)
 		m.preview.Width = max(w-lw-4, 1)
 		m.preview.Height = max(bodyH-3, 1)
-	} else {
-		m.list.SetSize(w, bodyH)
+	case m.previewOpen:
+		m.list.SetSize(w-4, bodyH-2)
 		m.preview.Width = max(w-2, 1)
 		m.preview.Height = max(bodyH-1, 1)
+	default:
+		m.list.SetSize(w-4, bodyH-2)
 	}
-	return m.syncPreview(true)
+	return m.renderPreview(false)
 }
 
 // leftWidth is the left panel's total width: ~38% of the terminal, floored.
@@ -231,83 +235,78 @@ func (m Model) helpView(w int) string {
 	return " " + h.View(m.keys)
 }
 
-// previewTitle is the pinned line above the preview: id, status, gates, and
-// drift for a task; name and title for a track.
+// previewTitle is the pinned line above the open preview, resolved from the
+// open subject: id, status, gates, and drift for a task; name and title for a
+// track.
 func (m Model) previewTitle() string {
-	e, ok := m.selectedEntry()
+	kind, arg, ok := splitKey(m.previewKey)
 	switch {
 	case !ok:
-		return dimStyle.Render("nothing selected")
-	case e.track != nil:
-		return accentStyle.Render(e.track.Name) + "  " + selStyle.Render(e.track.Title)
-	default:
-		t := accentStyle.Render(e.task.ID) + "  " + statusStyle(e.task.Status).Render(e.task.Status)
-		if g := gatesCell(*e.task); g != "" {
-			t += "  " + dimStyle.Render(g)
+		return dimStyle.Render("nothing open")
+	case kind == "track":
+		if s, ok := m.findSub(arg); ok {
+			return accentStyle.Render(s.Name) + "  " + selStyle.Render(s.Title)
 		}
-		if e.task.Drift != "" {
-			t += "  " + driftStyle.Render("⚠ "+e.task.Drift)
+	case kind == "task":
+		if r, ok := m.findRow(arg); ok {
+			t := accentStyle.Render(r.ID) + "  " + statusStyle(r.Status).Render(r.Status)
+			if g := gatesCell(r); g != "" {
+				t += "  " + dimStyle.Render(g)
+			}
+			if r.Drift != "" {
+				t += "  " + driftStyle.Render("⚠ "+r.Drift)
+			}
+			return t
 		}
-		return t
 	}
+	return dimStyle.Render("gone")
 }
 
-// selectionKey identifies what the preview should show for the selection.
-func (m Model) selectionKey() string {
-	e, ok := m.selectedEntry()
-	switch {
-	case !ok:
-		return ""
-	case e.track != nil:
-		return "track:" + e.track.Path
-	default:
-		return "task:" + e.task.ID
-	}
-}
-
-// syncPreview re-renders the preview when the selection changed (or force),
-// keeping the scroll offset while the subject stays the same.
-func (m Model) syncPreview(force bool) Model {
-	key := m.selectionKey()
-	if key == m.previewKey && !force {
-		return m
-	}
-	off := 0
-	if key == m.previewKey {
-		off = m.preview.YOffset
-	}
-	m.preview.SetContent(m.previewBody())
-	m.preview.SetYOffset(off)
-	m.previewKey = key
-	return m.settleAt(m.preview.YOffset)
-}
-
-// previewBody builds the preview content from the snapshot alone: the
-// glamour-rendered task body, or a track's summary card.
-func (m Model) previewBody() string {
+// previewContent renders the open subject from the snapshot alone: a task's
+// markdown through the shared renderer, or a track's summary card. It returns
+// the possibly-updated model because building the renderer mutates it.
+func (m Model) previewContent() (Model, string) {
+	kind, arg, ok := splitKey(m.previewKey)
 	w := max(m.preview.Width, 1)
-	e, ok := m.selectedEntry()
 	switch {
 	case !ok:
-		return dimStyle.Render("nothing selected")
-	case e.track != nil:
-		return m.trackCard(*e.track, w)
-	case e.task.Path == "":
-		return dimStyle.Render("no file — the board row points nowhere")
-	default:
-		return m.taskBody(*e.task, w)
+		return m, dimStyle.Render("nothing open")
+	case kind == "track":
+		if s, ok := m.findSub(arg); ok {
+			return m, m.trackCard(s, w)
+		}
+		return m, dimStyle.Render("track gone")
+	case kind == "task":
+		r, ok := m.findRow(arg)
+		switch {
+		case !ok:
+			return m, dimStyle.Render("task gone")
+		case r.Path == "":
+			return m, dimStyle.Render("no file — the board row points nowhere")
+		default:
+			return m.taskMarkdown(r.Content)
+		}
 	}
+	return m, ""
 }
 
-// taskBody returns the task's markdown rendered at the preview width,
-// cached per id until the next re-scan or resize.
-func (m Model) taskBody(r Row, w int) string {
-	if s, ok := m.mdCache[r.ID]; ok {
-		return s
+// taskMarkdown renders task content through the one shared glamour renderer,
+// built lazily on the first open and rebuilt only when the preview width
+// changes; the raw markdown shows on any renderer error.
+func (m Model) taskMarkdown(content []byte) (Model, string) {
+	wrap := max(m.preview.Width-2, 20)
+	if m.renderer == nil || m.rendererWidth != wrap {
+		r, err := newRenderer(wrap, m.theme)
+		if err != nil {
+			return m, string(task.Body(content))
+		}
+		m.renderer, m.rendererWidth = r, wrap
 	}
-	s := renderMarkdown(r.Content, w, m.theme)
-	m.mdCache[r.ID] = s
-	return s
+	out, err := m.renderer.Render(string(task.Body(content)))
+	if err != nil {
+		return m, string(task.Body(content))
+	}
+	return m, out
 }
 
 // trackCard summarizes a selected track: totals, per-status counts, its
@@ -392,28 +391,18 @@ func (m Model) breadcrumb() string {
 	return strings.Join(parts, " › ")
 }
 
-// renderMarkdown renders a task file for the preview: frontmatter stripped
-// (the title line already shows it), glamour sized to width, styled per the
-// configured theme (auto detects the terminal). On any renderer error the
-// raw markdown shows instead.
-func renderMarkdown(content []byte, width int, theme string) string {
-	content = task.Body(content)
-	opts := []glamour.TermRendererOption{glamour.WithWordWrap(max(width-2, 20))}
-	switch theme {
-	case "dark", "light":
-		opts = append(opts, glamour.WithStandardStyle(theme))
-	default:
-		opts = append(opts, glamour.WithAutoStyle())
+// newRenderer builds the single glamour renderer used program-wide, at a
+// fixed word-wrap and a concrete style. The theme is resolved to dark/light
+// before the program starts (run.go), so no terminal query fires here.
+func newRenderer(wrap int, theme string) (*glamour.TermRenderer, error) {
+	style := "dark"
+	if theme == "light" {
+		style = "light"
 	}
-	r, err := glamour.NewTermRenderer(opts...)
-	if err != nil {
-		return string(content)
-	}
-	out, err := r.Render(string(content))
-	if err != nil {
-		return string(content)
-	}
-	return out
+	return glamour.NewTermRenderer(
+		glamour.WithWordWrap(wrap),
+		glamour.WithStandardStyle(style),
+	)
 }
 
 // cursorMark is the two-column selection gutter.

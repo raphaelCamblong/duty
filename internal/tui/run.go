@@ -24,7 +24,7 @@ func Run(f fsys.FS, cwd string) error {
 	if err != nil {
 		return err
 	}
-	applyTheme(cfg.TUI.Theme)
+	cfg.TUI.Theme = resolveTheme(cfg.TUI.Theme)
 	m, err := New(f, root, cfg)
 	if err != nil {
 		return err
@@ -40,13 +40,24 @@ func Run(f fsys.FS, cwd string) error {
 	return err
 }
 
-// applyTheme forces lipgloss's light/dark background flag when config says
-// so; "auto" keeps terminal detection, so AdaptiveColors resolve themselves.
-func applyTheme(theme string) {
+// resolveTheme pins lipgloss's background flag and returns a concrete glamour
+// style ("dark" or "light"). The "auto" case runs the terminal-background
+// query exactly once, here, before the program starts — so neither
+// AdaptiveColors nor the markdown renderer ever query mid-frame.
+func resolveTheme(theme string) string {
 	switch theme {
 	case "dark":
 		lipgloss.SetHasDarkBackground(true)
+		return "dark"
 	case "light":
 		lipgloss.SetHasDarkBackground(false)
+		return "light"
+	default:
+		dark := lipgloss.HasDarkBackground()
+		lipgloss.SetHasDarkBackground(dark)
+		if dark {
+			return "dark"
+		}
+		return "light"
 	}
 }

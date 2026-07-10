@@ -48,19 +48,23 @@ func (m Model) wheel(msg tea.MouseMsg, dir int) (tea.Model, tea.Cmd) {
 	return m.moveSelection(dir), nil
 }
 
-// overPreview reports whether a mouse event targets the preview: inside its
-// zone when both panels show, anywhere while it is the single panel.
+// overPreview reports whether a mouse event targets the open preview: inside
+// its zone when the split shows, anywhere while it is the single panel; never
+// while browsing.
 func (m Model) overPreview(msg tea.MouseMsg) bool {
+	if !m.previewOpen {
+		return false
+	}
 	if !m.wide() {
-		return m.focus == focusPreview
+		return true
 	}
 	return m.zones.Get(zonePreview).InBounds(msg)
 }
 
-// click selects the entry under the pointer or focuses the clicked preview;
-// a second press on the same entry within doubleClick opens it.
+// click selects the entry under the pointer or focuses the open preview; a
+// second press on the same entry within doubleClick opens it.
 func (m Model) click(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	if m.wide() && m.zones.Get(zonePreview).InBounds(msg) {
+	if m.split() && m.zones.Get(zonePreview).InBounds(msg) {
 		m.focus = focusPreview
 		return m, nil
 	}
@@ -72,11 +76,11 @@ func (m Model) click(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// clickItem selects the visible entry at index; a double click opens it.
+// clickItem selects the visible entry at index and focuses the list; a double
+// click opens it (a task's preview, a track's descent or card).
 func (m Model) clickItem(index int) Model {
 	m.focus = focusList
 	m.list.Select(index)
-	m = m.syncPreview(false)
 	now := time.Now()
 	if m.lastClick == index && now.Sub(m.lastClickAt) < doubleClick {
 		m.lastClick = -1

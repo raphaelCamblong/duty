@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/harmonica"
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
@@ -38,10 +39,10 @@ const (
 	focusPreview
 )
 
-// Model is the Bubble Tea model of the viewer: a master-detail workspace on
-// one track at a time — entries left, live preview right, subtree state on
-// top. Update is a pure transition — filesystem reads happen in commands,
-// writes nowhere.
+// Model is the Bubble Tea model of the viewer: a full-width entry list under
+// a subtree-state header, opening a split preview on demand (a task rendered,
+// a track summarized). Update is a pure transition — filesystem reads happen
+// in commands, writes nowhere.
 type Model struct {
 	fsys    fsys.FS
 	root    string
@@ -59,11 +60,13 @@ type Model struct {
 	width   int
 	height  int
 
-	list       list.Model
-	focus      focusArea
-	preview    viewport.Model
-	previewKey string
-	mdCache    map[string]string
+	list          list.Model
+	focus         focusArea
+	preview       viewport.Model
+	previewOpen   bool
+	previewKey    string
+	renderer      *glamour.TermRenderer
+	rendererWidth int
 
 	spring       harmonica.Spring
 	scroll       float64
@@ -92,7 +95,6 @@ func New(f fsys.FS, root string, cfg config.Config) (Model, error) {
 		snap:      snap,
 		path:      ".",
 		memory:    map[string]int{},
-		mdCache:   map[string]string{},
 		list:      newList(),
 		spring:    harmonica.NewSpring(harmonica.FPS(scrollFPS), scrollFreq, 1.0),
 		lastClick: -1,
@@ -137,6 +139,10 @@ func (m Model) HelpExpanded() bool { return m.help.ShowAll }
 // PreviewFocused reports whether the preview panel holds focus.
 func (m Model) PreviewFocused() bool { return m.focus == focusPreview }
 
+// PreviewOpen reports whether the split preview is showing (false while
+// browsing the full-width list).
+func (m Model) PreviewOpen() bool { return m.previewOpen }
+
 // Cursor returns the selected item index — sub-tracks then tasks, section
 // headers not counted.
 func (m Model) Cursor() int {
@@ -164,13 +170,14 @@ func (m Model) SelectedID() string {
 	}
 }
 
-// DetailID returns the id of the task the focused preview shows, "" if none.
+// DetailID returns the id of the task the open preview shows, "" if the
+// preview is closed or showing a track card.
 func (m Model) DetailID() string {
-	if m.focus != focusPreview {
+	if !m.previewOpen {
 		return ""
 	}
-	if e, ok := m.selectedEntry(); ok && e.task != nil {
-		return e.task.ID
+	if kind, arg, ok := splitKey(m.previewKey); ok && kind == "task" {
+		return arg
 	}
 	return ""
 }
@@ -189,7 +196,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.help.Width = msg.Width
-		m.mdCache = map[string]string{}
 		return m.layout(), nil
 	case refreshMsg:
 		if m.refresh == nil {
@@ -226,7 +232,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.help.ShowAll = !m.help.ShowAll
 		return m.layout(), nil
 	case key.Matches(msg, m.keys.Focus):
-		m.focus = otherFocus(m.focus)
+		if m.previewOpen {
+			m.focus = otherFocus(m.focus)
+		}
 		return m, nil
 	case key.Matches(msg, m.keys.Filter):
 		m.focus = focusList
@@ -267,11 +275,11 @@ func otherFocus(f focusArea) focusArea {
 }
 
 // updateList forwards a message to the bubbles list, then re-aims the
-// selection and preview.
+// selection. Browsing never renders the preview (§8).
 func (m Model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
-	return m.fixSelection().syncPreview(false), cmd
+	return m.fixSelection(), cmd
 }
 
 // selectedEntry returns the selected track or task entry; headers and an
@@ -300,7 +308,7 @@ func (m Model) moveSelection(delta int) Model {
 			break
 		}
 	}
-	return m.syncPreview(false)
+	return m
 }
 
 // fixSelection nudges a selection off a section header onto the nearest
@@ -325,30 +333,97 @@ func (m Model) fixSelection() Model {
 	return m
 }
 
-// open descends into the selected track or focuses the preview on the
-// selected task.
+// open acts on the selection: a task always opens the split preview; a track
+// opens its summary card only when the preview is already open, otherwise it
+// descends into the track (§8).
 func (m Model) open() Model {
 	e, ok := m.selectedEntry()
 	if !ok {
 		return m
 	}
 	if e.track != nil {
+		if m.previewOpen {
+			return m.showPreview("track:" + e.track.Path)
+		}
 		return m.enterBoard(e.track.Path)
 	}
-	m.focus = focusPreview
-	return m.syncPreview(false)
+	return m.showPreview("task:" + e.task.ID)
 }
 
-// back unfocuses the preview, clears an applied filter, or climbs to the
-// parent track; a no-op on an unfiltered root list.
+// showPreview opens the split on subject key ("task:<id>" or "track:<path>"):
+// it sizes the two panels, renders the subject, and focuses the preview.
+func (m Model) showPreview(key string) Model {
+	m.previewOpen = true
+	m.focus = focusPreview
+	m.previewKey = key
+	m = m.layout()
+	return m.renderPreview(true)
+}
+
+// renderPreview fills the viewport from the open subject, resolved against the
+// current snapshot; reset returns to the top, otherwise the scroll offset
+// survives (a re-scan of the same subject). A no-op while browsing.
+func (m Model) renderPreview(reset bool) Model {
+	if !m.previewOpen {
+		return m
+	}
+	off := m.preview.YOffset
+	if reset {
+		off = 0
+	}
+	m, body := m.previewContent()
+	m.preview.SetContent(body)
+	m.preview.SetYOffset(off)
+	return m.settleAt(m.preview.YOffset)
+}
+
+// findRow resolves a task id to its row anywhere in the snapshot.
+func (m Model) findRow(id string) (Row, bool) {
+	for _, b := range m.snap.Boards {
+		for _, s := range b.Sections {
+			for _, r := range s.Rows {
+				if r.ID == id {
+					return r, true
+				}
+			}
+		}
+	}
+	return Row{}, false
+}
+
+// findSub resolves a track path to its sub-track view anywhere in the snapshot.
+func (m Model) findSub(path string) (Sub, bool) {
+	for _, b := range m.snap.Boards {
+		for _, s := range b.Subs {
+			if s.Path == path {
+				return s, true
+			}
+		}
+	}
+	return Sub{}, false
+}
+
+// splitKey splits a preview key into its kind ("task"/"track") and argument.
+func splitKey(key string) (kind, arg string, ok bool) {
+	i := strings.IndexByte(key, ':')
+	if i < 0 {
+		return "", "", false
+	}
+	return key[:i], key[i+1:], true
+}
+
+// back closes the open preview (to full-width browsing), then clears an
+// applied filter, then climbs to the parent track; a no-op on an unfiltered
+// root list.
 func (m Model) back() (tea.Model, tea.Cmd) {
-	if m.focus == focusPreview {
+	if m.previewOpen {
+		m.previewOpen = false
 		m.focus = focusList
-		return m, nil
+		return m.layout(), nil
 	}
 	if m.list.IsFiltered() {
 		m.list.ResetFilter()
-		return m.fixSelection().syncPreview(false), nil
+		return m.fixSelection(), nil
 	}
 	if b, ok := m.board(); ok && b.Parent != "" {
 		return m.enterBoard(b.Parent), nil
@@ -357,15 +432,17 @@ func (m Model) back() (tea.Model, tea.Cmd) {
 }
 
 // enterBoard switches the view to the track at path, remembering the old
-// selection and restoring any previous one on the target.
+// selection and restoring any previous one on the target. Descending returns
+// to full-width browsing.
 func (m Model) enterBoard(path string) Model {
 	m.memory[m.path] = m.Cursor()
 	m.path = path
 	m.list.ResetFilter()
 	m, _ = m.rebuildList()
 	m = m.selectNth(m.memory[path]).fixSelection()
+	m.previewOpen = false
 	m.focus = focusList
-	return m.syncPreview(false)
+	return m.layout()
 }
 
 // selectNth selects the nth selectable entry (headers not counted).
@@ -412,9 +489,8 @@ func (m Model) withSnap(msg snapMsg) (tea.Model, tea.Cmd) {
 		}
 		m.path = textualParent(m.path)
 	}
-	m.mdCache = map[string]string{}
 	m, cmd := m.rebuildList()
-	return m.fixSelection().syncPreview(true), cmd
+	return m.fixSelection().renderPreview(false), cmd
 }
 
 // dims returns the terminal size, defaulting to 80×24 before the first
@@ -430,6 +506,12 @@ func (m Model) dims() (w, h int) {
 func (m Model) wide() bool {
 	w, _ := m.dims()
 	return w >= twoPanelMinWidth
+}
+
+// split reports whether the side-by-side layout shows: an open preview on a
+// wide-enough terminal.
+func (m Model) split() bool {
+	return m.previewOpen && m.wide()
 }
 
 // waitRefresh blocks on the watcher channel and turns one notification into

@@ -226,35 +226,42 @@ row order; parse every task file's frontmatter for status/title/blocked-by and c
 gate checkboxes. Files win; a board/file mismatch renders as a `⚠` badge on the row — the
 TUI is the always-on drift surfacer.
 
-**Layout — a master-detail workspace** (lipgloss layout, adaptive colors everywhere):
+**Layout — browse full-width, preview on open** (lipgloss layout, adaptive colors
+everywhere). Startup is instant: the browsing view builds no markdown renderer and
+fires no terminal query — a task's file is rendered only when it is *opened*, never on
+selection change:
 - **Header:** breadcrumb of the track path — each board's H1 title (§4), never the
   folder name alone — plus the current track's **subtree** state: per-status counts,
   one per status in that status's color, and a one-line status-distribution bar
   (ntcharts), so a track's health reads at a glance.
-- **Left panel** (~38% of the width, min 30 cols): a `bubbles/list` with a custom
-  compact delegate. Sub-tracks first, one line each carrying a **per-status rollup**
-  of its subtree computed live from files — compact counts in status colors, zero-count
-  statuses omitted (`backend/  1 in-progress · 2 todo · 4 done`); then tasks under
-  their section headers, one line each: id, title, colored status (`todo` dim,
-  `in-progress` yellow, `blocked` red, `done` green), gate progress `2/3`, drift badge
-  if any. The list's built-in fuzzy filter opens on `/`. The selection drives the
-  preview.
-- **Right panel:** a live preview of the selection with zero extra file I/O — the
-  content comes from the same scan snapshot the rows do. A task previews as its file
-  rendered by glamour in a `bubbles/viewport`, rendered lazily on selection change and
-  cached until the next re-scan; a track previews as a summary card: title, per-status
-  counts, distribution bar, its sections with row counts, and its subtree drift count.
+- **Left panel** (the whole width while browsing; ~38%, min 30 cols, once a preview is
+  open): a `bubbles/list` with a custom compact delegate. Sub-tracks first, one line
+  each carrying a **per-status rollup** of its subtree computed live from files —
+  compact counts in status colors, zero-count statuses omitted (`backend/  1
+  in-progress · 2 todo · 4 done`); then tasks under their section headers, one line
+  each: id, title, colored status (`todo` dim, `in-progress` yellow, `blocked` red,
+  `done` green), gate progress `2/3`, drift badge if any. The list's built-in fuzzy
+  filter opens on `/`.
+- **Right panel — on open only:** while browsing there is no right panel. `enter` (or a
+  double-click) on a task opens the split — the list stays left, the task's file
+  rendered by glamour in a `bubbles/viewport` on the right, focus on the preview; `esc`
+  closes it back to the full-width list. `enter` on a track descends; with a preview
+  already open, `enter` on a track instead opens its summary card (title, per-status
+  counts, distribution bar, sections with row counts, subtree drift count). The preview
+  reads from the same scan snapshot as the rows (zero extra file I/O), rendered by one
+  glamour renderer built lazily on the first open and reused, rebuilt only on a width
+  change; content re-renders on re-scan.
 - **Footer:** key-hint bar (`bubbles/help`; `?` toggles the full grid).
-- **Responsive:** below ~80 columns the view falls back to a single panel — the list
-  alone, with `enter` opening the preview full-screen. Resizing re-flows gracefully.
+- **Responsive:** below ~80 columns an open preview takes over the body full-screen
+  instead of splitting; browsing stays the list alone. Resizing re-flows gracefully.
 
-**Keys:** `j/k` move, `enter` open (descend into a track / focus the preview on a
-task), `esc` back (unfocus the preview / clear the filter / up one track), `tab`
-toggle panel focus, `/` filter, `e` open the selected task in `$EDITOR` (suspend TUI,
-resume on exit), `?` key-hint footer, `q` quit.
+**Keys:** `j/k` move, `enter` open (descend into a track / open the selection in the
+preview), `esc` back (close the preview / clear the filter / up one track), `tab`
+toggle panel focus while a preview is open, `/` filter, `e` open the selected task in
+`$EDITOR` (suspend TUI, resume on exit), `?` key-hint footer, `q` quit.
 
 **Mouse:** panels and rows are BubbleZone hit-zones — a click selects a row (left
-panel) or focuses the preview (right panel), a double-click opens/descends, and the
+panel) or focuses an open preview (right panel), a double-click opens/descends, and the
 wheel scrolls the hovered panel. Preview scrolling is spring-smoothed with Harmonica;
 motion stays subtle, never slower than the keyboard.
 
