@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/raphaelCamblong/duty/internal/board"
@@ -921,5 +922,138 @@ func TestWatcherRefresh(t *testing.T) {
 	waitTick(t, w.C)
 	if r, _ := scanRow(mustScan(t, root), ".", "T-01"); r.GatesDone != 1 {
 		t.Errorf("after editor-style save: gates = %d/%d, want 1/1", r.GatesDone, r.GatesTotal)
+	}
+}
+
+func TestManualRefresh(t *testing.T) {
+	root := tuiTree(t)
+	m := newTUIModel(t, root)
+	if strings.Contains(m.View(), "T-04") {
+		t.Fatalf("fixture already carries T-04:\n%s", m.View())
+	}
+
+	mustDuty(t, root, "create", "task", "Epsilon task")
+
+	_, cmd := press(t, m, "r")
+	if cmd == nil {
+		t.Fatal("r returned no re-scan command")
+	}
+	nm, _ := m.Update(cmd())
+	m = nm.(tui.Model)
+
+	frame := m.View()
+	if !strings.Contains(frame, "T-04") || !strings.Contains(frame, "Epsilon task") {
+		t.Errorf("r did not re-scan the new task into the list:\n%s", frame)
+	}
+}
+
+func TestBreadcrumbClickNavigates(t *testing.T) {
+	root := fourStatusTree(t)
+	m := newTUIModel(t, root)
+	m, _ = press(t, m, "enter") // descend into the backend track (cursor 0)
+	if m.BoardPath() != "backend" {
+		t.Fatalf("did not descend: path=%q", m.BoardPath())
+	}
+
+	frame := render(t, m)
+	y := lineWith(t, frame, "Board", 100) // the model is 100 columns wide
+	m = clickAt(m, 4, y)                  // "Board" is the root crumb, columns 2..6
+	if m.BoardPath() != "." {
+		t.Errorf("clicking the root breadcrumb did not jump to it: path=%q", m.BoardPath())
+	}
+}
+
+func TestEmptyStates(t *testing.T) {
+	t.Run("fresh tree names itself", func(t *testing.T) {
+		root := initDuty(t)
+		frame := newTUIModelSize(t, root, 100, 30).View()
+		if !strings.Contains(frame, "empty tree") || !strings.Contains(frame, `duty create task`) {
+			t.Errorf("fresh-tree hint missing:\n%s", frame)
+		}
+		t.Logf("fresh tree 100x30:\n%s", frame)
+	})
+
+	t.Run("empty track nudges toward create", func(t *testing.T) {
+		root := initDuty(t)
+		mustDuty(t, root, "create", "track", "backend", "--title", "Backend")
+		m := newTUIModelSize(t, root, 100, 30)
+		m, _ = press(t, m, "enter") // descend into the empty track
+		if m.BoardPath() != "backend" {
+			t.Fatalf("did not descend into the empty track: path=%q", m.BoardPath())
+		}
+		frame := m.View()
+		if !strings.Contains(frame, "no tasks yet") || !strings.Contains(frame, `duty create task`) {
+			t.Errorf("empty-track hint missing:\n%s", frame)
+		}
+		t.Logf("empty track 100x30:\n%s", frame)
+	})
+
+	t.Run("filter with no matches shows the styled no-items state", func(t *testing.T) {
+		root := fourStatusTree(t)
+		m := newTUIModelSize(t, root, 100, 30)
+		var cmd tea.Cmd
+		for _, k := range []string{"/", "z", "z", "z", "z"} {
+			m, cmd = press(t, m, k)
+			m = pump(t, m, cmd)
+		}
+		frame := m.View()
+		if !strings.Contains(frame, "No matches") {
+			t.Errorf("empty-filter no-items hint missing:\n%s", frame)
+		}
+		if strings.Contains(frame, "Alpha task") {
+			t.Errorf("no-match filter still shows rows:\n%s", frame)
+		}
+		t.Logf("filter with no matches 100x30:\n%s", frame)
+	})
+}
+
+// auditTree stresses the layout: tasks in every status, a blocked-by link, a
+// filled goal, gate progress, and a titled track.
+func auditTree(t *testing.T) string {
+	t.Helper()
+	root := initDuty(t)
+	mustDuty(t, root, "create", "task", "Alpha task")
+	mustDuty(t, root, "create", "task", "Beta task", "--blocked-by", "T-01")
+	mustDuty(t, root, "create", "track", "backend", "--title", "Backend services")
+	mustDuty(t, filepath.Join(root, "backend"), "create", "task", "Gamma task")
+	mustDuty(t, filepath.Join(root, "backend"), "create", "task", "Delta task")
+	mustDuty(t, root, "status", "T-01", "in-progress")
+	mustDuty(t, root, "status", "T-03", "done")
+	mustDuty(t, root, "status", "T-04", "blocked")
+	writeGoal(t, filepath.Join(root, "T-01-alpha-task.md"), alphaGoal)
+	return root
+}
+
+// assertNoRagged fails when any frame line is wider than the terminal.
+func assertNoRagged(t *testing.T, frame string, w int) {
+	t.Helper()
+	for i, line := range strings.Split(frame, "\n") {
+		if got := lipgloss.Width(line); got > w {
+			t.Errorf("line %d width %d exceeds terminal width %d: %q", i, got, w, line)
+		}
+	}
+}
+
+func TestFrameAudit(t *testing.T) {
+	root := auditTree(t)
+	sizes := []struct{ w, h int }{{120, 35}, {100, 28}, {80, 24}, {70, 20}, {60, 16}}
+	for _, sz := range sizes {
+		name := fmt.Sprintf("%dx%d", sz.w, sz.h)
+		t.Run(name, func(t *testing.T) {
+			m := newTUIModelSize(t, root, sz.w, sz.h)
+			browse := m.View()
+			assertNoRagged(t, browse, sz.w)
+			t.Logf("browse %s:\n%s", name, browse)
+
+			m, _ = press(t, m, "j")     // T-01
+			m, _ = press(t, m, "j")     // T-02 (todo, blocked-by T-01)
+			m, _ = press(t, m, "enter") // open its preview
+			open := m.View()
+			assertNoRagged(t, open, sz.w)
+			if !strings.Contains(open, "blocked-by T-01") {
+				t.Errorf("preview header missing blocked-by at %s:\n%s", name, open)
+			}
+			t.Logf("preview %s:\n%s", name, open)
+		})
 	}
 }

@@ -111,11 +111,12 @@ func newList() list.Model {
 	l.SetShowStatusBar(false)
 	l.SetShowHelp(false)
 	l.SetFilteringEnabled(true)
-	l.SetStatusBarItemName("open task", "open tasks")
+	l.SetStatusBarItemName("match", "matches")
 	l.DisableQuitKeybindings()
 	l.FilterInput.Prompt = "/ "
 	l.FilterInput.PromptStyle = accentStyle
 	l.Styles.TitleBar = lipgloss.NewStyle()
+	l.Styles.NoItems = dimStyle.Padding(1, 2)
 	return l
 }
 
@@ -231,6 +232,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Help):
 		m.help.ShowAll = !m.help.ShowAll
 		return m.layout(), nil
+	case key.Matches(msg, m.keys.Refresh):
+		return m, scanCmd(m.fsys, m.root)
 	case key.Matches(msg, m.keys.Focus):
 		if m.previewOpen {
 			m.focus = otherFocus(m.focus)
@@ -389,6 +392,21 @@ func (m Model) findRow(id string) (Row, bool) {
 		}
 	}
 	return Row{}, false
+}
+
+// findRowBoard resolves a task id to its row and the board it sits in, used
+// by the preview header for the row's track title.
+func (m Model) findRowBoard(id string) (Row, Board, bool) {
+	for _, b := range m.snap.Boards {
+		for _, s := range b.Sections {
+			for _, r := range s.Rows {
+				if r.ID == id {
+					return r, b, true
+				}
+			}
+		}
+	}
+	return Row{}, Board{}, false
 }
 
 // findSub resolves a track path to its sub-track view anywhere in the snapshot.

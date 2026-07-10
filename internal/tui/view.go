@@ -35,7 +35,12 @@ var rollupOrder = []string{task.StatusInProgress, task.StatusTodo, task.StatusBl
 const (
 	zoneList    = "panel-list"
 	zonePreview = "panel-preview"
+	// crumbZonePrefix names the per-segment breadcrumb hit-zones.
+	crumbZonePrefix = "crumb:"
 )
+
+// crumbZone is the stable zone name of the breadcrumb segment for board path.
+func crumbZone(path string) string { return crumbZonePrefix + path }
 
 var (
 	colAccent = lipgloss.AdaptiveColor{Light: "62", Dark: "111"}
@@ -142,10 +147,29 @@ func leftWidth(w int) int {
 }
 
 // leftPanel is the entry list in its focus-colored border, a full-panel
-// mouse zone.
+// mouse zone. A board with no rows or tracks shows a centered dim hint in
+// place of the list; a filter that matches nothing falls through to the
+// list's own styled no-items state.
 func (m Model) leftPanel() string {
-	box := panelBox(m.focus == focusList).Width(m.list.Width() + 2).Height(m.list.Height())
-	return m.zones.Mark(zoneList, box.Render(m.list.View()))
+	cw, ch := m.list.Width()+2, m.list.Height()
+	box := panelBox(m.focus == focusList).Width(cw).Height(ch)
+	inner := m.list.View()
+	switch {
+	case !anySelectable(m.list.Items()):
+		inner = lipgloss.Place(cw, ch, lipgloss.Center, lipgloss.Center, m.emptyHint())
+	case !anySelectable(m.list.VisibleItems()):
+		inner = m.list.Styles.NoItems.Render("No matches")
+	}
+	return m.zones.Mark(zoneList, box.Render(inner))
+}
+
+// emptyHint is the centered dim message for a board with no tracks or tasks:
+// a fresh tree names itself, any other empty track nudges toward create.
+func (m Model) emptyHint() string {
+	if m.path == "." {
+		return dimStyle.Render(`empty tree — duty create task "…" to begin`)
+	}
+	return dimStyle.Render(`no tasks yet — duty create task "…"`)
 }
 
 // rightPanel is the preview — pinned title line over the viewport — in its
@@ -163,7 +187,7 @@ func (m Model) headerView(w int) string {
 	inner := max(w-4, 1)
 	b, _ := m.board()
 	content := lipgloss.JoinVertical(lipgloss.Left,
-		ansi.Truncate(crumbStyle.Render(m.breadcrumb()), inner, "…"),
+		ansi.Truncate(m.breadcrumb(), inner, "…"),
 		stateLine(b, inner),
 	)
 	return headerBox.Width(max(w-2, 1)).Render(content)
@@ -228,15 +252,22 @@ func (m Model) footerView(w int) string {
 }
 
 // helpView renders the bubbles/help hint bar (short, or the full grid after
-// "?"), sized to the terminal.
+// "?"), truncated per line so a hint set wider than the terminal degrades to
+// an ellipsis instead of overflowing the frame.
 func (m Model) helpView(w int) string {
+	inner := max(w-1, 1)
 	h := m.help
-	h.Width = w
-	return " " + h.View(m.keys)
+	h.Width = inner
+	lines := strings.Split(h.View(m.keys), "\n")
+	for i := range lines {
+		lines[i] = ansi.Truncate(lines[i], inner, "…")
+	}
+	return " " + strings.Join(lines, "\n")
 }
 
 // previewTitle is the pinned line above the open preview, resolved from the
-// open subject: id, status, gates, and drift for a task; name and title for a
+// open subject: id, colored status, gates n/m, and track title for a task —
+// blocked-by ids and drift appended dim when present; name and title for a
 // track.
 func (m Model) previewTitle() string {
 	kind, arg, ok := splitKey(m.previewKey)
@@ -248,18 +279,32 @@ func (m Model) previewTitle() string {
 			return accentStyle.Render(s.Name) + "  " + selStyle.Render(s.Title)
 		}
 	case kind == "task":
-		if r, ok := m.findRow(arg); ok {
-			t := accentStyle.Render(r.ID) + "  " + statusStyle(r.Status).Render(r.Status)
-			if g := gatesCell(r); g != "" {
-				t += "  " + dimStyle.Render(g)
-			}
-			if r.Drift != "" {
-				t += "  " + driftStyle.Render("⚠ "+r.Drift)
-			}
-			return t
+		if r, b, ok := m.findRowBoard(arg); ok {
+			return taskHeader(r, b.Title)
 		}
 	}
 	return dimStyle.Render("gone")
+}
+
+// taskHeader joins a task's identity into the preview's pinned line: id ·
+// status · gates n/m · track title, with blocked-by ids and any drift badge
+// trailing dim.
+func taskHeader(r Row, track string) string {
+	parts := []string{accentStyle.Render(r.ID), statusStyle(r.Status).Render(r.Status)}
+	if g := gatesCell(r); g != "" {
+		parts = append(parts, dimStyle.Render(g))
+	}
+	if track != "" {
+		parts = append(parts, dimStyle.Render(track))
+	}
+	line := strings.Join(parts, dimStyle.Render(" · "))
+	if len(r.BlockedBy) > 0 {
+		line += "  " + dimStyle.Render("blocked-by "+strings.Join(r.BlockedBy, ", "))
+	}
+	if r.Drift != "" {
+		line += "  " + driftStyle.Render("⚠ "+r.Drift)
+	}
+	return line
 }
 
 // previewContent renders the open subject from the snapshot alone: a task's
@@ -370,25 +415,38 @@ func statusRollup(counts map[string]int) string {
 	return strings.Join(parts, dimStyle.Render(" · "))
 }
 
-// breadcrumb joins the H1 titles from the root down to the track on screen.
+// breadcrumb joins the H1 titles from the root down to the track on screen,
+// each segment a BubbleZone the mouse can click to jump to that ancestor.
 func (m Model) breadcrumb() string {
-	var parts []string
+	chain := m.crumbChain()
+	if len(chain) == 0 {
+		return m.path
+	}
+	parts := make([]string, len(chain))
+	for i, p := range chain {
+		seg := crumbStyle.Render(m.snap.Boards[p].Title)
+		parts[i] = m.zones.Mark(crumbZone(p), seg)
+	}
+	return strings.Join(parts, dimStyle.Render(" › "))
+}
+
+// crumbChain lists the board paths from the root down to the track on screen,
+// the order the breadcrumb reads left to right.
+func (m Model) crumbChain() []string {
+	var chain []string
 	p := m.path
 	for {
 		b, ok := m.snap.Boards[p]
 		if !ok {
 			break
 		}
-		parts = append([]string{b.Title}, parts...)
+		chain = append([]string{p}, chain...)
 		if b.Parent == "" {
 			break
 		}
 		p = b.Parent
 	}
-	if len(parts) == 0 {
-		return m.path
-	}
-	return strings.Join(parts, " › ")
+	return chain
 }
 
 // newRenderer builds the single glamour renderer used program-wide, at a

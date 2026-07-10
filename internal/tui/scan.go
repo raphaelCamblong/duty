@@ -77,6 +77,8 @@ type Row struct {
 	File, Path string
 	// GatesDone and GatesTotal count ticked vs all gate checkboxes.
 	GatesDone, GatesTotal int
+	// BlockedBy lists the ids the task's frontmatter declares as prerequisites.
+	BlockedBy []string
 	// Drift is "" when file and board agree, else "board says <status>",
 	// "no row", "no file", or "unparsable file".
 	Drift string
@@ -176,7 +178,8 @@ func readTasks(f fsys.FS, dir string) (files map[string]Row, bad map[string][]by
 			ID: t.ID, Title: t.Title, Status: t.Status,
 			File: e.Name(), Path: abs,
 			GatesDone: gd, GatesTotal: gt,
-			Content: content,
+			BlockedBy: t.BlockedBy,
+			Content:   content,
 		}
 	}
 	return files, bad, nil

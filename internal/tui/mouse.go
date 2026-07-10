@@ -61,9 +61,15 @@ func (m Model) overPreview(msg tea.MouseMsg) bool {
 	return m.zones.Get(zonePreview).InBounds(msg)
 }
 
-// click selects the entry under the pointer or focuses the open preview; a
-// second press on the same entry within doubleClick opens it.
+// click routes a left press: a breadcrumb segment jumps to that ancestor
+// track, the open preview takes focus, otherwise the entry under the pointer
+// is selected (a second press on it opens it).
 func (m Model) click(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	for _, p := range m.crumbChain() {
+		if m.zones.Get(crumbZone(p)).InBounds(msg) {
+			return m.enterBoard(p), nil
+		}
+	}
 	if m.split() && m.zones.Get(zonePreview).InBounds(msg) {
 		m.focus = focusPreview
 		return m, nil

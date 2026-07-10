@@ -36,6 +36,17 @@ func (e entry) selectable() bool {
 	return e.track != nil || e.task != nil
 }
 
+// anySelectable reports whether items holds at least one track or task, so a
+// board carrying only an empty section header still reads as empty.
+func anySelectable(items []list.Item) bool {
+	for _, it := range items {
+		if e, ok := it.(entry); ok && e.selectable() {
+			return true
+		}
+	}
+	return false
+}
+
 // boardEntries lists a board as left-panel entries: sub-tracks first, then
 // every section header followed by its task rows in board order.
 func boardEntries(b Board) []list.Item {

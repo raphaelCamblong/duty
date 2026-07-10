@@ -255,9 +255,10 @@ everywhere). Startup is instant: the browsing view builds no markdown renderer a
 fires no terminal query — a task's file is rendered only when it is *opened*, never on
 selection change:
 - **Header:** breadcrumb of the track path — each board's H1 title (§4), never the
-  folder name alone — plus the current track's **subtree** state: per-status counts,
-  one per status in that status's color, and a one-line status-distribution bar
-  (ntcharts), so a track's health reads at a glance.
+  folder name alone, **each segment a BubbleZone the mouse can click to jump to that
+  ancestor track** (a shortcut for an `esc` chain) — plus the current track's
+  **subtree** state: per-status counts, one per status in that status's color, and a
+  one-line status-distribution bar (ntcharts), so a track's health reads at a glance.
 - **Left panel** (the whole width while browsing; ~38%, min 30 cols, once a preview is
   open): a `bubbles/list` with a custom compact delegate. Sub-tracks first, one line
   each carrying a **per-status rollup** of its subtree computed live from files —
@@ -265,13 +266,18 @@ selection change:
   in-progress · 2 todo · 4 done`); then tasks under their section headers, one line
   each: id, title, colored status (`todo` dim, `in-progress` yellow, `blocked` red,
   `done` green), gate progress `2/3`, drift badge if any. The list's built-in fuzzy
-  filter opens on `/`.
+  filter opens on `/`. **Empty states are intentional:** a board with no tracks or
+  tasks shows a centered dim hint (a fresh tree names itself, any other empty track
+  nudges toward `duty create task`), and a filter that matches nothing shows the
+  list's own styled no-items line rather than a blank panel.
 - **Right panel — on open only:** while browsing there is no right panel. `enter` (or a
   double-click) on a task opens the split — the list stays left, the task's file
   rendered by glamour in a `bubbles/viewport` on the right, focus on the preview; `esc`
   closes it back to the full-width list. `enter` on a track descends; with a preview
   already open, `enter` on a track instead opens its summary card (title, per-status
-  counts, distribution bar, sections with row counts, subtree drift count). The preview
+  counts, distribution bar, sections with row counts, subtree drift count). A task
+  preview is topped by a pinned header — `id · status (colored) · gates n/m · track
+  title`, with any `blocked-by` ids and drift flag trailing dim. The preview
   reads from the same scan snapshot as the rows (zero extra file I/O), rendered by one
   glamour renderer built lazily on the first open and reused, rebuilt only on a width
   change; content re-renders on re-scan.
@@ -282,12 +288,15 @@ selection change:
 **Keys:** `j/k` move, `enter` open (descend into a track / open the selection in the
 preview), `esc` back (close the preview / clear the filter / up one track), `tab`
 toggle panel focus while a preview is open, `/` filter, `e` open the selected task in
-`$EDITOR` (suspend TUI, resume on exit), `?` key-hint footer, `q` quit.
+`$EDITOR` (suspend TUI, resume on exit), `r` re-scan the tree now (the fsnotify watcher
+already refreshes on any change; `r` is manual reassurance), `?` key-hint footer, `q`
+quit.
 
-**Mouse:** panels and rows are BubbleZone hit-zones — a click selects a row (left
-panel) or focuses an open preview (right panel), a double-click opens/descends, and the
-wheel scrolls the hovered panel. Preview scrolling is spring-smoothed with Harmonica;
-motion stays subtle, never slower than the keyboard.
+**Mouse:** panels, rows, and breadcrumb segments are BubbleZone hit-zones — a click
+selects a row (left panel), focuses an open preview (right panel), or jumps to the
+clicked breadcrumb's ancestor track; a double-click opens/descends, and the wheel
+scrolls the hovered panel. Preview scrolling is spring-smoothed with Harmonica; motion
+stays subtle, never slower than the keyboard.
 
 **Live refresh:** watch every directory in the tree with fsnotify. On any event, debounce
 ~100 ms, then **re-scan everything** — the tree is dozens of small files, so a full

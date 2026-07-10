@@ -28,6 +28,6 @@ Order top-to-bottom is the intended build order.
 | [T-19](T-19-kubectl-style-cli-grammar.md) | kubectl-style CLI grammar | done |
 | [T-20](T-20-agent-reads-get-task-tracks-next.md) | Agent reads: get task, tracks, next | done |
 | [T-21](T-21-cli-help-groups-examples-completion.md) | CLI help groups, examples, completion | done |
-| [T-22](T-22-tui-polish-night-pass.md) | TUI polish night pass | todo |
+| [T-22](T-22-tui-polish-night-pass.md) | TUI polish night pass | done |
 
 Completed tasks (0) archived: [archive/](archive/).
