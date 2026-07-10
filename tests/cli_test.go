@@ -18,7 +18,7 @@ func runDuty(t *testing.T, dir string, args ...string) (code int, stdout, stderr
 	t.Helper()
 	t.Chdir(dir)
 	var out, errBuf bytes.Buffer
-	code = cli.Run(args, strings.NewReader(""), &out, &errBuf)
+	code = cli.Run(args, strings.NewReader(""), &out, &errBuf, "test")
 	return code, out.String(), errBuf.String()
 }
 
@@ -75,7 +75,8 @@ func TestRunDispatch(t *testing.T) {
 		wantErr  string
 	}{
 		{name: "no command", args: nil, wantCode: 2, wantErr: "usage: duty <command> [args]\n"},
-		{name: "unknown command", args: []string{"nope"}, wantCode: 2, wantErr: "unknown command \"nope\"\n"},
+		{name: "unknown command", args: []string{"zzz"}, wantCode: 2, wantErr: "unknown command \"zzz\"\n"},
+		{name: "typo suggests the close command", args: []string{"creat"}, wantCode: 2, wantErr: "unknown command \"creat\" — did you mean \"create\"?\n"},
 		{name: "old create spelling", args: []string{"create", "First task"}, wantCode: 2, wantErr: "unknown command \"First task\"\n"},
 		{name: "removed track command", args: []string{"track", "backend"}, wantCode: 2, wantErr: "unknown command \"track\"\n"},
 		{name: "removed board command", args: []string{"board", "backend"}, wantCode: 2, wantErr: "unknown command \"board\"\n"},

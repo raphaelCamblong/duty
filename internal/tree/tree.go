@@ -117,7 +117,7 @@ func ResolveTask(f fsys.FS, root, id string) (string, error) {
 		return "", err
 	}
 	if found == "" {
-		return "", fmt.Errorf("task %s not found", id)
+		return "", fmt.Errorf("unknown task id %q — try 'duty get tasks'", id)
 	}
 	if underArchive(root, found) {
 		return "", fmt.Errorf("task %s is archived: %w", id, ErrArchived)

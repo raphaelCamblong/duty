@@ -11,15 +11,18 @@ import (
 )
 
 const (
-	createUsage      = "usage: duty create <task|track> [args]"
-	createTaskUsage  = "usage: duty create task <title> [--slug S] [--blocked-by ID]... [--section NAME]"
-	createTrackUsage = "usage: duty create track <name> [--title T]"
+	createUsage        = "usage: duty create <task|track> [args]"
+	createExample      = "  duty create task \"Fix login\" --blocked-by T-03\n  duty create track backend --title \"Backend work\""
+	createTaskUsage    = "usage: duty create task <title> [--slug S] [--blocked-by ID]... [--section NAME]"
+	createTaskExample  = `  duty create task "Fix login" --blocked-by T-03`
+	createTrackUsage   = "usage: duty create track <name> [--title T]"
+	createTrackExample = `  duty create track backend --title "Backend work"`
 )
 
 // newCreateCmd builds the create verb: resource subcommands for tasks and
 // tracks.
 func newCreateCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
-	cmd := newGroupCmd("create", "create a task or a track", createUsage)
+	cmd := newGroupCmd("create", "create a task or a track", createUsage, createExample)
 	cmd.AddCommand(
 		newCreateTaskCmd(a, cwd, stdout),
 		newCreateTrackCmd(a, cwd),
@@ -36,8 +39,9 @@ func newCreateTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 		blockedBy stringList
 	)
 	cmd := &cobra.Command{
-		Use:   "task <title>",
-		Short: "create a task in the current board",
+		Use:     "task <title>",
+		Short:   "create a task in the current board",
+		Example: createTaskExample,
 		RunE: func(_ *cobra.Command, args []string) error {
 			if len(args) != 1 || args[0] == "" {
 				return errors.New(createTaskUsage)
@@ -61,8 +65,9 @@ func newCreateTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 func newCreateTrackCmd(a app.App, cwd string) *cobra.Command {
 	var title string
 	cmd := &cobra.Command{
-		Use:   "track <name>",
-		Short: "create a track under the current board",
+		Use:     "track <name>",
+		Short:   "create a track under the current board",
+		Example: createTrackExample,
 		RunE: func(_ *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return errors.New(createTrackUsage)

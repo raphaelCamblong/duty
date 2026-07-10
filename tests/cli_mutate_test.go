@@ -16,7 +16,7 @@ func runDutyStdin(t *testing.T, dir, input string, args ...string) (code int, st
 	t.Helper()
 	t.Chdir(dir)
 	var out, errBuf bytes.Buffer
-	code = cli.Run(args, strings.NewReader(input), &out, &errBuf)
+	code = cli.Run(args, strings.NewReader(input), &out, &errBuf, "test")
 	return code, out.String(), errBuf.String()
 }
 

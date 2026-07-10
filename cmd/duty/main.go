@@ -9,6 +9,10 @@ import (
 	"github.com/raphaelCamblong/duty/internal/cli"
 )
 
+// version is duty's build version, "dev" unless overridden at link time with
+// -ldflags "-X main.version=…".
+var version = "dev"
+
 func main() {
-	os.Exit(cli.Run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
+	os.Exit(cli.Run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr, version))
 }

@@ -167,6 +167,17 @@ subcommand (`task`, `track`, `tasks`); the agent hot path stays verb-only (`init
 sync invariant (file + board in one shot). Exit codes: `0` ok, `≠0` error with a
 one-line stderr message; `2` for a missing or unknown command.
 
+**Help & discovery.** `duty --help` groups the tree — `Author` (`init`, `create`),
+`Work` (`status`, `report`, `move`, `archive`, `delete`), `Read` (`get`), `Interface`
+(`tui`, `completion`) — and opens with the five-step lifecycle (`get next` → `status
+in-progress` → tick gates → `status done` + `report` → `archive`); every command
+carries a copy-pasteable `Example`. Typos on a command name suggest the closest match
+within edit distance 2 (`duty creat` → "did you mean \"create\"?"), still exit `2`.
+`duty completion <shell>` emits a shell completion script. `duty --version` prints the
+build version — `dev` unless overridden with `-ldflags "-X main.version=…"` — and
+exits `0`. An id that resolves nowhere hints at the fix: `unknown task id "T-99" — try
+'duty get tasks'`.
+
 | Command | Behavior |
 |---|---|
 | `duty init [title]` | Bootstrap: create `duty/` in cwd with skeleton `BOARD.md` (H1 = title, default `Board`), `README.md`, `archive/`. Refuse if already inside a tree. |
@@ -322,8 +333,9 @@ Add TUI mutations only if that round-trip proves too slow in practice.
   `(?m)^status: \S+`, first match only.
 - Row find: the line containing `(<filename>)` that starts with `|`. Status cell update:
   `strings.Split(row, "|")`, replace `cells[len(cells)-2]`, rejoin — preserves spacing.
-- Task-id → file: `filepath.WalkDir` from the tree root matching `<id>-*.md`; error names
-  the id and notes archived tasks are read-only. Global NN uniqueness (§3) guarantees at
+- Task-id → file: `filepath.WalkDir` from the tree root matching `<id>-*.md`; an unknown
+  id's error names it and hints `try 'duty get tasks'`, an archived match notes archived
+  tasks are read-only. Global NN uniqueness (§3) guarantees at
   most one match.
 - Board discovery: `filepath.WalkDir` collecting directories that contain `BOARD.md`,
   skipping `archive/`. Reused by get tasks, archive, the TUI scan, and NN numbering.

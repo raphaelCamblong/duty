@@ -18,6 +18,12 @@ const (
 	getTasksUsage  = "usage: duty get tasks [--status S] [--agent]"
 	getTracksUsage = "usage: duty get tracks [--agent]"
 	getNextUsage   = "usage: duty get next [--agent]"
+
+	getExample = `  duty get next --agent
+  duty get task T-07`
+	getTaskExample   = `  duty get task T-07`
+	getTracksExample = `  duty get tracks --agent`
+	getNextExample   = `  duty get next --agent`
 )
 
 // taskKeyWidth pads the key column of get task's human output; it is the
@@ -26,7 +32,7 @@ const taskKeyWidth = len("blocked-by:")
 
 // newGetCmd builds the get verb: resource subcommands for reading state.
 func newGetCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
-	cmd := newGroupCmd("get", "read tasks and tracks from the files", getUsage)
+	cmd := newGroupCmd("get", "read tasks and tracks from the files", getUsage, getExample)
 	cmd.AddCommand(
 		newGetTaskCmd(a, cwd, stdout),
 		newGetTasksCmd(a, cwd, stdout, "tasks", false),
@@ -46,8 +52,9 @@ func newListCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 func newGetTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var agent bool
 	cmd := &cobra.Command{
-		Use:   "task <id>",
-		Short: "show one task's metadata and file path",
+		Use:     "task <id>",
+		Short:   "show one task's metadata and file path",
+		Example: getTaskExample,
 		RunE: func(_ *cobra.Command, args []string) error {
 			if len(args) != 1 || args[0] == "" {
 				return errors.New(getTaskUsage)
@@ -73,8 +80,9 @@ func newGetTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 func newGetTracksCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var agent bool
 	cmd := &cobra.Command{
-		Use:   "tracks",
-		Short: "show every board's per-status task counts",
+		Use:     "tracks",
+		Short:   "show every board's per-status task counts",
+		Example: getTracksExample,
 		RunE: func(_ *cobra.Command, args []string) error {
 			if len(args) != 0 {
 				return errors.New(getTracksUsage)
@@ -104,8 +112,9 @@ func newGetTracksCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 func newGetNextCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var agent bool
 	cmd := &cobra.Command{
-		Use:   "next",
-		Short: "show the first actionable task (empty when nothing is ready)",
+		Use:     "next",
+		Short:   "show the first actionable task (empty when nothing is ready)",
+		Example: getNextExample,
 		RunE: func(_ *cobra.Command, args []string) error {
 			if len(args) != 0 {
 				return errors.New(getNextUsage)
@@ -138,9 +147,10 @@ func newGetTasksCmd(a app.App, cwd string, stdout io.Writer, use string, hidden 
 		agent  bool
 	)
 	cmd := &cobra.Command{
-		Use:    use,
-		Short:  "list open tasks from the files, with drift flags",
-		Hidden: hidden,
+		Use:     use,
+		Short:   "list open tasks from the files, with drift flags",
+		Example: fmt.Sprintf("  duty %s --status todo", use),
+		Hidden:  hidden,
 		RunE: func(_ *cobra.Command, args []string) error {
 			if len(args) != 0 {
 				return errors.New(getTasksUsage)

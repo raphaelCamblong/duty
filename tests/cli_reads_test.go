@@ -120,6 +120,9 @@ func TestGetTask(t *testing.T) {
 		if stdout != "" {
 			t.Errorf("stdout = %q, want empty", stdout)
 		}
+		if want := "unknown task id \"T-99\" — try 'duty get tasks'\n"; stderr != want {
+			t.Errorf("stderr = %q, want %q", stderr, want)
+		}
 	})
 
 	t.Run("missing id fails", func(t *testing.T) {

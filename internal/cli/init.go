@@ -8,13 +8,17 @@ import (
 	"github.com/raphaelCamblong/duty/internal/app"
 )
 
-const initUsage = "usage: duty init [title]"
+const (
+	initUsage   = "usage: duty init [title]"
+	initExample = `  duty init "Q3 roadmap"`
+)
 
 // newInitCmd builds the init command: bootstrap a duty tree in cwd.
 func newInitCmd(a app.App, cwd string) *cobra.Command {
 	return &cobra.Command{
-		Use:   "init [title]",
-		Short: "bootstrap a duty tree in the current directory",
+		Use:     "init [title]",
+		Short:   "bootstrap a duty tree in the current directory",
+		Example: initExample,
 		RunE: func(_ *cobra.Command, args []string) error {
 			if len(args) > 1 {
 				return errors.New(initUsage)

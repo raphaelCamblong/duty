@@ -1,7 +1,7 @@
 ---
 id: T-21
 title: CLI help groups, examples, completion
-status: todo
+status: done
 blocked-by: [T-20]
 ---
 
@@ -36,10 +36,22 @@ every command, typo suggestions, shell completion, a version.
 New commands or flags beyond `--version`; grammar changes; TUI.
 
 ## Gates
-- [ ] `duty --help` shows the four groups + lifecycle Long; every command's help
+- [x] `duty --help` shows the four groups + lifecycle Long; every command's help
   shows an Example (spot-checked in tests for root, create task, get next).
-- [ ] `duty creat` exits 2 and suggests `create`; `duty --version` prints and
+- [x] `duty creat` exits 2 and suggests `create`; `duty --version` prints and
   exits 0; `duty completion zsh` emits a script.
-- [ ] Full suite green; `gofmt -l .` empty; `go vet ./...` clean; build ok.
+- [x] Full suite green; `gofmt -l .` empty; `go vet ./...` clean; build ok.
 
 ## Report
+
+Files changed: cmd/duty/main.go, internal/cli/cli.go, internal/cli/{archive,create,delete,get,init,move,report,status,tui}.go, internal/tree/tree.go, task-system-spec.md, duty/BOARD.md, tests/cli_test.go, tests/cli_mutate_test.go, tests/cli_reads_test.go, tests/cli_help_test.go (new).
+
+Picked up an interrupted agent's partial T-21 work, reviewed it critically against the task Scope, and found it essentially complete and correct: root command groups (Author/Work/Read/Interface), five-line lifecycle Long, Example on every command, SuggestionsMinimumDistance 2 on root and every dispatcher (with a custom unknownCommand helper wired to cobra's SuggestionsFor), completion left enabled and grouped under Interface, --version wired via a ldflags-overridable main.version var threaded through cli.Run, and a resolve-failure hint (unknown task id %q — try 'duty get tasks') centralized in tree.ResolveTask so every caller (status/report/move/archive/delete/get task) gets it uniformly. Verified by hand: duty --help renders all four groups + lifecycle; duty creat/get nex both exit 2 with correct "did you mean" suggestions; duty --version prints "dev" and honors -ldflags "-X main.version=..."; duty completion {bash,zsh,fish} all emit real scripts and exit 0; every leaf and group command's --help shows a copy-pasteable Examples: block; unknown-id errors are one lowercase line, exit 1, across all mutating commands.
+
+Gate tails:
+- gofmt -l . -> empty
+- go vet ./... -> clean
+- go build -o bin/duty ./cmd/duty -> ok
+- go test ./tests/... -coverpkg=./internal/... -count=1 -> ok, 83.6% coverage
+
+Deviations: none from the task Scope. Spec updated in the same change (new "Help & discovery" paragraph plus the task-id resolution note) since behavior changed.

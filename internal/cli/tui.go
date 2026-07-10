@@ -9,13 +9,17 @@ import (
 	"github.com/raphaelCamblong/duty/internal/tui"
 )
 
-const tuiUsage = "usage: duty tui"
+const (
+	tuiUsage   = "usage: duty tui"
+	tuiExample = `  duty tui`
+)
 
 // newTUICmd builds the tui command: launch the live board viewer.
 func newTUICmd(f fsys.FS, cwd string) *cobra.Command {
 	return &cobra.Command{
-		Use:   "tui",
-		Short: "launch the live board viewer",
+		Use:     "tui",
+		Short:   "launch the live board viewer",
+		Example: tuiExample,
 		RunE: func(_ *cobra.Command, args []string) error {
 			if len(args) != 0 {
 				return errors.New(tuiUsage)

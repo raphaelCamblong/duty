@@ -25,23 +25,41 @@ type missingCommandError string
 // Error renders the one-line usage message.
 func (e missingCommandError) Error() string { return string(e) }
 
-// unknownCommandError names a command Run does not know; it maps to exit 2.
-type unknownCommandError string
+// unknownCommandError names a command Run does not know, with an optional
+// typo suggestion; it maps to exit 2.
+type unknownCommandError struct {
+	name       string
+	suggestion string
+}
 
-// Error renders the one-line unknown-command message.
+// Error renders the one-line unknown-command message, with a "did you mean"
+// hint when a close match exists.
 func (e unknownCommandError) Error() string {
-	return fmt.Sprintf("unknown command %q", string(e))
+	if e.suggestion == "" {
+		return fmt.Sprintf("unknown command %q", e.name)
+	}
+	return fmt.Sprintf("unknown command %q — did you mean %q?", e.name, e.suggestion)
 }
 
 // errNoCommand reports an invocation naming no command at all.
 var errNoCommand = missingCommandError("usage: duty <command> [args]")
+
+// unknownCommand builds the unknown-command error for name, suggesting the
+// closest of cmd's subcommands when one is within SuggestionsMinimumDistance.
+func unknownCommand(cmd *cobra.Command, name string) error {
+	suggestion := ""
+	if suggestions := cmd.SuggestionsFor(name); len(suggestions) > 0 {
+		suggestion = suggestions[0]
+	}
+	return unknownCommandError{name: name, suggestion: suggestion}
+}
 
 // Run executes one duty command over the real filesystem. args is the command
 // line without the program name; stdin feeds commands that read input; stdout
 // receives command output; stderr receives one-line error messages. It returns
 // the process exit code: 0 on success, 2 on a missing or unknown command, 1 on
 // any other error.
-func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+func Run(args []string, stdin io.Reader, stdout, stderr io.Writer, version string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, errNoCommand)
 		return 2
@@ -51,7 +69,7 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	root := newRoot(cwd, stdin, stdout, stderr)
+	root := newRoot(cwd, stdin, stdout, stderr, version)
 	root.SetArgs(args)
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(stderr, err)
@@ -65,39 +83,97 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	return 0
 }
 
+// Command group ids, shared between the root command's grouping and each
+// subcommand's assignment.
+const (
+	groupAuthor    = "author"
+	groupWork      = "work"
+	groupRead      = "read"
+	groupInterface = "interface"
+)
+
+// rootLong teaches the tool in one screen: what it is, then the five-step
+// lifecycle an agent (or a human) drives it through.
+const rootLong = `duty is a file-based task system: markdown task files plus nested board
+indexes, kept in sync by one binary.
+
+The lifecycle:
+  duty get next                  find the next actionable task
+  duty status <id> in-progress   start it
+  tick gate checkboxes in the task file as they pass
+  duty status <id> done          then duty report <id> with what changed
+  duty archive                   move every done task into its board's archive/`
+
+// rootExample is a copy-pasteable run through the lifecycle above.
+const rootExample = `  duty get next --agent
+  duty status T-07 in-progress
+  duty status T-07 done
+  duty report T-07 < report.txt
+  duty archive`
+
 // newRoot assembles the duty command tree over the real filesystem, rooted
 // at cwd, with cobra's own error and usage printing silenced.
-func newRoot(cwd string, stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
+func newRoot(cwd string, stdin io.Reader, stdout, stderr io.Writer, version string) *cobra.Command {
 	var f fsys.FS = fsys.OS{}
 	a := app.New(f)
 	root := &cobra.Command{
-		Use:           "duty <command> [args]",
-		Short:         "file-based task system: markdown tasks + board indexes",
-		Args:          cobra.ArbitraryArgs,
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		RunE: func(_ *cobra.Command, args []string) error {
+		Use:                        "duty <command> [args]",
+		Short:                      "file-based task system: markdown tasks + board indexes",
+		Long:                       rootLong,
+		Example:                    rootExample,
+		Version:                    version,
+		Args:                       cobra.ArbitraryArgs,
+		SilenceErrors:              true,
+		SilenceUsage:               true,
+		SuggestionsMinimumDistance: 2,
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return errNoCommand
 			}
-			return unknownCommandError(args[0])
+			return unknownCommand(cmd, args[0])
 		},
 	}
 	root.SetIn(stdin)
 	root.SetOut(stdout)
 	root.SetErr(stderr)
-	root.CompletionOptions.DisableDefaultCmd = true
+	root.SetCompletionCommandGroupID(groupInterface)
+	root.AddGroup(
+		&cobra.Group{ID: groupAuthor, Title: "Author Commands:"},
+		&cobra.Group{ID: groupWork, Title: "Work Commands:"},
+		&cobra.Group{ID: groupRead, Title: "Read Commands:"},
+		&cobra.Group{ID: groupInterface, Title: "Interface Commands:"},
+	)
+
+	initCmd := newInitCmd(a, cwd)
+	initCmd.GroupID = groupAuthor
+	createCmd := newCreateCmd(a, cwd, stdout)
+	createCmd.GroupID = groupAuthor
+	getCmd := newGetCmd(a, cwd, stdout)
+	getCmd.GroupID = groupRead
+	statusCmd := newStatusCmd(a, cwd)
+	statusCmd.GroupID = groupWork
+	reportCmd := newReportCmd(a, cwd, stdin)
+	reportCmd.GroupID = groupWork
+	moveCmd := newMoveCmd(a, cwd)
+	moveCmd.GroupID = groupWork
+	archiveCmd := newArchiveCmd(a, cwd)
+	archiveCmd.GroupID = groupWork
+	deleteCmd := newDeleteCmd(a, cwd)
+	deleteCmd.GroupID = groupWork
+	tuiCmd := newTUICmd(f, cwd)
+	tuiCmd.GroupID = groupInterface
+
 	root.AddCommand(
-		newInitCmd(a, cwd),
-		newCreateCmd(a, cwd, stdout),
-		newGetCmd(a, cwd, stdout),
+		initCmd,
+		createCmd,
+		getCmd,
 		newListCmd(a, cwd, stdout),
-		newStatusCmd(a, cwd),
-		newReportCmd(a, cwd, stdin),
-		newMoveCmd(a, cwd),
-		newArchiveCmd(a, cwd),
-		newDeleteCmd(a, cwd),
-		newTUICmd(f, cwd),
+		statusCmd,
+		reportCmd,
+		moveCmd,
+		archiveCmd,
+		deleteCmd,
+		tuiCmd,
 	)
 	return root
 }
@@ -105,18 +181,20 @@ func newRoot(cwd string, stdin io.Reader, stdout, stderr io.Writer) *cobra.Comma
 // newGroupCmd builds a verb command that only dispatches to its resource
 // subcommands: invoked bare it reports usage, with an unknown resource it
 // reports the unknown command — both map to exit 2.
-func newGroupCmd(use, short, usage string) *cobra.Command {
+func newGroupCmd(use, short, usage, example string) *cobra.Command {
 	return &cobra.Command{
-		Use:           use,
-		Short:         short,
-		Args:          cobra.ArbitraryArgs,
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		RunE: func(_ *cobra.Command, args []string) error {
+		Use:                        use,
+		Short:                      short,
+		Example:                    example,
+		Args:                       cobra.ArbitraryArgs,
+		SilenceErrors:              true,
+		SilenceUsage:               true,
+		SuggestionsMinimumDistance: 2,
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return missingCommandError(usage)
 			}
-			return unknownCommandError(args[0])
+			return unknownCommand(cmd, args[0])
 		},
 	}
 }
