@@ -464,10 +464,10 @@ func TestPruneNeverRemovesDefaultSection(t *testing.T) {
 	})
 }
 
-// TestGetTasksNeverWrites: get tasks (and its hidden list alias) reads files
-// as truth and reports drift without touching a single byte, in every output
-// mode (spec §6).
-func TestGetTasksNeverWrites(t *testing.T) {
+// TestReadsNeverWrite: every get reader (tasks and its hidden list alias,
+// task, tracks, next) reads files as truth and reports drift without touching
+// a single byte, in every output mode (spec §6).
+func TestReadsNeverWrite(t *testing.T) {
 	root := writeSalted(t)
 	drifted := replaceOnce(t, saltedBoard, saltT01Row,
 		"| [T-01](T-01-existing-task.md) | Existing task | done |")
@@ -491,6 +491,12 @@ func TestGetTasksNeverWrites(t *testing.T) {
 		{"get", "tasks", "--agent"},
 		{"get", "tasks", "--status", "blocked"},
 		{"get", "tasks", "--status", "done"},
+		{"get", "task", "T-01"},
+		{"get", "task", "T-01", "--agent"},
+		{"get", "tracks"},
+		{"get", "tracks", "--agent"},
+		{"get", "next"},
+		{"get", "next", "--agent"},
 		{"list"},
 		{"list", "--agent"},
 	} {
@@ -501,6 +507,6 @@ func TestGetTasksNeverWrites(t *testing.T) {
 
 	if got := hashTree(t, root); got != before {
 		diffTrees(t, snap, snapshotTree(t, root))
-		t.Errorf("tree hash after get tasks = %s, want %s", got, before)
+		t.Errorf("tree hash after reads = %s, want %s", got, before)
 	}
 }

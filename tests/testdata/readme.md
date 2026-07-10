@@ -25,11 +25,14 @@ Statuses: `todo | in-progress | done | blocked`.
 | `duty archive` | Move every `done` task into its board's `archive/`. |
 | `duty delete task <id>` | Remove an open task (`--force` for `done`). |
 | `duty get tasks` | Open tasks from the files, with drift flags (`--agent` for TSV). |
+| `duty get task <id>` | One task's metadata and file path — not its body (`--agent` for TSV). |
+| `duty get tracks` | Per-status task counts for every board (`--agent` for TSV). |
+| `duty get next` | The first actionable task in board order; empty when nothing is ready (`--agent` for TSV). |
 | `duty tui` | Live board viewer. |
 
 ## Lifecycle → command
 
-1. Start → `duty status <id> in-progress`.
+1. Start → `duty get next` (the first actionable task), then `duty status <id> in-progress`.
 2. Blocked (missing input, failed dep, unmade decision) → `duty status <id> blocked`
    + pipe a report naming exactly what's missing (`duty report <id>`), then stop.
    Never guess past a blocker.

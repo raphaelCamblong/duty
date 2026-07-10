@@ -15,7 +15,7 @@ Statuses: `todo | in-progress | done | blocked`.
 
 ## Lifecycle → command
 
-1. Start → `duty status <id> in-progress`.
+1. Start → `duty get next` (the first actionable task), then `duty status <id> in-progress`.
 2. Blocked (missing input, failed dep, unmade decision) → `duty status <id> blocked`
    + pipe a report naming exactly what's missing (`duty report <id>`), then stop.
    Never guess past a blocker.
@@ -26,7 +26,8 @@ Statuses: `todo | in-progress | done | blocked`.
 6. If a task turns out to be two, finish the stated scope and name the split in the
    report — don't expand.
 
-Reading state: `duty get tasks` (add `--agent` for TSV). Cleanup: `duty archive`.
+Reading state: `duty get next` (first actionable task), `duty get task <id>`, `duty get
+tasks`, `duty get tracks` (add `--agent` for TSV). Cleanup: `duty archive`.
 
 ## What stays your judgment
 

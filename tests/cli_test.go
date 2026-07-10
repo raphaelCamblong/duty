@@ -82,7 +82,7 @@ func TestRunDispatch(t *testing.T) {
 		{name: "removed link command", args: []string{"link", "T-01", "Later"}, wantCode: 2, wantErr: "unknown command \"link\"\n"},
 		{name: "old delete spelling", args: []string{"delete", "T-01"}, wantCode: 2, wantErr: "unknown command \"T-01\"\n"},
 		{name: "bare create", args: []string{"create"}, wantCode: 2, wantErr: "usage: duty create <task|track> [args]\n"},
-		{name: "bare get", args: []string{"get"}, wantCode: 2, wantErr: "usage: duty get tasks [--status S] [--agent]\n"},
+		{name: "bare get", args: []string{"get"}, wantCode: 2, wantErr: "usage: duty get <task|tasks|tracks|next> [args]\n"},
 		{name: "bare delete", args: []string{"delete"}, wantCode: 2, wantErr: "usage: duty delete task <id> [--force]\n"},
 		{name: "unknown get resource", args: []string{"get", "nope"}, wantCode: 2, wantErr: "unknown command \"nope\"\n"},
 	}

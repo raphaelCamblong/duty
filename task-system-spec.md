@@ -178,14 +178,24 @@ one-line stderr message; `2` for a missing or unknown command.
 | `duty archive` | For every open task with `status: done`, in the current board and every board below it: `os.Rename` → its own board's `archive/`, drop its row, prune empty sections, rewrite that board's footer count. Idempotent; "nothing to archive" is a clean no-op. |
 | `duty delete task <id> [--force]` | Refuse on `done` without `--force` (that's `archive`'s job). Remove the file, drop the row, prune. |
 | `duty get tasks [--status S]` | Recursive from the current board. One line per open task **from the files**: `id  status  title`, prefixed with the track path when not local (`backend/ T-12 …`). If the board row's status disagrees (or the row is missing), append a `⚠ board says …` drift flag. `list` survives as a hidden alias. |
+| `duty get task <id>` | One task's metadata **from its file** — never its body (the path is printed; readers `cat` it). Resolves the id anywhere in the tree. Human: aligned `key: value` lines (id, title, status, track, blocked-by, gates `n/m`, path). |
+| `duty get tracks` | One line per board — the current board included as `.` — recursive from the current board: path, title, per-status counts of its **own** (directly-filed) tasks (todo/in-progress/done/blocked) and its archived count. |
+| `duty get next` | The first **actionable** task: walk the current board's rows in board order (build order is priority), then sub-tracks depth-first in scan order, and return the first `todo` whose `blocked-by` are all `done` (an archived dependency counts as done). Output shape = `get task`. **Nothing actionable → no output, exit 0** (empty means nothing to do). |
 | `duty tui` | Launch the live board viewer (§8). |
 
 **Agent output.** Reading commands accept `--agent` (long-only, no shorthand): stable,
 token-lean TSV — one record per line, tab-separated fields, no alignment padding, no
-color, no badges. `duty get tasks --agent` emits `id<TAB>board-path<TAB>status<TAB>title<TAB>drift`
-(drift empty, or `board=<status>`, or `no-row`). TSV, not JSON: fewer tokens, trivially
-`cut`/`awk`-able, and the field order is part of the contract. Mutating commands stay
-quiet either way.
+color, no badges. TSV, not JSON: fewer tokens, trivially `cut`/`awk`-able, and the field
+order is part of the contract. Mutating commands stay quiet either way.
+
+- `duty get tasks --agent` — `id<TAB>board-path<TAB>status<TAB>title<TAB>drift` (drift
+  empty, or `board=<status>`, or `no-row`).
+- `duty get task --agent` / `duty get next --agent` — one record
+  `id<TAB>track-path<TAB>status<TAB>title<TAB>gates-done<TAB>gates-total<TAB>blocked-by<TAB>path`
+  (blocked-by comma-joined, empty when none). `get next` prints nothing when nothing is
+  actionable.
+- `duty get tracks --agent` — one record per board
+  `path<TAB>title<TAB>todo<TAB>in-progress<TAB>done<TAB>blocked<TAB>archived`.
 
 **Behavioral invariants (test these):**
 - **Lossless round-trip:** create → status → report → move to a section → move to
