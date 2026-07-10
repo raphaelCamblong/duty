@@ -1,8 +1,8 @@
-// Package cli is duty's presentation layer: thin cobra subcommands that
-// parse flags, delegate to the app services, and format output. Cobra's own
-// error and usage printing is silenced to keep the contract: quiet on
-// success, one lowercase stderr line per error, exit 0/1, and 2 on a missing
-// or unknown command.
+// Package cli is duty's presentation layer: thin cobra commands in a
+// kubectl-style verb → resource grammar that parse flags, delegate to the
+// app services, and format output. Cobra's own error and usage printing is
+// silenced to keep the contract: quiet on success, one lowercase stderr line
+// per error, exit 0/1, and 2 on a missing or unknown command.
 package cli
 
 import (
@@ -18,8 +18,12 @@ import (
 	"github.com/raphaelCamblong/duty/internal/fsys"
 )
 
-// errNoCommand reports an invocation naming no command; it maps to exit 2.
-var errNoCommand = errors.New("usage: duty <command> [args]")
+// missingCommandError reports an invocation naming no command or resource;
+// it maps to exit 2.
+type missingCommandError string
+
+// Error renders the one-line usage message.
+func (e missingCommandError) Error() string { return string(e) }
 
 // unknownCommandError names a command Run does not know; it maps to exit 2.
 type unknownCommandError string
@@ -28,6 +32,9 @@ type unknownCommandError string
 func (e unknownCommandError) Error() string {
 	return fmt.Sprintf("unknown command %q", string(e))
 }
+
+// errNoCommand reports an invocation naming no command at all.
+var errNoCommand = missingCommandError("usage: duty <command> [args]")
 
 // Run executes one duty command over the real filesystem. args is the command
 // line without the program name; stdin feeds commands that read input; stdout
@@ -48,8 +55,9 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	root.SetArgs(args)
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(stderr, err)
+		var missing missingCommandError
 		var unknown unknownCommandError
-		if errors.Is(err, errNoCommand) || errors.As(err, &unknown) {
+		if errors.As(err, &missing) || errors.As(err, &unknown) {
 			return 2
 		}
 		return 1
@@ -82,17 +90,35 @@ func newRoot(cwd string, stdin io.Reader, stdout, stderr io.Writer) *cobra.Comma
 	root.AddCommand(
 		newInitCmd(a, cwd),
 		newCreateCmd(a, cwd, stdout),
-		newTrackCmd(a, cwd),
+		newGetCmd(a, cwd, stdout),
+		newListCmd(a, cwd, stdout),
 		newStatusCmd(a, cwd),
-		newLinkCmd(a, cwd),
 		newReportCmd(a, cwd, stdin),
 		newMoveCmd(a, cwd),
 		newArchiveCmd(a, cwd),
 		newDeleteCmd(a, cwd),
-		newListCmd(a, cwd, stdout),
 		newTUICmd(f, cwd),
 	)
 	return root
+}
+
+// newGroupCmd builds a verb command that only dispatches to its resource
+// subcommands: invoked bare it reports usage, with an unknown resource it
+// reports the unknown command — both map to exit 2.
+func newGroupCmd(use, short, usage string) *cobra.Command {
+	return &cobra.Command{
+		Use:           use,
+		Short:         short,
+		Args:          cobra.ArbitraryArgs,
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(_ *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return missingCommandError(usage)
+			}
+			return unknownCommandError(args[0])
+		},
+	}
 }
 
 // stringList is a repeatable string flag; each occurrence may also carry

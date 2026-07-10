@@ -225,7 +225,7 @@ func TestRoundTrip(t *testing.T) {
 	beforeHash := hashTree(t, root)
 	before := snapshotTree(t, root)
 
-	code, stdout, stderr := runDuty(t, root, "create", "Scratch pad")
+	code, stdout, stderr := runDuty(t, root, "create", "task", "Scratch pad")
 	if code != 0 || stderr != "" {
 		t.Fatalf("create: code=%d stderr=%q", code, stderr)
 	}
@@ -240,10 +240,10 @@ func TestRoundTrip(t *testing.T) {
 	if code, stdout, stderr := runDutyStdin(t, root, "Scratch report.\n", "report", "T-06"); code != 0 || stdout != "" || stderr != "" {
 		t.Fatalf("report: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	mustRun(t, root, "link", "T-06", "Waiting")
-	mustRun(t, root, "move", "T-06", "backend")
-	mustRun(t, filepath.Join(root, "backend"), "move", "T-06", ".")
-	mustRun(t, root, "delete", "T-06")
+	mustRun(t, root, "move", "T-06", "--section", "Waiting")
+	mustRun(t, root, "move", "T-06", "--track", "backend")
+	mustRun(t, filepath.Join(root, "backend"), "move", "T-06", "--track", ".")
+	mustRun(t, root, "delete", "task", "T-06")
 	mustRun(t, root, "archive")
 
 	if got := hashTree(t, root); got != beforeHash {
@@ -275,7 +275,7 @@ func TestSaltedBoardSurvivesEveryMutation(t *testing.T) {
 		{
 			name: "create appends one row after the last table line",
 			run: func(t *testing.T, root string) {
-				code, stdout, stderr := runDuty(t, root, "create", "Fresh work")
+				code, stdout, stderr := runDuty(t, root, "create", "task", "Fresh work")
 				if code != 0 || stderr != "" {
 					t.Fatalf("create: code=%d stderr=%q", code, stderr)
 				}
@@ -302,9 +302,9 @@ func TestSaltedBoardSurvivesEveryMutation(t *testing.T) {
 			},
 		},
 		{
-			name: "link into an existing section moves only the row line",
+			name: "move --section into an existing section moves only the row line",
 			run: func(t *testing.T, root string) {
-				mustRun(t, root, "link", "T-01", "Parked")
+				mustRun(t, root, "move", "T-01", "--section", "Parked")
 			},
 			want: func(t *testing.T, w map[string]string) {
 				b := replaceOnce(t, saltedBoard, saltT01Row+"\n", "")
@@ -312,18 +312,18 @@ func TestSaltedBoardSurvivesEveryMutation(t *testing.T) {
 			},
 		},
 		{
-			name: "link creating a section prunes the emptied one and nothing more",
+			name: "move --section creating a section prunes the emptied one and nothing more",
 			run: func(t *testing.T, root string) {
-				mustRun(t, root, "link", "T-03", "Waiting")
+				mustRun(t, root, "move", "T-03", "--section", "Waiting")
 			},
 			want: func(t *testing.T, w map[string]string) {
 				w["BOARD.md"] = replaceOnce(t, saltedBoard, "## Parked\n", "## Waiting\n")
 			},
 		},
 		{
-			name: "move touches one row per board and relocates the file verbatim",
+			name: "move --track touches one row per board and relocates the file verbatim",
 			run: func(t *testing.T, root string) {
-				mustRun(t, root, "move", "T-02", "backend")
+				mustRun(t, root, "move", "T-02", "--track", "backend")
 			},
 			want: func(t *testing.T, w map[string]string) {
 				w["BOARD.md"] = replaceOnce(t, saltedBoard, saltT02Row+"\n", "")
@@ -336,8 +336,8 @@ func TestSaltedBoardSurvivesEveryMutation(t *testing.T) {
 		{
 			name: "move there and back restores everything but the moved row's hand padding",
 			run: func(t *testing.T, root string) {
-				mustRun(t, root, "move", "T-02", "backend")
-				mustRun(t, filepath.Join(root, "backend"), "move", "T-02", ".")
+				mustRun(t, root, "move", "T-02", "--track", "backend")
+				mustRun(t, filepath.Join(root, "backend"), "move", "T-02", "--track", ".")
 			},
 			want: func(t *testing.T, w map[string]string) {
 				w["BOARD.md"] = replaceOnce(t, saltedBoard, saltT02Row, normalT02Row)
@@ -346,7 +346,7 @@ func TestSaltedBoardSurvivesEveryMutation(t *testing.T) {
 		{
 			name: "delete removes only the file and its row",
 			run: func(t *testing.T, root string) {
-				mustRun(t, root, "delete", "T-01")
+				mustRun(t, root, "delete", "task", "T-01")
 			},
 			want: func(t *testing.T, w map[string]string) {
 				w["BOARD.md"] = replaceOnce(t, saltedBoard, saltT01Row+"\n", "")
@@ -369,9 +369,9 @@ func TestSaltedBoardSurvivesEveryMutation(t *testing.T) {
 			},
 		},
 		{
-			name: "board appends one bullet after the last hand-written one",
+			name: "create track appends one bullet after the last hand-written one",
 			run: func(t *testing.T, root string) {
-				mustRun(t, root, "board", "api")
+				mustRun(t, root, "create", "track", "api")
 			},
 			want: func(t *testing.T, w map[string]string) {
 				w["BOARD.md"] = replaceOnce(t, saltedBoard, saltBullet+"\n",
@@ -438,7 +438,7 @@ func TestPruneNeverRemovesDefaultSection(t *testing.T) {
 	t.Run("delete prunes the emptied section, keeps the empty default", func(t *testing.T) {
 		root := writePruneTree(t)
 		want := snapshotTree(t, root)
-		mustRun(t, root, "delete", "T-01")
+		mustRun(t, root, "delete", "task", "T-01")
 		want["BOARD.md"] = replaceOnce(t, pruneBoard, laterBlock, "")
 		delete(want, "T-01-only-task.md")
 		diffTrees(t, want, snapshotTree(t, root))
@@ -464,9 +464,10 @@ func TestPruneNeverRemovesDefaultSection(t *testing.T) {
 	})
 }
 
-// TestListNeverWrites: list reads files as truth and reports drift without
-// touching a single byte, in every output mode (spec §6).
-func TestListNeverWrites(t *testing.T) {
+// TestGetTasksNeverWrites: get tasks (and its hidden list alias) reads files
+// as truth and reports drift without touching a single byte, in every output
+// mode (spec §6).
+func TestGetTasksNeverWrites(t *testing.T) {
 	root := writeSalted(t)
 	drifted := replaceOnce(t, saltedBoard, saltT01Row,
 		"| [T-01](T-01-existing-task.md) | Existing task | done |")
@@ -477,9 +478,9 @@ func TestListNeverWrites(t *testing.T) {
 	before := hashTree(t, root)
 	snap := snapshotTree(t, root)
 
-	code, stdout, stderr := runDuty(t, root, "list")
+	code, stdout, stderr := runDuty(t, root, "get", "tasks")
 	if code != 0 || stderr != "" {
-		t.Fatalf("list: code=%d stderr=%q", code, stderr)
+		t.Fatalf("get tasks: code=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{"⚠ board says done", "⚠ board says missing"} {
 		if !strings.Contains(stdout, want) {
@@ -487,9 +488,11 @@ func TestListNeverWrites(t *testing.T) {
 		}
 	}
 	for _, args := range [][]string{
+		{"get", "tasks", "--agent"},
+		{"get", "tasks", "--status", "blocked"},
+		{"get", "tasks", "--status", "done"},
+		{"list"},
 		{"list", "--agent"},
-		{"list", "--status", "blocked"},
-		{"list", "--status", "done"},
 	} {
 		if code, _, stderr := runDuty(t, root, args...); code != 0 || stderr != "" {
 			t.Fatalf("duty %v: code=%d stderr=%q", args, code, stderr)
@@ -498,6 +501,6 @@ func TestListNeverWrites(t *testing.T) {
 
 	if got := hashTree(t, root); got != before {
 		diffTrees(t, snap, snapshotTree(t, root))
-		t.Errorf("tree hash after list = %s, want %s", got, before)
+		t.Errorf("tree hash after get tasks = %s, want %s", got, before)
 	}
 }

@@ -128,17 +128,17 @@ Completed tasks (12) archived: [archive/](archive/).
 ```
 
 - The H1 is the board's **title** (root default `Board`; tracks get theirs from
-  `duty track`). It's the truth for the TUI breadcrumb and track rows; the parent's
-  `## Boards` bullet text is cosmetic.
+  `duty create track`). It's the truth for the TUI breadcrumb and track rows; the
+  parent's `## Boards` bullet text is cosmetic.
 - The Task cell is a link: text = bare id, href = the filename. Row lookup keys on the
   `(filename)` substring — unambiguous and section-agnostic.
 - The board stays **3 columns**. Status is duplicated here (the one denormalization, kept
   honest by the sync invariant); everything else — `blocked-by`, gate progress — is read
   from the files by whoever needs it. No column creep.
 - **`## Boards`** lists tracks, one bullet each (`- [name/](name/BOARD.md) — Title`).
-  It exists purely for humans browsing the markdown: `duty track` appends the bullet as a
-  courtesy, but tooling **never reads it** — track discovery is by scan, so a stale
-  bullet is cosmetic, never a correctness problem. Omitted when there are no tracks.
+  It exists purely for humans browsing the markdown: `duty create track` appends the
+  bullet as a courtesy, but tooling **never reads it** — track discovery is by scan, so a
+  stale bullet is cosmetic, never a correctness problem. Omitted when there are no tracks.
 - **Sections** are `## <Name>` headers, each followed by its own table. `## Open tasks`
   is the default and always exists; other sections are created on demand and **pruned
   automatically** when their last row leaves (empty sections are noise).
@@ -161,39 +161,42 @@ Completed tasks (12) archived: [archive/](archive/).
 
 ## 6. The CLI
 
-Subcommand-style. Every mutating command maintains the sync invariant (file + board in
-one shot). Exit codes: `0` ok, `≠0` error with a one-line stderr message.
+Verb → resource, kubectl-style: `create`, `get`, and `delete` take a resource
+subcommand (`task`, `track`, `tasks`); the agent hot path stays verb-only (`init`,
+`status`, `report`, `move`, `archive`, `tui`). Every mutating command maintains the
+sync invariant (file + board in one shot). Exit codes: `0` ok, `≠0` error with a
+one-line stderr message; `2` for a missing or unknown command.
 
 | Command | Behavior |
 |---|---|
 | `duty init [title]` | Bootstrap: create `duty/` in cwd with skeleton `BOARD.md` (H1 = title, default `Board`), `README.md`, `archive/`. Refuse if already inside a tree. |
-| `duty create <title> [--slug S] [--blocked-by ID…] [--section NAME]` | Create in the **current board**. Validate that every `--blocked-by` id exists (anywhere in the tree). Next NN scans the whole tree. Write the template file (frontmatter + section skeleton). Append the board row (`todo`) to the section's table — default `Open tasks`, section created if absent. Print the created path. |
-| `duty track <name> [--title T]` | Create track `<name>/` (validated `[a-z0-9-]+`) under the current board: skeleton `BOARD.md` (H1 = title, default: the name) + `archive/`. Append its bullet to the parent's `## Boards` section (created if absent). Refuse if the folder already exists. `board` is a working alias. |
+| `duty create task <title> [--slug S] [--blocked-by ID…] [--section NAME]` | Create in the **current board**. Validate that every `--blocked-by` id exists (anywhere in the tree). Next NN scans the whole tree. Write the template file (frontmatter + section skeleton). Append the board row (`todo`) to the section's table — default `Open tasks`, section created if absent. Print the created path. |
+| `duty create track <name> [--title T]` | Create track `<name>/` (validated `[a-z0-9-]+`) under the current board: skeleton `BOARD.md` (H1 = title, default: the name) + `archive/`. Append its bullet to the parent's `## Boards` section (created if absent). Refuse if the folder already exists. |
 | `duty status <id> <status>` | Rewrite the frontmatter `status:` line + the row's status cell. Reject unknown statuses. |
-| `duty link <id> <section>` | Move the row under `## <section>` (created if absent, inserted above the footer); prune any section left empty. |
-| `duty move <id> <board-path>` | Move a task to another board. `board-path` is relative to the tree root (`.` = root board). Rename the file into the target folder (same filename — ids don't encode boards), drop the source row (prune), append to the target's `Open tasks` (or `--section`), status preserved. |
+| `duty move <id> [--track PATH] [--section NAME]` | At least one flag. `--track` moves the task to another track: `PATH` is relative to the tree root (`.` = root board); rename the file into the target folder (same filename — ids don't encode tracks), drop the source row (prune), append to the target's `--section` (default `Open tasks`), status preserved. `--section` alone moves the row under `## <section>` within its own board (created if absent, inserted above the footer); prune any section left empty. |
 | `duty report <id>` | Append stdin under `## Report` (heading created once, content accumulates). Refuse empty stdin. |
 | `duty archive` | For every open task with `status: done`, in the current board and every board below it: `os.Rename` → its own board's `archive/`, drop its row, prune empty sections, rewrite that board's footer count. Idempotent; "nothing to archive" is a clean no-op. |
-| `duty delete <id> [--force]` | Refuse on `done` without `--force` (that's `archive`'s job). Remove the file, drop the row, prune. |
-| `duty list [--status S]` | Recursive from the current board. One line per open task **from the files**: `id  status  title`, prefixed with the track path when not local (`backend/ T-12 …`). If the board row's status disagrees (or the row is missing), append a `⚠ board says …` drift flag. |
+| `duty delete task <id> [--force]` | Refuse on `done` without `--force` (that's `archive`'s job). Remove the file, drop the row, prune. |
+| `duty get tasks [--status S]` | Recursive from the current board. One line per open task **from the files**: `id  status  title`, prefixed with the track path when not local (`backend/ T-12 …`). If the board row's status disagrees (or the row is missing), append a `⚠ board says …` drift flag. `list` survives as a hidden alias. |
 | `duty tui` | Launch the live board viewer (§8). |
 
 **Agent output.** Reading commands accept `--agent` (long-only, no shorthand): stable,
 token-lean TSV — one record per line, tab-separated fields, no alignment padding, no
-color, no badges. `duty list --agent` emits `id<TAB>board-path<TAB>status<TAB>title<TAB>drift`
+color, no badges. `duty get tasks --agent` emits `id<TAB>board-path<TAB>status<TAB>title<TAB>drift`
 (drift empty, or `board=<status>`, or `no-row`). TSV, not JSON: fewer tokens, trivially
 `cut`/`awk`-able, and the field order is part of the contract. Mutating commands stay
 quiet either way.
 
 **Behavioral invariants (test these):**
-- **Lossless round-trip:** create → status → report → link → move → move back → delete →
-  archive on a scratch task leaves the `duty/` tree byte-identical (hash it before and after). This
-  is the master acceptance test — it proves every writer preserves everything it doesn't own.
+- **Lossless round-trip:** create → status → report → move to a section → move to
+  another track → move back → delete → archive on a scratch task leaves the `duty/`
+  tree byte-identical (hash it before and after). This is the master acceptance test —
+  it proves every writer preserves everything it doesn't own.
 - **Board edits are line-surgical:** read lines, touch only the target line/cell, write
   back. Never re-render the whole board from a model (that's how hand-written prose,
   banners, and ordering get destroyed).
 - Section pruning never removes the default section.
-- `list` reads files as truth and only *reports* drift — it never auto-heals.
+- `get tasks` reads files as truth and only *reports* drift — it never auto-heals.
 
 ## 7. Configuration
 
@@ -313,7 +316,7 @@ Add TUI mutations only if that round-trip proves too slow in practice.
   the id and notes archived tasks are read-only. Global NN uniqueness (§3) guarantees at
   most one match.
 - Board discovery: `filepath.WalkDir` collecting directories that contain `BOARD.md`,
-  skipping `archive/`. Reused by list, archive, the TUI scan, and NN numbering.
+  skipping `archive/`. Reused by get tasks, archive, the TUI scan, and NN numbering.
 - Gate count: count `- [x]` vs `- [ ]` lines under `## Gates` (until the next `^## `).
 - Companion agent-facing doc (`duty/README.md`, one page): the command table, the
   lifecycle→command mapping, and what stays the worker's judgment (filling

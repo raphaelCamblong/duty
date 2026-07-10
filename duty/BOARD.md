@@ -25,7 +25,7 @@ Order top-to-bottom is the intended build order.
 | [T-16](T-16-templated-markdown-rendering.md) | Templated markdown rendering | done |
 | [T-17](T-17-tui-master-detail-layout-and-track-namin.md) | TUI master-detail layout and track naming | done |
 | [T-18](T-18-tui-startup-performance-and-preview-on-o.md) | TUI startup performance and preview on open | done |
-| [T-19](T-19-kubectl-style-cli-grammar.md) | kubectl-style CLI grammar | todo |
+| [T-19](T-19-kubectl-style-cli-grammar.md) | kubectl-style CLI grammar | done |
 | [T-20](T-20-agent-reads-get-task-tracks-next.md) | Agent reads: get task, tracks, next | todo |
 | [T-21](T-21-cli-help-groups-examples-completion.md) | CLI help groups, examples, completion | todo |
 | [T-22](T-22-tui-polish-night-pass.md) | TUI polish night pass | todo |

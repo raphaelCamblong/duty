@@ -10,22 +10,37 @@ import (
 	"github.com/raphaelCamblong/duty/internal/app"
 )
 
-const createUsage = "usage: duty create <title> [--slug S] [--blocked-by ID]... [--section NAME]"
+const (
+	createUsage      = "usage: duty create <task|track> [args]"
+	createTaskUsage  = "usage: duty create task <title> [--slug S] [--blocked-by ID]... [--section NAME]"
+	createTrackUsage = "usage: duty create track <name> [--title T]"
+)
 
-// newCreateCmd builds the create command: new task in the current board,
-// printing the created path — the only output.
+// newCreateCmd builds the create verb: resource subcommands for tasks and
+// tracks.
 func newCreateCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
+	cmd := newGroupCmd("create", "create a task or a track", createUsage)
+	cmd.AddCommand(
+		newCreateTaskCmd(a, cwd, stdout),
+		newCreateTrackCmd(a, cwd),
+	)
+	return cmd
+}
+
+// newCreateTaskCmd builds create task: new task in the current board,
+// printing the created path — the only output.
+func newCreateTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var (
 		slug      string
 		section   string
 		blockedBy stringList
 	)
 	cmd := &cobra.Command{
-		Use:   "create <title>",
+		Use:   "task <title>",
 		Short: "create a task in the current board",
 		RunE: func(_ *cobra.Command, args []string) error {
 			if len(args) != 1 || args[0] == "" {
-				return errors.New(createUsage)
+				return errors.New(createTaskUsage)
 			}
 			path, err := a.CreateTask(cwd, args[0], slug, section, blockedBy)
 			if err != nil {
@@ -38,5 +53,23 @@ func newCreateCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&slug, "slug", "", "filename slug override")
 	cmd.Flags().StringVar(&section, "section", "", `board section for the new row (default "Open tasks")`)
 	cmd.Flags().Var(&blockedBy, "blocked-by", "id of a task that must be done first (repeatable)")
+	return cmd
+}
+
+// newCreateTrackCmd builds create track: new track (a folder with its own
+// board) under the current one.
+func newCreateTrackCmd(a app.App, cwd string) *cobra.Command {
+	var title string
+	cmd := &cobra.Command{
+		Use:   "track <name>",
+		Short: "create a track under the current board",
+		RunE: func(_ *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return errors.New(createTrackUsage)
+			}
+			return a.CreateTrack(cwd, args[0], title)
+		},
+	}
+	cmd.Flags().StringVar(&title, "title", "", "track title (default: the name)")
 	return cmd
 }

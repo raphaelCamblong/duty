@@ -23,7 +23,7 @@ func runDutyStdin(t *testing.T, dir, input string, args ...string) (code int, st
 // createTask creates a task via the CLI in boardDir and returns its filename.
 func createTask(t *testing.T, boardDir, title string) string {
 	t.Helper()
-	code, stdout, stderr := runDuty(t, boardDir, "create", title)
+	code, stdout, stderr := runDuty(t, boardDir, "create", "task", title)
 	if code != 0 {
 		t.Fatalf("create %q: code=%d stderr=%q", title, code, stderr)
 	}
@@ -125,7 +125,7 @@ func TestStatus(t *testing.T) {
 
 	t.Run("resolves ids anywhere in the tree", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "board", "backend")
+		mustRun(t, root, "create", "track", "backend")
 		sub := filepath.Join(root, "backend")
 		name := createTask(t, sub, "Backend task")
 		mustRun(t, root, "status", "T-01", "done")
@@ -154,12 +154,12 @@ func TestStatus(t *testing.T) {
 	})
 }
 
-func TestLink(t *testing.T) {
+func TestMoveSection(t *testing.T) {
 	t.Run("moves the row under a new section above the footer", func(t *testing.T) {
 		root := initDuty(t)
 		one := createTask(t, root, "First task")
 		two := createTask(t, root, "Second task")
-		mustRun(t, root, "link", "T-01", "Later")
+		mustRun(t, root, "move", "T-01", "--section", "Later")
 		got := readText(t, filepath.Join(root, "BOARD.md"))
 		openAt := strings.Index(got, "\n## Open tasks\n")
 		twoAt := strings.Index(got, "("+two+")")
@@ -178,8 +178,8 @@ func TestLink(t *testing.T) {
 		root := initDuty(t)
 		one := createTask(t, root, "First task")
 		two := createTask(t, root, "Second task")
-		mustRun(t, root, "link", "T-01", "Later")
-		mustRun(t, root, "link", "T-02", "Later")
+		mustRun(t, root, "move", "T-01", "--section", "Later")
+		mustRun(t, root, "move", "T-02", "--section", "Later")
 		got := readText(t, filepath.Join(root, "BOARD.md"))
 		if strings.Count(got, "## Later") != 1 {
 			t.Fatalf("want one Later section, got %q", got)
@@ -188,15 +188,15 @@ func TestLink(t *testing.T) {
 		oneAt := strings.Index(got, "("+one+")")
 		twoAt := strings.Index(got, "("+two+")")
 		if oneAt < laterAt || twoAt < oneAt {
-			t.Errorf("want both rows under Later in link order, got %q", got)
+			t.Errorf("want both rows under Later in move order, got %q", got)
 		}
 	})
 
 	t.Run("prunes the section it empties", func(t *testing.T) {
 		root := initDuty(t)
 		one := createTask(t, root, "First task")
-		mustRun(t, root, "link", "T-01", "Later")
-		mustRun(t, root, "link", "T-01", "Open tasks")
+		mustRun(t, root, "move", "T-01", "--section", "Later")
+		mustRun(t, root, "move", "T-01", "--section", "Open tasks")
 		got := readText(t, filepath.Join(root, "BOARD.md"))
 		if strings.Contains(got, "## Later") {
 			t.Errorf("emptied section not pruned: %q", got)
@@ -211,7 +211,7 @@ func TestLink(t *testing.T) {
 	t.Run("never prunes the default section", func(t *testing.T) {
 		root := initDuty(t)
 		createTask(t, root, "Only task")
-		mustRun(t, root, "link", "T-01", "Later")
+		mustRun(t, root, "move", "T-01", "--section", "Later")
 		if got := readText(t, filepath.Join(root, "BOARD.md")); !strings.Contains(got, "## Open tasks") {
 			t.Errorf("default section pruned: %q", got)
 		}
@@ -220,9 +220,9 @@ func TestLink(t *testing.T) {
 	t.Run("rejects archived ids", func(t *testing.T) {
 		root := initDuty(t)
 		writeArchived(t, root, "T-90-old-work.md")
-		code, _, stderr := runDuty(t, root, "link", "T-90", "Later")
+		code, _, stderr := runDuty(t, root, "move", "T-90", "--section", "Later")
 		if code == 0 {
-			t.Fatal("link on an archived id succeeded")
+			t.Fatal("move --section on an archived id succeeded")
 		}
 		oneLine(t, "stderr", stderr)
 		if !strings.Contains(stderr, "archived") {
@@ -235,9 +235,9 @@ func TestLink(t *testing.T) {
 			name string
 			args []string
 		}{
-			{name: "unknown id", args: []string{"link", "T-99", "Later"}},
-			{name: "missing section", args: []string{"link", "T-01"}},
-			{name: "no args", args: []string{"link"}},
+			{name: "unknown id", args: []string{"move", "T-99", "--section", "Later"}},
+			{name: "no flags", args: []string{"move", "T-01"}},
+			{name: "no args", args: []string{"move"}},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -253,7 +253,7 @@ func TestLink(t *testing.T) {
 					t.Errorf("stdout = %q, want empty", stdout)
 				}
 				if readText(t, filepath.Join(root, "BOARD.md")) != before {
-					t.Error("board changed by failed link")
+					t.Error("board changed by failed move")
 				}
 			})
 		}
@@ -331,13 +331,13 @@ func TestReport(t *testing.T) {
 	})
 }
 
-func TestMove(t *testing.T) {
+func TestMoveTrack(t *testing.T) {
 	t.Run("renames the file and swaps rows, preserving status", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "board", "backend")
+		mustRun(t, root, "create", "track", "backend")
 		name := createTask(t, root, "Move me")
 		mustRun(t, root, "status", "T-01", "in-progress")
-		mustRun(t, root, "move", "T-01", "backend")
+		mustRun(t, root, "move", "T-01", "--track", "backend")
 
 		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
 			t.Errorf("source file still present (err %v)", err)
@@ -361,14 +361,14 @@ func TestMove(t *testing.T) {
 
 	t.Run("move there and back restores both boards and the file", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "board", "backend")
+		mustRun(t, root, "create", "track", "backend")
 		name := createTask(t, root, "Round trip")
 		rootBoard := readText(t, filepath.Join(root, "BOARD.md"))
 		subBoard := readText(t, filepath.Join(root, "backend", "BOARD.md"))
 		file := readText(t, filepath.Join(root, name))
 
-		mustRun(t, root, "move", "T-01", "backend")
-		mustRun(t, filepath.Join(root, "backend"), "move", "T-01", ".")
+		mustRun(t, root, "move", "T-01", "--track", "backend")
+		mustRun(t, filepath.Join(root, "backend"), "move", "T-01", "--track", ".")
 
 		if got := readText(t, filepath.Join(root, "BOARD.md")); got != rootBoard {
 			t.Errorf("root board not restored:\n got %q\nwant %q", got, rootBoard)
@@ -383,10 +383,10 @@ func TestMove(t *testing.T) {
 
 	t.Run("section flag places the row and prunes the source section", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "board", "backend")
+		mustRun(t, root, "create", "track", "backend")
 		name := createTask(t, root, "Sectioned")
-		mustRun(t, root, "link", "T-01", "Later")
-		mustRun(t, root, "move", "T-01", "backend", "--section", "Doing")
+		mustRun(t, root, "move", "T-01", "--section", "Later")
+		mustRun(t, root, "move", "T-01", "--track", "backend", "--section", "Doing")
 
 		src := readText(t, filepath.Join(root, "BOARD.md"))
 		if strings.Contains(src, "## Later") {
@@ -403,10 +403,10 @@ func TestMove(t *testing.T) {
 
 	t.Run("moves into nested boards by path", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "board", "backend")
-		mustRun(t, filepath.Join(root, "backend"), "board", "api")
+		mustRun(t, root, "create", "track", "backend")
+		mustRun(t, filepath.Join(root, "backend"), "create", "track", "api")
 		name := createTask(t, root, "Deep task")
-		mustRun(t, root, "move", "T-01", "backend/api")
+		mustRun(t, root, "move", "T-01", "--track", "backend/api")
 		if _, err := os.Stat(filepath.Join(root, "backend", "api", name)); err != nil {
 			t.Errorf("file not in nested board: %v", err)
 		}
@@ -418,7 +418,7 @@ func TestMove(t *testing.T) {
 	t.Run("move to the same board keeps one row and the file", func(t *testing.T) {
 		root := initDuty(t)
 		name := createTask(t, root, "Stay put")
-		mustRun(t, root, "move", "T-01", ".")
+		mustRun(t, root, "move", "T-01", "--track", ".")
 		if _, err := os.Stat(filepath.Join(root, name)); err != nil {
 			t.Errorf("file missing after same-board move: %v", err)
 		}
@@ -432,11 +432,11 @@ func TestMove(t *testing.T) {
 			name string
 			args []string
 		}{
-			{name: "non-existent board", args: []string{"move", "T-01", "nope"}},
-			{name: "path escaping the tree", args: []string{"move", "T-01", "../elsewhere"}},
-			{name: "absolute path", args: []string{"move", "T-01", "/tmp"}},
-			{name: "unknown id", args: []string{"move", "T-99", "."}},
-			{name: "missing board path", args: []string{"move", "T-01"}},
+			{name: "non-existent track", args: []string{"move", "T-01", "--track", "nope"}},
+			{name: "path escaping the tree", args: []string{"move", "T-01", "--track", "../elsewhere"}},
+			{name: "absolute path", args: []string{"move", "T-01", "--track", "/tmp"}},
+			{name: "unknown id", args: []string{"move", "T-99", "--track", "."}},
+			{name: "old positional spelling", args: []string{"move", "T-01", "backend"}},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -464,7 +464,7 @@ func TestMove(t *testing.T) {
 	t.Run("rejects archived ids", func(t *testing.T) {
 		root := initDuty(t)
 		writeArchived(t, root, "T-90-old-work.md")
-		code, _, stderr := runDuty(t, root, "move", "T-90", ".")
+		code, _, stderr := runDuty(t, root, "move", "T-90", "--track", ".")
 		if code == 0 {
 			t.Fatal("move on an archived id succeeded")
 		}

@@ -9,13 +9,13 @@ import (
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
-// CreateBoard creates the track name/ under the board containing cwd: a
+// CreateTrack creates the track name/ under the board containing cwd: a
 // skeleton board index (H1 = title, default the name) plus archive/, and the
 // courtesy bullet appended to the parent's "## Boards" section. It refuses
 // when the folder already exists.
-func (a App) CreateBoard(cwd, name, title string) error {
+func (a App) CreateTrack(cwd, name, title string) error {
 	if !nameRE.MatchString(name) {
-		return fmt.Errorf("invalid board name %q: must match [a-z0-9-]+", name)
+		return fmt.Errorf("invalid track name %q: must match [a-z0-9-]+", name)
 	}
 
 	parentDir, err := tree.CurrentBoard(a.fs, cwd)
@@ -24,7 +24,7 @@ func (a App) CreateBoard(cwd, name, title string) error {
 	}
 	sub := filepath.Join(parentDir, name)
 	if _, err := a.fs.Stat(sub); err == nil {
-		return fmt.Errorf("cannot create board: %s already exists", sub)
+		return fmt.Errorf("cannot create track: %s already exists", sub)
 	}
 	parentPath := filepath.Join(parentDir, names.BoardFile)
 	parent, err := a.fs.ReadFile(parentPath)
@@ -40,7 +40,7 @@ func (a App) CreateBoard(cwd, name, title string) error {
 	}
 
 	if err := a.fs.MkdirAll(filepath.Join(sub, names.ArchiveDir)); err != nil {
-		return fmt.Errorf("create board: %w", err)
+		return fmt.Errorf("create track: %w", err)
 	}
 	if err := a.fs.WriteFile(filepath.Join(sub, names.BoardFile), board.Render(title)); err != nil {
 		return err

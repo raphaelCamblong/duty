@@ -76,6 +76,15 @@ func TestRunDispatch(t *testing.T) {
 	}{
 		{name: "no command", args: nil, wantCode: 2, wantErr: "usage: duty <command> [args]\n"},
 		{name: "unknown command", args: []string{"nope"}, wantCode: 2, wantErr: "unknown command \"nope\"\n"},
+		{name: "old create spelling", args: []string{"create", "First task"}, wantCode: 2, wantErr: "unknown command \"First task\"\n"},
+		{name: "removed track command", args: []string{"track", "backend"}, wantCode: 2, wantErr: "unknown command \"track\"\n"},
+		{name: "removed board command", args: []string{"board", "backend"}, wantCode: 2, wantErr: "unknown command \"board\"\n"},
+		{name: "removed link command", args: []string{"link", "T-01", "Later"}, wantCode: 2, wantErr: "unknown command \"link\"\n"},
+		{name: "old delete spelling", args: []string{"delete", "T-01"}, wantCode: 2, wantErr: "unknown command \"T-01\"\n"},
+		{name: "bare create", args: []string{"create"}, wantCode: 2, wantErr: "usage: duty create <task|track> [args]\n"},
+		{name: "bare get", args: []string{"get"}, wantCode: 2, wantErr: "usage: duty get tasks [--status S] [--agent]\n"},
+		{name: "bare delete", args: []string{"delete"}, wantCode: 2, wantErr: "usage: duty delete task <id> [--force]\n"},
+		{name: "unknown get resource", args: []string{"get", "nope"}, wantCode: 2, wantErr: "unknown command \"nope\"\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -157,7 +166,7 @@ func TestInit(t *testing.T) {
 func TestCreate(t *testing.T) {
 	t.Run("writes task file and board row in one call", func(t *testing.T) {
 		root := initDuty(t)
-		code, stdout, stderr := runDuty(t, root, "create", "First task")
+		code, stdout, stderr := runDuty(t, root, "create", "task", "First task")
 		if code != 0 || stderr != "" {
 			t.Fatalf("create: code=%d stderr=%q", code, stderr)
 		}
@@ -178,7 +187,7 @@ func TestCreate(t *testing.T) {
 
 	t.Run("accepts flags after the title", func(t *testing.T) {
 		root := initDuty(t)
-		code, stdout, stderr := runDuty(t, root, "create", "Second task", "--slug", "second")
+		code, stdout, stderr := runDuty(t, root, "create", "task", "Second task", "--slug", "second")
 		if code != 0 {
 			t.Fatalf("create: code=%d stderr=%q", code, stderr)
 		}
@@ -196,7 +205,7 @@ func TestCreate(t *testing.T) {
 		if err := os.WriteFile(archived, []byte("---\nid: T-07\n---\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		code, stdout, stderr := runDuty(t, root, "create", "Next task")
+		code, stdout, stderr := runDuty(t, root, "create", "task", "Next task")
 		if code != 0 {
 			t.Fatalf("create: code=%d stderr=%q", code, stderr)
 		}
@@ -207,14 +216,14 @@ func TestCreate(t *testing.T) {
 
 	t.Run("blocked-by resolves anywhere in the tree", func(t *testing.T) {
 		root := initDuty(t)
-		if code, _, stderr := runDuty(t, root, "create", "Root task"); code != 0 {
+		if code, _, stderr := runDuty(t, root, "create", "task", "Root task"); code != 0 {
 			t.Fatalf("create root task: %q", stderr)
 		}
-		if code, _, stderr := runDuty(t, root, "board", "backend"); code != 0 {
+		if code, _, stderr := runDuty(t, root, "create", "track", "backend"); code != 0 {
 			t.Fatalf("board: %q", stderr)
 		}
 		sub := filepath.Join(root, "backend")
-		code, _, stderr := runDuty(t, sub, "create", "Backend task", "--blocked-by", "T-01")
+		code, _, stderr := runDuty(t, sub, "create", "task", "Backend task", "--blocked-by", "T-01")
 		if code != 0 {
 			t.Fatalf("create in sub-board: code=%d stderr=%q", code, stderr)
 		}
@@ -231,7 +240,7 @@ func TestCreate(t *testing.T) {
 		root := initDuty(t)
 		boardPath := filepath.Join(root, "BOARD.md")
 		before := readText(t, boardPath)
-		code, stdout, stderr := runDuty(t, root, "create", "Bad deps", "--blocked-by", "T-99")
+		code, stdout, stderr := runDuty(t, root, "create", "task", "Bad deps", "--blocked-by", "T-99")
 		if code == 0 {
 			t.Fatal("create with unknown blocked-by succeeded")
 		}
@@ -257,7 +266,7 @@ func TestCreate(t *testing.T) {
 		if err := os.WriteFile(archived, []byte("---\nid: T-03\n---\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		code, _, stderr := runDuty(t, root, "create", "Follow up", "--blocked-by", "T-03")
+		code, _, stderr := runDuty(t, root, "create", "task", "Follow up", "--blocked-by", "T-03")
 		if code != 0 {
 			t.Errorf("create: code=%d stderr=%q, want success (archived dep exists)", code, stderr)
 		}
@@ -265,7 +274,7 @@ func TestCreate(t *testing.T) {
 
 	t.Run("section flag creates the section", func(t *testing.T) {
 		root := initDuty(t)
-		code, _, stderr := runDuty(t, root, "create", "Later task", "--section", "Later")
+		code, _, stderr := runDuty(t, root, "create", "task", "Later task", "--section", "Later")
 		if code != 0 {
 			t.Fatalf("create: code=%d stderr=%q", code, stderr)
 		}
@@ -283,11 +292,11 @@ func TestCreate(t *testing.T) {
 			name string
 			args []string
 		}{
-			{name: "missing title", args: []string{"create"}},
-			{name: "two titles", args: []string{"create", "one", "two"}},
-			{name: "invalid slug", args: []string{"create", "Task", "--slug", "Bad_Slug"}},
-			{name: "unslugifiable title", args: []string{"create", "!!!"}},
-			{name: "unknown flag", args: []string{"create", "Task", "--nope"}},
+			{name: "missing title", args: []string{"create", "task"}},
+			{name: "two titles", args: []string{"create", "task", "one", "two"}},
+			{name: "invalid slug", args: []string{"create", "task", "Task", "--slug", "Bad_Slug"}},
+			{name: "unslugifiable title", args: []string{"create", "task", "!!!"}},
+			{name: "unknown flag", args: []string{"create", "task", "Task", "--nope"}},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -305,12 +314,12 @@ func TestCreate(t *testing.T) {
 	})
 }
 
-func TestBoardCommand(t *testing.T) {
+func TestCreateTrack(t *testing.T) {
 	t.Run("creates skeleton and parent bullet quietly", func(t *testing.T) {
 		root := initDuty(t)
-		code, stdout, stderr := runDuty(t, root, "board", "backend", "--title", "Backend")
+		code, stdout, stderr := runDuty(t, root, "create", "track", "backend", "--title", "Backend")
 		if code != 0 || stdout != "" || stderr != "" {
-			t.Fatalf("board: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+			t.Fatalf("create track: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 		}
 		sub := filepath.Join(root, "backend")
 		if got, want := readText(t, filepath.Join(sub, "BOARD.md")), string(board.Render("Backend")); got != want {
@@ -329,29 +338,10 @@ func TestBoardCommand(t *testing.T) {
 		}
 	})
 
-	t.Run("track is the primary name, board the alias", func(t *testing.T) {
-		root := initDuty(t)
-		for _, tt := range []struct{ cmd, name, title string }{
-			{cmd: "track", name: "x", title: "X"},
-			{cmd: "board", name: "y", title: "Y"},
-		} {
-			code, stdout, stderr := runDuty(t, root, tt.cmd, tt.name, "--title", tt.title)
-			if code != 0 || stdout != "" || stderr != "" {
-				t.Fatalf("%s: code=%d stdout=%q stderr=%q", tt.cmd, code, stdout, stderr)
-			}
-			if got := readText(t, filepath.Join(root, tt.name, "BOARD.md")); !strings.HasPrefix(got, "# "+tt.title+"\n") {
-				t.Errorf("%s H1 = %q, want # %s", tt.cmd, got[:min(len(got), 10)], tt.title)
-			}
-			if info, err := os.Stat(filepath.Join(root, tt.name, "archive")); err != nil || !info.IsDir() {
-				t.Errorf("%s/%s/archive not a directory: %v", tt.cmd, tt.name, err)
-			}
-		}
-	})
-
 	t.Run("title defaults to the name", func(t *testing.T) {
 		root := initDuty(t)
-		if code, _, stderr := runDuty(t, root, "board", "api"); code != 0 {
-			t.Fatalf("board: %q", stderr)
+		if code, _, stderr := runDuty(t, root, "create", "track", "api"); code != 0 {
+			t.Fatalf("create track: %q", stderr)
 		}
 		if got := readText(t, filepath.Join(root, "api", "BOARD.md")); !strings.HasPrefix(got, "# api\n") {
 			t.Errorf("sub H1 = %q, want # api", got[:min(len(got), 10)])
@@ -363,12 +353,12 @@ func TestBoardCommand(t *testing.T) {
 
 	t.Run("nests under the current board", func(t *testing.T) {
 		root := initDuty(t)
-		if code, _, stderr := runDuty(t, root, "board", "backend"); code != 0 {
-			t.Fatalf("board backend: %q", stderr)
+		if code, _, stderr := runDuty(t, root, "create", "track", "backend"); code != 0 {
+			t.Fatalf("create track backend: %q", stderr)
 		}
 		sub := filepath.Join(root, "backend")
-		if code, _, stderr := runDuty(t, sub, "board", "api"); code != 0 {
-			t.Fatalf("board api: %q", stderr)
+		if code, _, stderr := runDuty(t, sub, "create", "track", "api"); code != 0 {
+			t.Fatalf("create track api: %q", stderr)
 		}
 		if _, err := os.Stat(filepath.Join(sub, "api", "BOARD.md")); err != nil {
 			t.Errorf("nested board missing: %v", err)
@@ -384,13 +374,13 @@ func TestBoardCommand(t *testing.T) {
 			t.Fatal(err)
 		}
 		before := readText(t, filepath.Join(root, "BOARD.md"))
-		code, _, stderr := runDuty(t, root, "board", "docs")
+		code, _, stderr := runDuty(t, root, "create", "track", "docs")
 		if code == 0 {
-			t.Fatal("board over an existing folder succeeded")
+			t.Fatal("create track over an existing folder succeeded")
 		}
 		oneLine(t, "stderr", stderr)
 		if got := readText(t, filepath.Join(root, "BOARD.md")); got != before {
-			t.Error("parent board changed by refused board command")
+			t.Error("parent board changed by refused create track")
 		}
 	})
 
@@ -398,9 +388,9 @@ func TestBoardCommand(t *testing.T) {
 		for _, name := range []string{"Backend", "back end", "back/end", "", "café"} {
 			t.Run(name, func(t *testing.T) {
 				root := initDuty(t)
-				code, _, stderr := runDuty(t, root, "board", name)
+				code, _, stderr := runDuty(t, root, "create", "track", name)
 				if code == 0 {
-					t.Fatalf("board %q succeeded, want invalid-name error", name)
+					t.Fatalf("create track %q succeeded, want invalid-name error", name)
 				}
 				oneLine(t, "stderr", stderr)
 			})

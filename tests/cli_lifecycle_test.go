@@ -59,7 +59,7 @@ func TestArchive(t *testing.T) {
 
 	t.Run("archives sub-board tasks into that sub-board's own archive, not the root's", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "board", "backend")
+		mustRun(t, root, "create", "track", "backend")
 		sub := filepath.Join(root, "backend")
 		rootName := createTask(t, root, "Root task")
 		subName := createTask(t, sub, "Backend task")
@@ -106,7 +106,7 @@ func TestArchive(t *testing.T) {
 
 	t.Run("a second run is a no-op leaving the tree byte-identical", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "board", "backend")
+		mustRun(t, root, "create", "track", "backend")
 		createTask(t, root, "Root task")
 		createTask(t, filepath.Join(root, "backend"), "Backend task")
 		mustRun(t, root, "status", "T-01", "done")
@@ -129,7 +129,7 @@ func TestArchive(t *testing.T) {
 
 	t.Run("only archives the current board and below, not a sibling", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "board", "backend")
+		mustRun(t, root, "create", "track", "backend")
 		sub := filepath.Join(root, "backend")
 		rootName := createTask(t, root, "Root task")
 		mustRun(t, root, "status", "T-01", "done")
@@ -155,7 +155,7 @@ func TestDelete(t *testing.T) {
 		name := createTask(t, root, "Finished task")
 		mustRun(t, root, "status", "T-01", "done")
 		boardBefore := readText(t, filepath.Join(root, "BOARD.md"))
-		code, stdout, stderr := runDuty(t, root, "delete", "T-01")
+		code, stdout, stderr := runDuty(t, root, "delete", "task", "T-01")
 		if code == 0 {
 			t.Fatal("delete of a done task without --force succeeded")
 		}
@@ -178,7 +178,7 @@ func TestDelete(t *testing.T) {
 		root := initDuty(t)
 		name := createTask(t, root, "Finished task")
 		mustRun(t, root, "status", "T-01", "done")
-		mustRun(t, root, "delete", "T-01", "--force")
+		mustRun(t, root, "delete", "task", "T-01", "--force")
 		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
 			t.Errorf("file still present (err %v)", err)
 		}
@@ -190,8 +190,8 @@ func TestDelete(t *testing.T) {
 	t.Run("deletes an open task and prunes its emptied section", func(t *testing.T) {
 		root := initDuty(t)
 		name := createTask(t, root, "Open task")
-		mustRun(t, root, "link", "T-01", "Later")
-		mustRun(t, root, "delete", "T-01")
+		mustRun(t, root, "move", "T-01", "--section", "Later")
+		mustRun(t, root, "delete", "task", "T-01")
 		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
 			t.Errorf("file still present (err %v)", err)
 		}
@@ -204,7 +204,7 @@ func TestDelete(t *testing.T) {
 	t.Run("rejects archived ids", func(t *testing.T) {
 		root := initDuty(t)
 		writeArchived(t, root, "T-90-old-work.md")
-		code, _, stderr := runDuty(t, root, "delete", "T-90", "--force")
+		code, _, stderr := runDuty(t, root, "delete", "task", "T-90", "--force")
 		if code == 0 {
 			t.Fatal("delete on an archived id succeeded")
 		}
@@ -216,7 +216,7 @@ func TestDelete(t *testing.T) {
 
 	t.Run("unknown id errors", func(t *testing.T) {
 		root := initDuty(t)
-		code, _, stderr := runDuty(t, root, "delete", "T-99")
+		code, _, stderr := runDuty(t, root, "delete", "task", "T-99")
 		if code == 0 {
 			t.Fatal("delete on an unknown id succeeded")
 		}
@@ -224,7 +224,7 @@ func TestDelete(t *testing.T) {
 	})
 
 	t.Run("argument validation", func(t *testing.T) {
-		for _, args := range [][]string{{"delete"}, {"delete", "T-01", "extra"}} {
+		for _, args := range [][]string{{"delete", "task"}, {"delete", "task", "T-01", "extra"}} {
 			root := initDuty(t)
 			createTask(t, root, "First task")
 			code, _, stderr := runDuty(t, root, args...)
@@ -236,14 +236,14 @@ func TestDelete(t *testing.T) {
 	})
 }
 
-func TestList(t *testing.T) {
+func TestGetTasks(t *testing.T) {
 	t.Run("lists local open tasks from the files, no prefix", func(t *testing.T) {
 		root := initDuty(t)
 		createTask(t, root, "First task")
 		mustRun(t, root, "status", "T-01", "in-progress")
-		code, stdout, stderr := runDuty(t, root, "list")
+		code, stdout, stderr := runDuty(t, root, "get", "tasks")
 		if code != 0 || stderr != "" {
-			t.Fatalf("list: code=%d stderr=%q", code, stderr)
+			t.Fatalf("get tasks: code=%d stderr=%q", code, stderr)
 		}
 		if strings.Contains(stdout, "T-01/") || strings.Contains(stdout, "/ T-01") {
 			t.Errorf("local task got a sub-board prefix: %q", stdout)
@@ -258,11 +258,11 @@ func TestList(t *testing.T) {
 
 	t.Run("prefixes rows from a sub-board with its path", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "board", "backend")
+		mustRun(t, root, "create", "track", "backend")
 		createTask(t, filepath.Join(root, "backend"), "Backend task")
-		code, stdout, stderr := runDuty(t, root, "list")
+		code, stdout, stderr := runDuty(t, root, "get", "tasks")
 		if code != 0 || stderr != "" {
-			t.Fatalf("list: code=%d stderr=%q", code, stderr)
+			t.Fatalf("get tasks: code=%d stderr=%q", code, stderr)
 		}
 		if !strings.Contains(stdout, "backend/ T-01") {
 			t.Errorf("stdout = %q, want a %q prefix", stdout, "backend/ T-01")
@@ -274,9 +274,9 @@ func TestList(t *testing.T) {
 		createTask(t, root, "Todo task")
 		createTask(t, root, "Doing task")
 		mustRun(t, root, "status", "T-02", "in-progress")
-		code, stdout, stderr := runDuty(t, root, "list", "--status", "in-progress")
+		code, stdout, stderr := runDuty(t, root, "get", "tasks", "--status", "in-progress")
 		if code != 0 || stderr != "" {
-			t.Fatalf("list: code=%d stderr=%q", code, stderr)
+			t.Fatalf("get tasks: code=%d stderr=%q", code, stderr)
 		}
 		if strings.Contains(stdout, "T-01") || !strings.Contains(stdout, "T-02") {
 			t.Errorf("stdout = %q, want only T-02", stdout)
@@ -285,9 +285,9 @@ func TestList(t *testing.T) {
 
 	t.Run("rejects an unknown --status", func(t *testing.T) {
 		root := initDuty(t)
-		code, stdout, stderr := runDuty(t, root, "list", "--status", "cancelled")
+		code, stdout, stderr := runDuty(t, root, "get", "tasks", "--status", "cancelled")
 		if code == 0 {
-			t.Fatal("list with an unknown status succeeded")
+			t.Fatal("get tasks with an unknown status succeeded")
 		}
 		oneLine(t, "stderr", stderr)
 		if stdout != "" {
@@ -310,18 +310,18 @@ func TestList(t *testing.T) {
 		taskBefore := readText(t, filepath.Join(root, name))
 		boardBefore := readText(t, boardPath)
 
-		code, stdout, stderr := runDuty(t, root, "list")
+		code, stdout, stderr := runDuty(t, root, "get", "tasks")
 		if code != 0 || stderr != "" {
-			t.Fatalf("list: code=%d stderr=%q", code, stderr)
+			t.Fatalf("get tasks: code=%d stderr=%q", code, stderr)
 		}
 		if !strings.Contains(stdout, "⚠ board says done") {
 			t.Errorf("stdout = %q, want a drift flag naming the board's status", stdout)
 		}
 		if readText(t, filepath.Join(root, name)) != taskBefore {
-			t.Error("task file changed by list")
+			t.Error("task file changed by get tasks")
 		}
 		if readText(t, boardPath) != boardBefore {
-			t.Error("board changed by list")
+			t.Error("board changed by get tasks")
 		}
 	})
 
@@ -340,33 +340,33 @@ func TestList(t *testing.T) {
 		taskBefore := readText(t, filepath.Join(root, name))
 		boardBefore := readText(t, boardPath)
 
-		code, stdout, stderr := runDuty(t, root, "list")
+		code, stdout, stderr := runDuty(t, root, "get", "tasks")
 		if code != 0 || stderr != "" {
-			t.Fatalf("list: code=%d stderr=%q", code, stderr)
+			t.Fatalf("get tasks: code=%d stderr=%q", code, stderr)
 		}
 		if !strings.Contains(stdout, "T-01") || !strings.Contains(stdout, "⚠") {
 			t.Errorf("stdout = %q, want T-01 flagged", stdout)
 		}
 		if readText(t, filepath.Join(root, name)) != taskBefore {
-			t.Error("task file changed by list")
+			t.Error("task file changed by get tasks")
 		}
 		if readText(t, boardPath) != boardBefore {
-			t.Error("board changed by list")
+			t.Error("board changed by get tasks")
 		}
 	})
 
 	t.Run("rejects extra arguments", func(t *testing.T) {
 		root := initDuty(t)
-		code, _, stderr := runDuty(t, root, "list", "extra")
+		code, _, stderr := runDuty(t, root, "get", "tasks", "extra")
 		if code == 0 {
-			t.Fatal("list with a positional argument succeeded")
+			t.Fatal("get tasks with a positional argument succeeded")
 		}
 		oneLine(t, "stderr", stderr)
 	})
 
 	t.Run("--agent emits exact TSV field order, in sync and drifted", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "board", "backend")
+		mustRun(t, root, "create", "track", "backend")
 		sub := filepath.Join(root, "backend")
 		rootName := createTask(t, root, "Root task")
 		createTask(t, sub, "Backend task")
@@ -381,9 +381,9 @@ func TestList(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		code, stdout, stderr := runDuty(t, root, "list", "--agent")
+		code, stdout, stderr := runDuty(t, root, "get", "tasks", "--agent")
 		if code != 0 || stderr != "" {
-			t.Fatalf("list --agent: code=%d stderr=%q", code, stderr)
+			t.Fatalf("get tasks --agent: code=%d stderr=%q", code, stderr)
 		}
 		lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
 		records := make(map[string][]string, len(lines))
@@ -409,6 +409,20 @@ func TestList(t *testing.T) {
 		}
 		if want := []string{"T-02", "backend", "todo", "Backend task", ""}; !equalFields(sub02, want) {
 			t.Errorf("T-02 record = %v, want %v", sub02, want)
+		}
+	})
+
+	t.Run("hidden list alias matches get tasks output", func(t *testing.T) {
+		root := initDuty(t)
+		createTask(t, root, "First task")
+		gotCode, gotOut, gotErr := runDuty(t, root, "get", "tasks")
+		aliasCode, aliasOut, aliasErr := runDuty(t, root, "list")
+		if aliasCode != gotCode || aliasOut != gotOut || aliasErr != gotErr {
+			t.Errorf("list = (%d, %q, %q), want get tasks' (%d, %q, %q)",
+				aliasCode, aliasOut, aliasErr, gotCode, gotOut, gotErr)
+		}
+		if code, _, stderr := runDuty(t, root, "list", "--agent"); code != 0 || stderr != "" {
+			t.Errorf("list --agent: code=%d stderr=%q", code, stderr)
 		}
 	})
 }

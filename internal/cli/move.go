@@ -8,21 +8,26 @@ import (
 	"github.com/raphaelCamblong/duty/internal/app"
 )
 
-const moveUsage = "usage: duty move <id> <board-path> [--section NAME]"
+const moveUsage = "usage: duty move <id> [--track PATH] [--section NAME] (at least one flag)"
 
-// newMoveCmd builds the move command: move a task to another board.
+// newMoveCmd builds the move command: relocate a task to another track,
+// move its board row to a section, or both.
 func newMoveCmd(a app.App, cwd string) *cobra.Command {
-	var section string
+	var (
+		track   string
+		section string
+	)
 	cmd := &cobra.Command{
-		Use:   "move <id> <board-path>",
-		Short: "move a task to another board",
+		Use:   "move <id>",
+		Short: "move a task to another track and/or board section",
 		RunE: func(_ *cobra.Command, args []string) error {
-			if len(args) != 2 || args[0] == "" || args[1] == "" {
+			if len(args) != 1 || args[0] == "" || (track == "" && section == "") {
 				return errors.New(moveUsage)
 			}
-			return a.Move(cwd, args[0], args[1], section)
+			return a.Move(cwd, args[0], track, section)
 		},
 	}
-	cmd.Flags().StringVar(&section, "section", "", `target board section for the row (default "Open tasks")`)
+	cmd.Flags().StringVar(&track, "track", "", `target track path from the tree root ("." = root board)`)
+	cmd.Flags().StringVar(&section, "section", "", "target board section for the row")
 	return cmd
 }

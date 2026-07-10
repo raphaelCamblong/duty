@@ -3,7 +3,7 @@
 One file = one task, small enough for one worker (human or agent) in one sitting.
 [BOARD.md](BOARD.md) is the index: order top-to-bottom = build order. The task file is
 the truth; the board is a projection. A track is a folder; its board defines its state
-(`duty track <name>` creates one). Full spec: [../task-system-spec.md](../task-system-spec.md).
+(`duty create track <name>` creates one). Full spec: [../task-system-spec.md](../task-system-spec.md).
 
 ## Task file
 
@@ -26,13 +26,7 @@ Statuses: `todo | in-progress | done | blocked`.
 6. If a task turns out to be two, finish the stated scope and name the split in the
    report — don't expand.
 
-Reading state: `duty list` (add `--agent` for TSV). Cleanup: `duty archive`.
-
-## Until the CLI exists
-
-The `duty` binary is what these tasks build. Until `T-08` is done, maintain the sync
-invariant by hand: every status change edits BOTH the task file's `status:` line AND
-its row in `BOARD.md`, in the same commit. Append reports under `## Report` manually.
+Reading state: `duty get tasks` (add `--agent` for TSV). Cleanup: `duty archive`.
 
 ## What stays your judgment
 

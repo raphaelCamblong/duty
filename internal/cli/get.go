@@ -11,21 +11,35 @@ import (
 	"github.com/raphaelCamblong/duty/internal/app"
 )
 
-const listUsage = "usage: duty list [--status S] [--agent]"
+const getTasksUsage = "usage: duty get tasks [--status S] [--agent]"
 
-// newListCmd builds the list command: every open task in the current board
-// and below, one human line or one --agent TSV record per task.
+// newGetCmd builds the get verb: resource subcommands for reading state.
+func newGetCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
+	cmd := newGroupCmd("get", "read tasks from the files", getTasksUsage)
+	cmd.AddCommand(newGetTasksCmd(a, cwd, stdout, "tasks", false))
+	return cmd
+}
+
+// newListCmd builds the hidden top-level list alias for get tasks.
 func newListCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
+	return newGetTasksCmd(a, cwd, stdout, "list", true)
+}
+
+// newGetTasksCmd builds the tasks reader under the given name: every open
+// task in the current board and below, one human line or one --agent TSV
+// record per task.
+func newGetTasksCmd(a app.App, cwd string, stdout io.Writer, use string, hidden bool) *cobra.Command {
 	var (
 		status string
 		agent  bool
 	)
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "list open tasks from the files, with drift flags",
+		Use:    use,
+		Short:  "list open tasks from the files, with drift flags",
+		Hidden: hidden,
 		RunE: func(_ *cobra.Command, args []string) error {
 			if len(args) != 0 {
-				return errors.New(listUsage)
+				return errors.New(getTasksUsage)
 			}
 			rows, err := a.List(cwd, status)
 			if err != nil {
@@ -46,7 +60,7 @@ func newListCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	return cmd
 }
 
-// humanLine renders r for human reading: "[board/ ]id  status  title[  drift]".
+// humanLine renders r for human reading: "[track/ ]id  status  title[  drift]".
 func humanLine(r app.Row) string {
 	var b strings.Builder
 	if r.Board != "." {

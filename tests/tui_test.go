@@ -24,10 +24,10 @@ import (
 func tuiTree(t *testing.T) string {
 	t.Helper()
 	root := initDuty(t)
-	mustDuty(t, root, "create", "Alpha task")
-	mustDuty(t, root, "create", "Beta task")
-	mustDuty(t, root, "board", "backend", "--title", "Backend")
-	mustDuty(t, filepath.Join(root, "backend"), "create", "Gamma task")
+	mustDuty(t, root, "create", "task", "Alpha task")
+	mustDuty(t, root, "create", "task", "Beta task")
+	mustDuty(t, root, "create", "track", "backend", "--title", "Backend")
+	mustDuty(t, filepath.Join(root, "backend"), "create", "task", "Gamma task")
 	mustDuty(t, root, "status", "T-01", "in-progress")
 	mustDuty(t, root, "status", "T-03", "done")
 	return root
@@ -86,7 +86,7 @@ func rewriteBoard(t *testing.T, dir string, edit func([]byte) ([]byte, error)) {
 func TestScanViewModel(t *testing.T) {
 	t.Run("sections and rows follow the board order", func(t *testing.T) {
 		root := tuiTree(t)
-		mustDuty(t, root, "link", "T-01", "Later")
+		mustDuty(t, root, "move", "T-01", "--section", "Later")
 		snap := mustScan(t, root)
 		b := snap.Boards["."]
 		var got []string
@@ -213,11 +213,11 @@ const alphaGoal = "Ship the alpha milestone without regressions."
 func fourStatusTree(t *testing.T) string {
 	t.Helper()
 	root := initDuty(t)
-	mustDuty(t, root, "create", "Alpha task")
-	mustDuty(t, root, "create", "Beta task")
-	mustDuty(t, root, "board", "backend", "--title", "Backend")
-	mustDuty(t, filepath.Join(root, "backend"), "create", "Gamma task")
-	mustDuty(t, filepath.Join(root, "backend"), "create", "Delta task")
+	mustDuty(t, root, "create", "task", "Alpha task")
+	mustDuty(t, root, "create", "task", "Beta task")
+	mustDuty(t, root, "create", "track", "backend", "--title", "Backend")
+	mustDuty(t, filepath.Join(root, "backend"), "create", "task", "Gamma task")
+	mustDuty(t, filepath.Join(root, "backend"), "create", "task", "Delta task")
 	mustDuty(t, root, "status", "T-01", "in-progress")
 	mustDuty(t, root, "status", "T-03", "done")
 	mustDuty(t, root, "status", "T-04", "blocked")
@@ -329,7 +329,7 @@ func perfTree(t *testing.T) string {
 	root := initDuty(t)
 	tracks := []string{"backend", "frontend", "infra"}
 	for _, tr := range tracks {
-		mustDuty(t, root, "board", tr, "--title", tr)
+		mustDuty(t, root, "create", "track", tr, "--title", tr)
 	}
 	dirs := []string{root,
 		filepath.Join(root, "backend"),
@@ -337,7 +337,7 @@ func perfTree(t *testing.T) string {
 		filepath.Join(root, "infra"),
 	}
 	for i := 0; i < 20; i++ {
-		mustDuty(t, dirs[i%len(dirs)], "create", fmt.Sprintf("Task %d does something useful", i))
+		mustDuty(t, dirs[i%len(dirs)], "create", "task", fmt.Sprintf("Task %d does something useful", i))
 	}
 	return root
 }
@@ -898,11 +898,11 @@ func TestWatcherRefresh(t *testing.T) {
 	}
 	drainTicks(w.C)
 
-	mustDuty(t, root, "board", "frontend", "--title", "Frontend")
+	mustDuty(t, root, "create", "track", "frontend", "--title", "Frontend")
 	waitTick(t, w.C)
 	drainTicks(w.C)
 
-	mustDuty(t, filepath.Join(root, "frontend"), "create", "Delta task")
+	mustDuty(t, filepath.Join(root, "frontend"), "create", "task", "Delta task")
 	waitTick(t, w.C)
 	snap := mustScan(t, root)
 	if _, ok := snap.Boards["frontend"]; !ok {

@@ -17,15 +17,14 @@ Statuses: `todo | in-progress | done | blocked`.
 
 | Command | Behavior |
 |---|---|
-| `duty create <title>` | New task in the current board (`--slug`, `--blocked-by`, `--section`). |
-| `duty track <name>` | New track — a folder with its own board — under the current one (`--title`; `board` is an alias). |
+| `duty create task <title>` | New task in the current board (`--slug`, `--blocked-by`, `--section`). |
+| `duty create track <name>` | New track — a folder with its own board — under the current one (`--title`). |
 | `duty status <id> <status>` | Set status in the task file AND its board row. |
-| `duty link <id> <section>` | Move the board row under `## <section>`. |
+| `duty move <id>` | `--track PATH` moves the task to another track (path from the tree root); `--section NAME` moves its board row under `## <section>`. At least one flag. |
 | `duty report <id>` | Append stdin under the task's `## Report`. |
-| `duty move <id> <board-path>` | Move a task to another board (path from the tree root). |
 | `duty archive` | Move every `done` task into its board's `archive/`. |
-| `duty delete <id>` | Remove an open task (`--force` for `done`). |
-| `duty list` | Open tasks from the files, with drift flags (`--agent` for TSV). |
+| `duty delete task <id>` | Remove an open task (`--force` for `done`). |
+| `duty get tasks` | Open tasks from the files, with drift flags (`--agent` for TSV). |
 | `duty tui` | Live board viewer. |
 
 ## Lifecycle → command
