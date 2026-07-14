@@ -1,7 +1,7 @@
 ---
 id: T-27
 title: "Code quality sweep: function length and smells"
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -48,13 +48,69 @@ Any behavior/output/API change; test refactoring; TUI visual changes; new
 features; `future.md`.
 
 ## Gates
-- [ ] Function-length re-measure (`go run /tmp/funlen.go`, or golangci `funlen`)
+- [x] Function-length re-measure (`go run /tmp/funlen.go`, or golangci `funlen`)
   reports zero production functions >35 lines, or only justified survivors.
-- [ ] `gocyclo -over 12` and `gocognit -over 20` clean on `internal/` + `cmd/`.
-- [ ] `golangci-lint run` clean with the committed `.golangci.yml`;
+- [x] `gocyclo -over 12` and `gocognit -over 20` clean on `internal/` + `cmd/`.
+- [x] `golangci-lint run` clean with the committed `.golangci.yml`;
   `staticcheck ./...` clean.
-- [ ] Full suite green (`go test ./tests/... -coverpkg=./internal/... -count=1`)
+- [x] Full suite green (`go test ./tests/... -coverpkg=./internal/... -count=1`)
   with ZERO test-file edits; `gofmt -l .` empty; `go vet ./...` clean;
   `go build -o bin/duty ./cmd/duty` ok; `TestStartupPerformance` green.
 
 ## Report
+
+Function-length sweep — before (go run /tmp/funlen.go):
+  68  Move          internal/app/move.go:24   (cyclo 18)
+  62  newRoot       internal/cli/cli.go:116
+  50  CreateTask    internal/app/create.go:19  (cyclo 16)
+  47  handleKey     internal/tui/model.go:222  (cyclo 18)
+  40  boardRows     internal/app/list.go:59
+  38  archiveBoard  internal/app/archive.go:37
+  total: 6 functions over 35 lines
+After: total: 0 functions over 35 lines. No survivors needed justification.
+
+Extractions (all single-purpose named helpers, behavior byte-frozen):
+- app.Move -> moveTrack, dropFromBoard, moveAcross (target row still computed before the rename).
+- cli.newRoot -> rootCmd, addCommands, grouped (list stays ungrouped, command order preserved).
+- app.CreateTask -> validateBlockedBy, writeTask (check order preserved).
+- tui.handleKey -> handleGlobalKey, handleActionKey, filterList, scrollPreview (key-match order preserved).
+- app.boardRows -> taskRow; reuses relBoard (removed a duplicated, dead-error-path Rel computation).
+- app.archiveBoard -> dropRows, moveToArchive.
+
+Broader pass:
+- New app.readTask helper: deduplicates the ReadFile+task.Parse+"%s: %w" wrap
+  pattern from 6 sites (move, list, archive, get x3); read errors pass through
+  unwrapped so actionable still branches on fs.ErrNotExist.
+- errcheck fixes: explicit `_ =` on deliberate best-effort Close/Remove in
+  fsys/os.go (temp-file cleanup), tui/watch.go (error-path close, non-strict
+  re-walk), tui/run.go (deferred watcher close).
+- No else-after-return, godoc drift (AST-checked: every exported symbol's doc
+  starts with its name), trailing-period/capitalized errors, or TODOs found.
+
+Scope amendments (orchestrator scanner pass, folded in):
+- SECURITY: goldmark v1.7.13 -> v1.7.17 (GO-2026-5320 XSS, reachable via
+  tui taskMarkdown -> glamour). govulncheck: "No vulnerabilities found ...
+  affected by 0 vulnerabilities".
+- gofumpt adopted repo-wide (internal/tui/view.go + 3 test files,
+  formatting-only, sanctioned) and enforced via .golangci.yml formatters;
+  gate amended: gofumpt -l . empty replaces gofmt -l . (both empty).
+- Dead API deleted: task.Section + its TestSection (consumer removed in
+  T-18/T-24; sanctioned test deletion). fsys.Mem untouched (test double).
+- CI: govulncheck step added to .github/workflows/ci.yml.
+
+Lint gate: committed .golangci.yml (v2: funlen 35/50, gocyclo 12, gocognit 20,
+dupl; gofumpt formatter). Accepted, justified in config comments:
+- errcheck exclude-functions fmt.Fprint/Fprintf/Fprintln — presentation-layer
+  writes to injected writers, nothing to do on terminal write failure.
+- _test.go excluded from funlen/dupl (task-sanctioned) + gocyclo/gocognit/
+  errcheck (complexity gates scope to internal/+cmd/; tests are edit-frozen),
+  plus one QF1001 (De Morgan quickfix) text exclusion in a frozen test.
+
+Gate tails:
+- go run /tmp/funlen.go: "total: 0 functions over 35 lines"
+- gocyclo -over 12 internal cmd: exit 0; gocognit -over 20 internal cmd: exit 0
+- golangci-lint run: "0 issues."; staticcheck ./...: exit 0
+- go test ./tests/... -coverpkg=./internal/... -count=1: "ok ... 9.286s
+  coverage: 85.2%" (85.4% before; delta is the deleted task.Section);
+  zero non-sanctioned test edits; gofumpt -l . empty; go vet clean; build ok;
+  TestStartupPerformance green.

@@ -1,0 +1,41 @@
+version: "2"
+
+linters:
+  enable:
+    - dupl
+    - funlen
+    - gocognit
+    - gocyclo
+  settings:
+    errcheck:
+      # Presentation-layer writes to injected io.Writers (stdout, stderr, the
+      # TUI frame): there is nothing to do when a terminal write fails.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    funlen:
+      lines: 35
+      statements: 50
+    gocyclo:
+      min-complexity: 12
+    gocognit:
+      min-complexity: 20
+  exclusions:
+    rules:
+      # Table-driven tests are legitimately long and repetitive; the length,
+      # duplication, and complexity gates apply to production code only.
+      - path: _test\.go
+        linters:
+          - dupl
+          - errcheck
+          - funlen
+          - gocognit
+          - gocyclo
+      # Style quickfix in a frozen test file; tests are behavior-locked.
+      - path: _test\.go
+        text: "QF1001"
+
+formatters:
+  enable:
+    - gofumpt

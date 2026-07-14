@@ -407,7 +407,8 @@ func perfTree(t *testing.T) string {
 	for _, tr := range tracks {
 		mustDuty(t, root, "create", "track", tr, "--title", tr)
 	}
-	dirs := []string{root,
+	dirs := []string{
+		root,
 		filepath.Join(root, "backend"),
 		filepath.Join(root, "frontend"),
 		filepath.Join(root, "infra"),

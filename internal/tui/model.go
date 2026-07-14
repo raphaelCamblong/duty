@@ -218,7 +218,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleKey routes a key press: everything to the filter input while one is
-// being typed, global keys next, then the focused panel.
+// being typed, global keys next, panel actions after, then the focused panel.
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.list.SettingFilter() {
 		if msg.Type == tea.KeyCtrlC {
@@ -226,39 +226,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m.updateList(msg)
 	}
-	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-	case key.Matches(msg, m.keys.Help):
-		m.help.ShowAll = !m.help.ShowAll
-		return m.layout(), nil
-	case key.Matches(msg, m.keys.Refresh):
-		return m, scanCmd(m.fsys, m.root)
-	case key.Matches(msg, m.keys.Focus):
-		if m.previewOpen {
-			m.focus = otherFocus(m.focus)
-		}
-		return m, nil
-	case key.Matches(msg, m.keys.Filter):
-		m.focus = focusList
-		return m.updateList(msg)
-	case key.Matches(msg, m.keys.Edit):
-		if e, ok := m.selectedEntry(); ok && e.task != nil {
-			return m, editCmd(m.editor, e.task.Path)
-		}
-		return m, nil
-	case key.Matches(msg, m.keys.Back):
-		return m.back()
-	case key.Matches(msg, m.keys.Open):
-		if m.focus == focusList {
-			return m.open(), nil
-		}
-		return m, nil
+	if model, cmd, ok := m.handleGlobalKey(msg); ok {
+		return model, cmd
+	}
+	if model, cmd, ok := m.handleActionKey(msg); ok {
+		return model, cmd
 	}
 	if m.focus == focusPreview {
-		var cmd tea.Cmd
-		m.preview, cmd = m.preview.Update(msg)
-		return m.settleAt(m.preview.YOffset), cmd
+		return m.scrollPreview(msg)
 	}
 	switch {
 	case key.Matches(msg, m.keys.Down):
@@ -267,6 +242,64 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.moveSelection(-1), nil
 	}
 	return m.updateList(msg)
+}
+
+// handleGlobalKey handles the keys that apply regardless of the focused
+// panel: quit, help, refresh, focus toggle, filter.
+func (m Model) handleGlobalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	switch {
+	case key.Matches(msg, m.keys.Quit):
+		return m, tea.Quit, true
+	case key.Matches(msg, m.keys.Help):
+		m.help.ShowAll = !m.help.ShowAll
+		return m.layout(), nil, true
+	case key.Matches(msg, m.keys.Refresh):
+		return m, scanCmd(m.fsys, m.root), true
+	case key.Matches(msg, m.keys.Focus):
+		if m.previewOpen {
+			m.focus = otherFocus(m.focus)
+		}
+		return m, nil, true
+	case key.Matches(msg, m.keys.Filter):
+		model, cmd := m.filterList(msg)
+		return model, cmd, true
+	}
+	return m, nil, false
+}
+
+// handleActionKey handles the keys acting on the selected entry: edit, back,
+// open.
+func (m Model) handleActionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	switch {
+	case key.Matches(msg, m.keys.Edit):
+		if e, ok := m.selectedEntry(); ok && e.task != nil {
+			return m, editCmd(m.editor, e.task.Path), true
+		}
+		return m, nil, true
+	case key.Matches(msg, m.keys.Back):
+		model, cmd := m.back()
+		return model, cmd, true
+	case key.Matches(msg, m.keys.Open):
+		if m.focus == focusList {
+			return m.open(), nil, true
+		}
+		return m, nil, true
+	}
+	return m, nil, false
+}
+
+// filterList moves focus to the list and starts the fuzzy filter.
+func (m Model) filterList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.focus = focusList
+	return m.updateList(msg)
+}
+
+// scrollPreview forwards a key to the preview viewport and settles the
+// scroll position.
+func (m Model) scrollPreview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.preview, cmd = m.preview.Update(msg)
+	return m.settleAt(m.preview.YOffset), cmd
 }
 
 // otherFocus toggles between the two panels.

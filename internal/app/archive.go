@@ -42,29 +42,16 @@ func (a App) archiveBoard(b string) error {
 	if len(done) == 0 {
 		return nil
 	}
-
 	boardPath := filepath.Join(b, names.BoardFile)
 	index, err := a.fs.ReadFile(boardPath)
 	if err != nil {
 		return err
 	}
-	for _, name := range done {
-		if index, err = board.DropRow(index, name); err != nil {
-			return err
-		}
+	index, err = dropRows(index, done)
+	if err != nil {
+		return err
 	}
-	index = board.PruneEmptySections(index)
-
-	archiveDir := filepath.Join(b, names.ArchiveDir)
-	if err := a.fs.MkdirAll(archiveDir); err != nil {
-		return fmt.Errorf("archive %s: %w", b, err)
-	}
-	for _, name := range done {
-		if err := a.fs.Rename(filepath.Join(b, name), filepath.Join(archiveDir, name)); err != nil {
-			return fmt.Errorf("archive %s: %w", name, err)
-		}
-	}
-	count, err := a.countTaskFiles(archiveDir)
+	count, err := a.moveToArchive(b, done)
 	if err != nil {
 		return err
 	}
@@ -73,6 +60,33 @@ func (a App) archiveBoard(b string) error {
 		return err
 	}
 	return a.fs.WriteFile(boardPath, index)
+}
+
+// dropRows drops one row per filename from the board index and prunes any
+// section left empty.
+func dropRows(index []byte, filenames []string) ([]byte, error) {
+	for _, name := range filenames {
+		var err error
+		if index, err = board.DropRow(index, name); err != nil {
+			return nil, err
+		}
+	}
+	return board.PruneEmptySections(index), nil
+}
+
+// moveToArchive renames every named task file in b into b's archive/,
+// creating it if needed, and returns the archive's new task-file count.
+func (a App) moveToArchive(b string, filenames []string) (int, error) {
+	archiveDir := filepath.Join(b, names.ArchiveDir)
+	if err := a.fs.MkdirAll(archiveDir); err != nil {
+		return 0, fmt.Errorf("archive %s: %w", b, err)
+	}
+	for _, name := range filenames {
+		if err := a.fs.Rename(filepath.Join(b, name), filepath.Join(archiveDir, name)); err != nil {
+			return 0, fmt.Errorf("archive %s: %w", name, err)
+		}
+	}
+	return a.countTaskFiles(archiveDir)
 }
 
 // doneTasks returns the filenames of every status: done task filed directly
@@ -87,14 +101,9 @@ func (a App) doneTasks(dir string) ([]string, error) {
 		if e.IsDir() || !tree.IsTaskFile(e.Name()) {
 			continue
 		}
-		path := filepath.Join(dir, e.Name())
-		content, err := a.fs.ReadFile(path)
+		t, _, err := a.readTask(filepath.Join(dir, e.Name()))
 		if err != nil {
 			return nil, err
-		}
-		t, err := task.Parse(content)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
 		}
 		if t.Status == task.StatusDone {
 			done = append(done, e.Name())

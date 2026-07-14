@@ -222,7 +222,8 @@ func TestAddRow(t *testing.T) {
 			name:    "creates a missing section above the footer",
 			content: fixture,
 			section: "Blocked on infra",
-			want: insertLines(fixture, 27,
+			want: insertLines(
+				fixture, 27,
 				"## Blocked on infra",
 				"",
 				"| Task | Title | Status |",
@@ -365,7 +366,8 @@ func TestMoveRow(t *testing.T) {
 			filename: "T-04-someday.md",
 			section:  "Doing",
 			// Drop line 25; the footer is now at 26.
-			want: insertLines(removeLines(fixture, 25, 26), 26,
+			want: insertLines(
+				removeLines(fixture, 25, 26), 26,
 				"## Doing",
 				"",
 				"| Task | Title | Status |",
@@ -545,7 +547,8 @@ func TestAddBoardBullet(t *testing.T) {
 		{
 			name:    "creates the Boards section before the first task section",
 			content: skeleton,
-			want: insertLines(skeleton, 5,
+			want: insertLines(
+				skeleton, 5,
 				"## Boards",
 				"",
 				"- [frontend/](frontend/BOARD.md) — Frontend",

@@ -9,6 +9,7 @@ import (
 	"regexp"
 
 	"github.com/raphaelCamblong/duty/internal/fsys"
+	"github.com/raphaelCamblong/duty/internal/task"
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
@@ -40,4 +41,19 @@ func (a App) resolveOpen(cwd, id string) (string, error) {
 		return "", err
 	}
 	return tree.ResolveTask(a.fs, root, id)
+}
+
+// readTask reads and parses the task file at path, returning the parsed task
+// and the raw contents. Read errors pass through unwrapped so callers can
+// branch on fs.ErrNotExist; parse errors carry the path.
+func (a App) readTask(path string) (task.Task, []byte, error) {
+	content, err := a.fs.ReadFile(path)
+	if err != nil {
+		return task.Task{}, nil, err
+	}
+	t, err := task.Parse(content)
+	if err != nil {
+		return task.Task{}, nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return t, content, nil
 }

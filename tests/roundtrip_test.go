@@ -364,8 +364,7 @@ func TestSaltedBoardSurvivesEveryMutation(t *testing.T) {
 					"## Parked\n\n"+tableHead+"\n"+tableSep+"\n"+saltT03Row+"\n\n", "")
 				w["BOARD.md"] = replaceOnce(t, b, "Completed tasks (2)", "Completed tasks (3)")
 				delete(w, "T-03-parked-task.md")
-				w[filepath.FromSlash("archive/T-03-parked-task.md")] =
-					replaceOnce(t, saltT03File, "status: blocked", "status: done")
+				w[filepath.FromSlash("archive/T-03-parked-task.md")] = replaceOnce(t, saltT03File, "status: blocked", "status: done")
 			},
 		},
 		{
@@ -455,8 +454,7 @@ func TestPruneNeverRemovesDefaultSection(t *testing.T) {
 		b := replaceOnce(t, pruneBoard, laterBlock, "")
 		want["BOARD.md"] = replaceOnce(t, b, "Completed tasks (0)", "Completed tasks (1)")
 		delete(want, "T-01-only-task.md")
-		want[filepath.FromSlash("archive/T-01-only-task.md")] =
-			replaceOnce(t, pruneTask, "status: todo", "status: done")
+		want[filepath.FromSlash("archive/T-01-only-task.md")] = replaceOnce(t, pruneTask, "status: todo", "status: done")
 		diffTrees(t, want, snapshotTree(t, root))
 		if got := readText(t, filepath.Join(root, "BOARD.md")); !strings.Contains(got, "## Open tasks") {
 			t.Errorf("default section pruned: %q", got)

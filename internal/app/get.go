@@ -107,13 +107,9 @@ func (a App) GetNext(cwd string) (*TaskInfo, error) {
 
 // taskInfo reads the task file at path and assembles its TaskInfo.
 func (a App) taskInfo(root, path string) (TaskInfo, error) {
-	content, err := a.fs.ReadFile(path)
+	t, content, err := a.readTask(path)
 	if err != nil {
 		return TaskInfo{}, err
-	}
-	t, err := task.Parse(content)
-	if err != nil {
-		return TaskInfo{}, fmt.Errorf("%s: %w", path, err)
 	}
 	return buildTaskInfo(root, path, content, t), nil
 }
@@ -193,16 +189,12 @@ func (a App) nextInBoard(root, b string) (*TaskInfo, error) {
 // file is skipped, not an error — the board can drift ahead of the files.
 func (a App) actionable(root, b, filename string) (*TaskInfo, error) {
 	path := filepath.Join(b, filename)
-	content, err := a.fs.ReadFile(path)
+	t, content, err := a.readTask(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, nil
 		}
 		return nil, err
-	}
-	t, err := task.Parse(content)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	if t.Status != task.StatusTodo {
 		return nil, nil
@@ -243,13 +235,9 @@ func (a App) depDone(root, id string) (bool, error) {
 		}
 		return false, nil
 	}
-	content, err := a.fs.ReadFile(path)
+	t, _, err := a.readTask(path)
 	if err != nil {
 		return false, err
-	}
-	t, err := task.Parse(content)
-	if err != nil {
-		return false, fmt.Errorf("%s: %w", path, err)
 	}
 	return t.Status == task.StatusDone, nil
 }
@@ -265,14 +253,9 @@ func (a App) taskStatuses(dir string) ([]string, error) {
 		if e.IsDir() || !tree.IsTaskFile(e.Name()) {
 			continue
 		}
-		path := filepath.Join(dir, e.Name())
-		content, err := a.fs.ReadFile(path)
+		t, _, err := a.readTask(filepath.Join(dir, e.Name()))
 		if err != nil {
 			return nil, err
-		}
-		t, err := task.Parse(content)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
 		}
 		out = append(out, t.Status)
 	}

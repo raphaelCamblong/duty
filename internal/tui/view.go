@@ -188,7 +188,8 @@ func (m Model) rightPanel() string {
 func (m Model) headerView(w int) string {
 	inner := max(w-4, 1)
 	b, _ := m.board()
-	content := lipgloss.JoinVertical(lipgloss.Left,
+	content := lipgloss.JoinVertical(
+		lipgloss.Left,
 		ansi.Truncate(m.breadcrumb(), inner, "…"),
 		stateLine(b, inner),
 	)
@@ -212,7 +213,8 @@ func statusBar(counts map[string]int, w int) string {
 	if totalCount(counts) == 0 {
 		return dimStyle.Render(strings.Repeat("╌", w))
 	}
-	bar := barchart.New(w, 1,
+	bar := barchart.New(
+		w, 1,
 		barchart.WithHorizontalBars(),
 		barchart.WithNoAxis(),
 		barchart.WithBarWidth(1),

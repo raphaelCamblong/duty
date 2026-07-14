@@ -20,7 +20,6 @@ func (a App) CreateTask(cwd, title, slug, section string, blockedBy []string) (s
 	if slug != "" && !nameRE.MatchString(slug) {
 		return "", fmt.Errorf("invalid slug %q: must match [a-z0-9-]+", slug)
 	}
-
 	boardDir, err := tree.CurrentBoard(a.fs, cwd)
 	if err != nil {
 		return "", err
@@ -29,16 +28,13 @@ func (a App) CreateTask(cwd, title, slug, section string, blockedBy []string) (s
 	if err != nil {
 		return "", err
 	}
-	for _, dep := range blockedBy {
-		if _, err := tree.ResolveTask(a.fs, root, dep); err != nil && !errors.Is(err, tree.ErrArchived) {
-			return "", fmt.Errorf("blocked-by: %w", err)
-		}
+	if err := a.validateBlockedBy(root, blockedBy); err != nil {
+		return "", err
 	}
 	nn, err := tree.NextNN(a.fs, root)
 	if err != nil {
 		return "", err
 	}
-	id := "T-" + nn
 	if slug == "" {
 		slug = task.Slugify(title)
 	}
@@ -48,7 +44,24 @@ func (a App) CreateTask(cwd, title, slug, section string, blockedBy []string) (s
 	if section == "" {
 		section = board.DefaultSection
 	}
+	return a.writeTask(boardDir, "T-"+nn, slug, title, section, blockedBy)
+}
 
+// validateBlockedBy checks every dependency id resolves somewhere in the
+// tree; archived dependencies are legal.
+func (a App) validateBlockedBy(root string, blockedBy []string) error {
+	for _, dep := range blockedBy {
+		if _, err := tree.ResolveTask(a.fs, root, dep); err != nil && !errors.Is(err, tree.ErrArchived) {
+			return fmt.Errorf("blocked-by: %w", err)
+		}
+	}
+	return nil
+}
+
+// writeTask renders the template file and appends its board row (status
+// todo), both contents computed before either write, and returns the new
+// file's path.
+func (a App) writeTask(boardDir, id, slug, title, section string, blockedBy []string) (string, error) {
 	filename := id + "-" + slug + ".md"
 	boardPath := filepath.Join(boardDir, names.BoardFile)
 	content, err := a.fs.ReadFile(boardPath)

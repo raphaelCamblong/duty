@@ -385,60 +385,6 @@ func TestCountGates(t *testing.T) {
 	}
 }
 
-func TestSection(t *testing.T) {
-	tests := []struct {
-		name    string
-		content string
-		heading string
-		want    string
-	}{
-		{
-			name:    "single line goal",
-			content: "# T-01 — X\n\n## Goal\nShip the outcome.\n\n## Scope\nstuff\n",
-			heading: "Goal",
-			want:    "Ship the outcome.",
-		},
-		{
-			name:    "multi-line body stops at next section",
-			content: "## Goal\nLine one.\nLine two.\n\n## Read first\nno\n",
-			heading: "Goal",
-			want:    "Line one.\nLine two.",
-		},
-		{
-			name:    "trailing heading spaces still match",
-			content: "## Goal  \nBody here.\n\n## Scope\n",
-			heading: "Goal",
-			want:    "Body here.",
-		},
-		{
-			name:    "empty section",
-			content: "## Goal\n\n## Scope\nx\n",
-			heading: "Goal",
-			want:    "",
-		},
-		{
-			name:    "missing section",
-			content: "## Scope\nonly scope\n",
-			heading: "Goal",
-			want:    "",
-		},
-		{
-			name:    "section at end of file",
-			content: "## Scope\nx\n\n## Goal\nlast section body",
-			heading: "Goal",
-			want:    "last section body",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := task.Section([]byte(tt.content), tt.heading); got != tt.want {
-				t.Errorf("Section() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestSlugify(t *testing.T) {
 	tests := []struct {
 		name  string

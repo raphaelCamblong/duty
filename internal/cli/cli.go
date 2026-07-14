@@ -114,9 +114,18 @@ const rootExample = `  duty get next --agent
 // newRoot assembles the duty command tree over the real filesystem, rooted
 // at cwd, with cobra's own error and usage printing silenced.
 func newRoot(cwd string, stdin io.Reader, stdout, stderr io.Writer, version string) *cobra.Command {
-	var f fsys.FS = fsys.OS{}
-	a := app.New(f)
-	root := &cobra.Command{
+	root := rootCmd(version)
+	root.SetIn(stdin)
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	addCommands(root, cwd, stdin, stdout)
+	return root
+}
+
+// rootCmd builds the bare root command: identity, help text, and cobra's own
+// error and usage printing silenced.
+func rootCmd(version string) *cobra.Command {
+	return &cobra.Command{
 		Use:                        "duty <command> [args]",
 		Short:                      "file-based task system: markdown tasks + board indexes",
 		Long:                       rootLong,
@@ -133,9 +142,13 @@ func newRoot(cwd string, stdin io.Reader, stdout, stderr io.Writer, version stri
 			return unknownCommand(cmd, args[0])
 		},
 	}
-	root.SetIn(stdin)
-	root.SetOut(stdout)
-	root.SetErr(stderr)
+}
+
+// addCommands registers the help groups and every subcommand under root,
+// wired over the real filesystem rooted at cwd.
+func addCommands(root *cobra.Command, cwd string, stdin io.Reader, stdout io.Writer) {
+	var f fsys.FS = fsys.OS{}
+	a := app.New(f)
 	root.SetCompletionCommandGroupID(groupInterface)
 	root.AddGroup(
 		&cobra.Group{ID: groupAuthor, Title: "Author Commands:"},
@@ -143,39 +156,24 @@ func newRoot(cwd string, stdin io.Reader, stdout, stderr io.Writer, version stri
 		&cobra.Group{ID: groupRead, Title: "Read Commands:"},
 		&cobra.Group{ID: groupInterface, Title: "Interface Commands:"},
 	)
-
-	initCmd := newInitCmd(a, cwd)
-	initCmd.GroupID = groupAuthor
-	createCmd := newCreateCmd(a, cwd, stdout)
-	createCmd.GroupID = groupAuthor
-	getCmd := newGetCmd(a, cwd, stdout)
-	getCmd.GroupID = groupRead
-	statusCmd := newStatusCmd(a, cwd)
-	statusCmd.GroupID = groupWork
-	reportCmd := newReportCmd(a, cwd, stdin)
-	reportCmd.GroupID = groupWork
-	moveCmd := newMoveCmd(a, cwd)
-	moveCmd.GroupID = groupWork
-	archiveCmd := newArchiveCmd(a, cwd)
-	archiveCmd.GroupID = groupWork
-	deleteCmd := newDeleteCmd(a, cwd)
-	deleteCmd.GroupID = groupWork
-	tuiCmd := newTUICmd(f, cwd)
-	tuiCmd.GroupID = groupInterface
-
 	root.AddCommand(
-		initCmd,
-		createCmd,
-		getCmd,
+		grouped(newInitCmd(a, cwd), groupAuthor),
+		grouped(newCreateCmd(a, cwd, stdout), groupAuthor),
+		grouped(newGetCmd(a, cwd, stdout), groupRead),
 		newListCmd(a, cwd, stdout),
-		statusCmd,
-		reportCmd,
-		moveCmd,
-		archiveCmd,
-		deleteCmd,
-		tuiCmd,
+		grouped(newStatusCmd(a, cwd), groupWork),
+		grouped(newReportCmd(a, cwd, stdin), groupWork),
+		grouped(newMoveCmd(a, cwd), groupWork),
+		grouped(newArchiveCmd(a, cwd), groupWork),
+		grouped(newDeleteCmd(a, cwd), groupWork),
+		grouped(newTUICmd(f, cwd), groupInterface),
 	)
-	return root
+}
+
+// grouped assigns cmd to the help group id and returns it.
+func grouped(cmd *cobra.Command, id string) *cobra.Command {
+	cmd.GroupID = id
+	return cmd
 }
 
 // newGroupCmd builds a verb command that only dispatches to its resource

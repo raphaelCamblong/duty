@@ -57,15 +57,7 @@ func (a App) List(cwd, status string) ([]Row, error) {
 // tracks are separate entries in the caller's board list), tagged with
 // its path relative to root — the board list started from.
 func (a App) boardRows(root, b string) ([]Row, error) {
-	rel, err := filepath.Rel(root, b)
-	if err != nil {
-		return nil, fmt.Errorf("list %s: %w", b, err)
-	}
-	boardPath := "."
-	if rel != "." {
-		boardPath = filepath.ToSlash(rel)
-	}
-
+	boardPath := relBoard(root, b)
 	index, err := a.fs.ReadFile(filepath.Join(b, names.BoardFile))
 	if err != nil {
 		return nil, err
@@ -74,29 +66,33 @@ func (a App) boardRows(root, b string) ([]Row, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list %s: %w", b, err)
 	}
-
 	var rows []Row
 	for _, e := range entries {
 		if e.IsDir() || !tree.IsTaskFile(e.Name()) {
 			continue
 		}
-		path := filepath.Join(b, e.Name())
-		content, err := a.fs.ReadFile(path)
+		row, err := a.taskRow(index, b, e.Name(), boardPath)
 		if err != nil {
 			return nil, err
 		}
-		t, err := task.Parse(content)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
-		}
-		row, ok := board.FindRow(index, e.Name())
-		missing, rowStatus := drift(ok, row, t.Status)
-		rows = append(rows, Row{
-			ID: t.ID, Title: t.Title, Status: t.Status,
-			Board: boardPath, RowMissing: missing, RowStatus: rowStatus,
-		})
+		rows = append(rows, row)
 	}
 	return rows, nil
+}
+
+// taskRow assembles filename's Row from its file in dir, its drift computed
+// against its row in the board index.
+func (a App) taskRow(index []byte, dir, filename, boardPath string) (Row, error) {
+	t, _, err := a.readTask(filepath.Join(dir, filename))
+	if err != nil {
+		return Row{}, err
+	}
+	row, ok := board.FindRow(index, filename)
+	missing, rowStatus := drift(ok, row, t.Status)
+	return Row{
+		ID: t.ID, Title: t.Title, Status: t.Status,
+		Board: boardPath, RowMissing: missing, RowStatus: rowStatus,
+	}, nil
 }
 
 // drift compares a task's file status to its board row, found via

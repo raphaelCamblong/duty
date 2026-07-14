@@ -34,7 +34,7 @@ func NewWatcher(f fsys.FS, root string) (*Watcher, error) {
 		return nil, fmt.Errorf("watch %s: %w", root, err)
 	}
 	if err := addDirs(f, fw, root, true); err != nil {
-		fw.Close()
+		_ = fw.Close()
 		return nil, err
 	}
 	w := &Watcher{C: make(chan struct{}, 1), fsys: f, notif: fw}
@@ -69,7 +69,7 @@ func (w *Watcher) loop(root string) {
 			}
 		case <-fire:
 			fire = nil
-			addDirs(w.fsys, w.notif, root, false)
+			_ = addDirs(w.fsys, w.notif, root, false)
 			select {
 			case w.C <- struct{}{}:
 			default:
