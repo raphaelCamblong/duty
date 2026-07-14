@@ -1,0 +1,90 @@
+# GoReleaser v2 config — one tag ships cross-platform archives, checksums,
+# a changelog, a GitHub Release, and a Homebrew tap formula.
+# Dry run: go run github.com/goreleaser/goreleaser/v2@latest release --snapshot --clean --skip=publish
+version: 2
+
+project_name: duty
+
+before:
+  hooks:
+    - go mod tidy
+    - mkdir -p completions
+    - sh -c "go run ./cmd/duty completion bash > completions/duty.bash"
+    - sh -c "go run ./cmd/duty completion zsh > completions/duty.zsh"
+    - sh -c "go run ./cmd/duty completion fish > completions/duty.fish"
+
+builds:
+  - id: duty
+    main: ./cmd/duty
+    binary: duty
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: duty
+    ids:
+      - duty
+    formats:
+      - tar.gz
+    name_template: "duty_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE
+      - README.md
+      - src: completions/*
+        dst: completions
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^task:"
+      - "^board:"
+
+release:
+  draft: false
+
+# Homebrew tap via a cask (goreleaser deprecated `brews` formulas for binaries
+# in favour of `homebrew_casks`). Ships the binary + shell completions; the
+# post-install hook strips the macOS quarantine bit off the unsigned binary.
+homebrew_casks:
+  - name: duty
+    repository:
+      owner: raphaelCamblong
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/raphaelCamblong/duty"
+    description: "File-based task system: markdown tasks, nested board indexes, one Go binary (CLI + TUI)"
+    binaries:
+      - duty
+    completions:
+      bash: completions/duty.bash
+      zsh: completions/duty.zsh
+      fish: completions/duty.fish
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/duty"]
+          end

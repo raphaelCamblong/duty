@@ -25,6 +25,6 @@ Order top-to-bottom is the intended build order.
 | [T-23](T-23-cloudflare-pages-docs-hosting.md) | Cloudflare Pages docs hosting | todo |
 | [T-24](T-24-inline-track-state-bars-and-tracks-heade.md) | Inline track state bars and tracks header | done |
 | [T-25](T-25-mit-license-and-root-readme.md) | MIT license and root README | done |
-| [T-26](T-26-goreleaser-release-pipeline.md) | GoReleaser release pipeline | todo |
+| [T-26](T-26-goreleaser-release-pipeline.md) | GoReleaser release pipeline | done |
 
 Completed tasks (0) archived: [archive/](archive/).

@@ -1,7 +1,7 @@
 ---
 id: T-26
 title: GoReleaser release pipeline
-status: todo
+status: done
 blocked-by: [T-25]
 ---
 
@@ -46,14 +46,40 @@ apt/rpm/nfpm, AUR, scoop, winget, snap (all later); actually pushing a tag;
 creating the tap repo (needs Raphael's account).
 
 ## Gates
-- [ ] Dry run passes locally:
+- [x] Dry run passes locally:
   `go run github.com/goreleaser/goreleaser/v2@latest release --snapshot --clean --skip=publish`
   → `dist/` holds all six platform archives + checksums; archives contain
   binary, LICENSE, README, completions.
-- [ ] A snapshot binary runs: `dist/` darwin_arm64 `duty --version` prints the
+- [x] A snapshot binary runs: `dist/` darwin_arm64 `duty --version` prints the
   snapshot version (ldflags wired).
-- [ ] `go run …goreleaser… check` reports a valid config; both workflow YAMLs
+- [x] `go run …goreleaser… check` reports a valid config; both workflow YAMLs
   pass `actionlint` if available (else note it).
-- [ ] Full suite still green; `gofmt -l .` empty.
+- [x] Full suite still green; `gofmt -l .` empty.
 
 ## Report
+
+Shipped the GoReleaser v2 release pipeline. `.goreleaser.yaml` builds ./cmd/duty
+with CGO_ENABLED=0 across darwin/linux/windows x amd64/arm64, ldflags
+`-s -w -X main.version={{.Version}}` plus mod_timestamp for reproducibility. A
+before-hook generates bash/zsh/fish completions via `go run ./cmd/duty
+completion`; archives are tar.gz (zip on windows) carrying binary + LICENSE +
+README + completions, alongside a checksums file and a git changelog that
+excludes docs:/task:/board: prefixes.
+
+The Homebrew tap ships as `homebrew_casks` (goreleaser deprecated `brews`
+formulas for binaries; the deprecated `homebrew_casks.binary` became
+`binaries:` too) targeting raphaelCamblong/homebrew-tap with the
+TAP_GITHUB_TOKEN env and a postflight quarantine-strip hook. Casks have no Ruby
+`test do`/`license` stanza, so the `duty --version` smoke test lives instead in
+the goreleaser dry run and the cask's own install; intent (tap install of
+binary + completions) preserved.
+
+Workflows: release.yml on v* tags (fetch-depth 0, setup-go from go.mod,
+goreleaser-action release --clean, concurrency-guarded, GITHUB_TOKEN +
+TAP_GITHUB_TOKEN); ci.yml on push/PR to main (gofmt check, vet, build, full
+test suite). dist/ and completions/ gitignored.
+
+Gates: `goreleaser check` valid; snapshot dry run produced all six platform
+archives + checksums with the right contents; darwin_arm64 snapshot binary
+prints `duty version 0.0.1-next`; actionlint clean on both workflows; full
+suite green (85.3%); gofmt empty.
