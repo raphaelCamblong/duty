@@ -336,6 +336,70 @@ func TestTracksHeaderAndInlineBar(t *testing.T) {
 	}
 }
 
+// twoTrackTree builds a root board with two sibling tracks whose title lengths
+// and subtree counts differ: "api/" (short title, 2 tasks → 1-digit count) and
+// "frontend/" (long title, 11 tasks → 2-digit count). The mismatch is what the
+// right-aligned bar must survive — a left-inlined bar would start at a
+// different x on each row.
+func twoTrackTree(t *testing.T) string {
+	t.Helper()
+	root := initDuty(t)
+	mustDuty(t, root, "create", "track", "api", "--title", "API")
+	mustDuty(t, filepath.Join(root, "api"), "create", "task", "One api task")
+	mustDuty(t, filepath.Join(root, "api"), "create", "task", "Two api task")
+	mustDuty(t, root, "create", "track", "frontend", "--title", "The frontend web application")
+	for i := 0; i < 11; i++ {
+		mustDuty(t, filepath.Join(root, "frontend"), "create", "task", fmt.Sprintf("Frontend task %d", i))
+	}
+	return root
+}
+
+// barStartCol is the visual column of the first state-bar cell in a track row.
+func barStartCol(t *testing.T, row string) int {
+	t.Helper()
+	plain := ansi.Strip(row)
+	at := strings.Index(plain, "█")
+	if at < 0 {
+		t.Fatalf("track row has no state bar: %q", plain)
+	}
+	return ansi.StringWidth(plain[:at])
+}
+
+// contentEndCol is the visual column just past the row's last visible content,
+// the panel padding and border trimmed — where the right-aligned count ends.
+func contentEndCol(row string) int {
+	return ansi.StringWidth(strings.TrimRight(ansi.Strip(row), " │"))
+}
+
+func TestTrackBarRightAligned(t *testing.T) {
+	root := twoTrackTree(t)
+	for _, sz := range []struct{ w, h int }{{120, 35}, {70, 20}} {
+		t.Run(fmt.Sprintf("%dx%d", sz.w, sz.h), func(t *testing.T) {
+			m := newTUIModelSize(t, root, sz.w, sz.h)
+			frame := m.View()
+			lines := strings.Split(frame, "\n")
+			apiRow := lines[lineWith(t, frame, "api/", 40)]
+			feRow := lines[lineWith(t, frame, "frontend/", 40)]
+
+			apiBar, feBar := barStartCol(t, apiRow), barStartCol(t, feRow)
+			if apiBar != feBar {
+				t.Errorf("bar start columns differ (not aligned): api=%d frontend=%d\napi: %q\nfe:  %q",
+					apiBar, feBar, ansi.Strip(apiRow), ansi.Strip(feRow))
+			}
+			if apiBar < sz.w/2 {
+				t.Errorf("bar starts at col %d, left of the %d half: not right-aligned", apiBar, sz.w/2)
+			}
+			apiEnd, feEnd := contentEndCol(apiRow), contentEndCol(feRow)
+			if apiEnd != feEnd {
+				t.Errorf("count blocks not flush to a common right edge: api=%d frontend=%d", apiEnd, feEnd)
+			}
+			assertNoRagged(t, frame, sz.w)
+			t.Logf("track rows %dx%d (bar flush right, aligned start col %d):\n%s\n%s",
+				sz.w, sz.h, apiBar, ansi.Strip(apiRow), ansi.Strip(feRow))
+		})
+	}
+}
+
 func TestMasterDetailLayout(t *testing.T) {
 	root := fourStatusTree(t)
 

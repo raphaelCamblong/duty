@@ -485,15 +485,16 @@ func trackBar(counts map[string]int, width int) string {
 	return b.String()
 }
 
-// trackBarCell is a track row's trailing state: a fixed-width inline
-// status-distribution bar and a dim total count, or a dim "empty" when the
-// subtree holds no tasks.
-func trackBarCell(counts map[string]int) string {
+// trackBarCell is a track row's right-aligned state column, a fixed
+// trackBarWidth+2+countW cells: the status-distribution bar and a right-aligned
+// dim total count, or a dim "empty" filling the column when the subtree holds
+// no tasks.
+func trackBarCell(counts map[string]int, countW int) string {
 	bar := trackBar(counts, trackBarWidth)
 	if bar == "" {
-		return dimStyle.Render("empty")
+		return pad(dimStyle.Render("empty"), trackBarWidth+2+countW)
 	}
-	return bar + "  " + dimStyle.Render(strconv.Itoa(totalCount(counts)))
+	return bar + "  " + dimStyle.Render(fmt.Sprintf("%*d", countW, totalCount(counts)))
 }
 
 // breadcrumb joins the H1 titles from the root down to the track on screen,
@@ -587,6 +588,18 @@ func maxSubNameWidth(subs []Sub) int {
 	w := 0
 	for _, s := range subs {
 		w = max(w, lipgloss.Width(s.Name))
+	}
+	return w
+}
+
+// maxSubCountWidth sizes the track rows' dim total-count column, measured over
+// the non-empty subtrees (an empty subtree shows "empty", carries no count).
+func maxSubCountWidth(subs []Sub) int {
+	w := 0
+	for _, s := range subs {
+		if n := totalCount(s.Counts); n > 0 {
+			w = max(w, len(strconv.Itoa(n)))
+		}
 	}
 	return w
 }

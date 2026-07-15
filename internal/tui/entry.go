@@ -110,6 +110,7 @@ func statusRank(status string) int {
 type compactDelegate struct {
 	zones   *zone.Manager
 	nameW   int
+	countW  int
 	idW     int
 	driftW  int
 	ageW    int
@@ -123,6 +124,7 @@ func newDelegate(z *zone.Manager, b Board, showAge bool, now time.Time) compactD
 	d := compactDelegate{
 		zones:   z,
 		nameW:   maxSubNameWidth(b.Subs),
+		countW:  maxSubCountWidth(b.Subs),
 		idW:     maxIDWidth(b.Sections),
 		driftW:  maxDriftWidth(b.Sections),
 		showAge: showAge,
@@ -193,14 +195,18 @@ func styleMatches(s string, matches []int, base lipgloss.Style) string {
 	return lipgloss.StyleRunes(s, matches, base.Underline(true), base)
 }
 
-// trackLine renders one sub-track: name, title, and a fixed-width inline
-// status-distribution bar of its subtree with a dim total count (dim "empty"
-// when the subtree holds no tasks).
+// trackLine renders one sub-track: name and title left, a flexible gap, then a
+// right-aligned fixed-width status-distribution bar of its subtree with a dim
+// total count flush at the line end (dim "empty" when the subtree holds no
+// tasks). The bar column starts at the same x on every track row — mirroring
+// taskLine's right columns — and the title ellipsis-truncates first when narrow.
 func (d compactDelegate) trackLine(s Sub, selected bool, w int, nameM, titleM []int) string {
+	rightW := trackBarWidth + 2 + d.countW
+	fixed := 2 + d.nameW + 2 + 2 + rightW
 	line := cursorMark(selected) +
 		pad(styleMatches(s.Name, nameM, accentStyle), d.nameW) + "  " +
-		styleMatches(s.Title, titleM, titleStyle(selected)) + "  " +
-		trackBarCell(s.Counts)
+		pad(styleMatches(s.Title, titleM, titleStyle(selected)), max(w-fixed, minTitleWidth)) + "  " +
+		trackBarCell(s.Counts, d.countW)
 	return ansi.Truncate(line, w, "…")
 }
 

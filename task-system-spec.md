@@ -286,12 +286,14 @@ selection change:
 - **Left panel** (the whole width while browsing; ~38%, min 30 cols, once a preview is
   open): a `bubbles/list` with a custom compact delegate. Sub-tracks first under a
   **"Tracks" header** (non-selectable, skipped by navigation, hidden while filtering,
-  like the task section headers), one line each carrying a fixed-width **inline
-  status-distribution bar** of its subtree computed live from files — proportional
-  colored segments in the header bar's palette, every non-zero status at least one
-  cell, a dim total count trailing (`backend/  Title  ▰▰▰▰▰▰▱▱  7`), a dim `empty`
-  for a track with no tasks; the textual per-status rollup lives in the track's
-  preview card. Then tasks under their section headers, one line
+  like the task section headers), one line each — name and title left, then a
+  **right-aligned fixed-width status-distribution bar** of its subtree computed
+  live from files, flush at the line end with a dim total count, the bar column
+  starting at the same x on every track row (`backend/  Title      ▰▰▰▰▰▰▱▱  7`) —
+  proportional colored segments in the header bar's palette, every non-zero status
+  at least one cell, a dim `empty` for a track with no tasks; the title
+  ellipsis-truncates first when narrow and the bar is never dropped; the textual
+  per-status rollup lives in the track's preview card. Then tasks under their section headers, one line
   each: id, title, colored status (`todo` dim, `in-progress` yellow, `blocked` red,
   `done` green), gate progress `2/3`, a dim relative-age column right of the gates
   (`6m ago` / `2h ago`, the absolute date past a week — §humanize), drift badge if any.
