@@ -37,6 +37,35 @@ func ReplaceSection(content []byte, heading string, body []byte) ([]byte, error)
 	return createSection(content, heading, body), nil
 }
 
+// ReplaceSections applies a bulk-edit payload — a sequence of "## <name>"
+// blocks — onto content: each named section's body is replaced (a missing one
+// created, per ReplaceSection), in payload order, with every byte outside the
+// touched sections surviving. It errors when payload does not open at a "## "
+// heading or names an empty section.
+func ReplaceSections(content, payload []byte) ([]byte, error) {
+	if !OpensAtSection(payload) {
+		return nil, fmt.Errorf("body must start at a %q heading", "## ")
+	}
+	var err error
+	for pos := nextHeadingFrom(payload, 0); pos < len(payload); {
+		line, bodyStart := lineAt(payload, pos)
+		end := nextHeadingFrom(payload, bodyStart)
+		if content, err = ReplaceSection(content, headingName(line), payload[bodyStart:end]); err != nil {
+			return nil, err
+		}
+		pos = end
+	}
+	return content, nil
+}
+
+// OpensAtSection reports whether content, after any leading blank lines, begins
+// at a "## " section heading — the shape a task body and a bulk-set payload
+// must have.
+func OpensAtSection(content []byte) bool {
+	at := nextHeadingFrom(content, 0)
+	return at < len(content) && len(bytes.TrimSpace(content[:at])) == 0
+}
+
 // createSection inserts a fresh "## <heading>" section: before the report
 // section when one exists, else appended at the end of the file.
 func createSection(content []byte, heading string, body []byte) []byte {
@@ -117,8 +146,14 @@ func nextHeadingFrom(content []byte, pos int) int {
 // headingMatch reports whether line is a "## " heading whose text equals
 // heading, ignoring case and trailing whitespace.
 func headingMatch(line []byte, heading string) bool {
-	rest, ok := strings.CutPrefix(strings.TrimRight(string(line), " \t\r"), "## ")
-	return ok && strings.EqualFold(rest, strings.TrimSpace(heading))
+	return isSectionHeading(line) && strings.EqualFold(headingName(line), strings.TrimSpace(heading))
+}
+
+// headingName returns the text of a "## " heading line, trimmed of the marker
+// and surrounding whitespace. It assumes line is a section heading.
+func headingName(line []byte) string {
+	rest, _ := strings.CutPrefix(strings.TrimRight(string(line), " \t\r"), "## ")
+	return strings.TrimSpace(rest)
 }
 
 // isSectionHeading reports whether line opens a "## " level-two section.

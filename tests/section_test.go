@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/raphaelCamblong/duty/internal/task"
@@ -111,6 +112,40 @@ func TestReplaceSection(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestReplaceSections(t *testing.T) {
+	t.Run("replaces three blocks in one call, bytes outside them survive", func(t *testing.T) {
+		payload := "## Goal\nNew goal.\n\n## Scope\nNew scope.\n\n## Design\nPorts.\n"
+		got, err := task.ReplaceSections([]byte(sectionDoc), []byte(payload))
+		if err != nil {
+			t.Fatalf("ReplaceSections error = %v", err)
+		}
+		want := replaceOnce(t, sectionDoc, "## Goal\nThe original goal.\n", "## Goal\nNew goal.\n")
+		want = replaceOnce(t, want, "## Scope\nDo the thing.\n", "## Scope\nNew scope.\n")
+		want = replaceOnce(t, want, "## Report\n", "## Design\nPorts.\n\n## Report\n")
+		if string(got) != want {
+			t.Errorf("ReplaceSections =\n%q\nwant:\n%q", got, want)
+		}
+	})
+
+	t.Run("applies blocks in payload order", func(t *testing.T) {
+		got, err := task.ReplaceSections([]byte(sectionDoc), []byte("## Alpha\na\n\n## Beta\nb\n"))
+		if err != nil {
+			t.Fatalf("ReplaceSections error = %v", err)
+		}
+		if alpha, beta := strings.Index(string(got), "## Alpha"), strings.Index(string(got), "## Beta"); alpha < 0 || beta < alpha {
+			t.Errorf("want ## Alpha before ## Beta, got %q", got)
+		}
+	})
+
+	t.Run("rejects a payload that does not open at a heading", func(t *testing.T) {
+		for _, payload := range []string{"", "prose\n## Goal\nx\n", "no heading here\n"} {
+			if _, err := task.ReplaceSections([]byte(sectionDoc), []byte(payload)); err == nil {
+				t.Errorf("ReplaceSections(%q) = nil error, want refusal", payload)
+			}
+		}
+	})
 }
 
 func TestGates(t *testing.T) {

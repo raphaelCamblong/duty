@@ -116,6 +116,60 @@ blocked-by: [T-08]
 	}
 }
 
+func TestRenderWithBody(t *testing.T) {
+	const body = "## Goal\nShip it.\n\n## Gates\n- [ ] build\n- [x] tests\n\n## Report\n"
+	want := `---
+id: T-20
+title: One-shot
+status: todo
+blocked-by: [T-01]
+---
+
+# T-20 — One-shot
+
+` + body
+	t.Run("splices the body verbatim below the generated H1", func(t *testing.T) {
+		if got := string(task.RenderWithBody("T-20", "One-shot", []string{"T-01"}, []byte(body))); got != want {
+			t.Errorf("RenderWithBody =\n%q\nwant:\n%q", got, want)
+		}
+	})
+
+	t.Run("trims leading blank lines and guarantees a trailing newline", func(t *testing.T) {
+		got := string(task.RenderWithBody("T-20", "One-shot", []string{"T-01"}, []byte("\n\n"+strings.TrimRight(body, "\n"))))
+		if got != want {
+			t.Errorf("RenderWithBody(padded) =\n%q\nwant:\n%q", got, want)
+		}
+	})
+
+	t.Run("counts gates authored in the body", func(t *testing.T) {
+		done, total := task.CountGates(task.RenderWithBody("T-20", "One-shot", nil, []byte(body)))
+		if done != 1 || total != 2 {
+			t.Errorf("CountGates(--body) = %d/%d, want 1/2", done, total)
+		}
+	})
+}
+
+func TestOpensAtSection(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{name: "flush heading", content: "## Goal\nx\n", want: true},
+		{name: "leading blank lines", content: "\n\n## Goal\nx\n", want: true},
+		{name: "prose before the heading", content: "intro\n## Goal\n", want: false},
+		{name: "no heading at all", content: "just prose\n", want: false},
+		{name: "empty", content: "", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := task.OpensAtSection([]byte(tt.content)); got != tt.want {
+				t.Errorf("OpensAtSection(%q) = %v, want %v", tt.content, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParse(t *testing.T) {
 	tests := []struct {
 		name    string

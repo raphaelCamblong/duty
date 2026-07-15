@@ -9,8 +9,9 @@ the truth; the board is a projection the `duty` CLI keeps in sync.
 Frontmatter (`id`, `title`, `status`, `blocked-by`) + sections: `## Goal`,
 `## Read first`, `## Scope` (decisions are pre-made — don't re-decide),
 `## Out of scope`, `## Gates` (a `- [ ]` checklist; all ticked = done),
-`## Report` (append, never overwrite). Author it CLI-first — no editor needed:
-`set` fills a section, `gates add`/`check` manage the checklist.
+`## Report` (append, never overwrite). Author it in one shot — no editor needed:
+`create task --body` pipes the whole body in, `set` fills or bulk-replaces sections,
+`gates add`/`check` manage the checklist.
 
 Statuses: `todo | in-progress | done | blocked`.
 
@@ -18,9 +19,9 @@ Statuses: `todo | in-progress | done | blocked`.
 
 | Command | Behavior |
 |---|---|
-| `duty create task <title>` | New task in the current board (`--slug`, `--blocked-by`, `--section`). |
+| `duty create task <title>` | New task in the current board (`--slug`, `--blocked-by`, `--section`). `--body` reads the whole task body (`## ` sections) from stdin below a generated H1 — author it in one call. |
 | `duty create track <name>` | New track — a folder with its own board — under the current one (`--title`). |
-| `duty set <id> <section>` | Replace a task section's body from stdin (`set T-07 goal < goal.md`) — line-surgical; a missing section is created. |
+| `duty set <id> [section]` | Replace one section's body from stdin (`set T-07 goal < goal.md`), or every `## ` block at once with no section arg (`set T-07 < body.md`) — line-surgical; a missing section is created. |
 | `duty gates <id>` | List a task's gates 1-based (`--agent` for TSV). `gates add <id> <text>` appends one; `gates check`/`uncheck <id> <n>` flip the n-th. |
 | `duty status <id> <status>` | Set status in the task file AND its board row. Claiming a task already `in-progress` needs `--force` (take over a stale claim). |
 | `duty move <id>` | `--track PATH` moves the task to another track (path from the tree root); `--section NAME` moves its board row under `## <section>`. At least one flag. |
@@ -39,8 +40,8 @@ anywhere in the tree — on `create task`, `create track`, `get tasks`, `get tra
 
 ## Lifecycle → command
 
-0. Author → `duty create task <title>`, then `duty set <id> goal` / `set <id> scope`
-   from stdin and `duty gates add <id> <text>` — no editor needed.
+0. Author → `duty create task <title> --body` pipes the whole markdown body in one call,
+   or `duty set <id>` bulk-replaces `## ` sections from stdin afterward — no editor needed.
 1. Start → `duty get next` (the first actionable task), then `duty status <id> in-progress`.
 2. Blocked (missing input, failed dep, unmade decision) → `duty status <id> blocked`
    + pipe a report naming exactly what's missing (`duty report <id>`), then stop.

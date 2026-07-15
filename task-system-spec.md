@@ -152,6 +152,9 @@ Completed tasks (12) archived: [archive/](archive/).
 
 ## 5. Lifecycle (the worker's contract)
 
+0. **Author** → `duty create task <title> --body` pipes the whole markdown body
+   (the `## ` sections below the generated H1) in one shot; `duty set <id>` bulk-replaces
+   `## ` sections from stdin afterward. One command each, no editor — the agent write path.
 1. **Start** → `duty status <id> in-progress`.
 2. **Blocked** (missing input, failed dependency, a decision the task doesn't pre-make) →
    `duty status <id> blocked` + pipe a report naming *exactly* what's missing, then stop.
@@ -188,12 +191,12 @@ exits `0`. An id that resolves nowhere hints at the fix: `unknown task id "T-99"
 | Command | Behavior |
 |---|---|
 | `duty init [title]` | Bootstrap: create `duty/` in cwd with skeleton `BOARD.md` (H1 = title, default `Board`), `README.md`, `archive/`. Refuse if already inside a tree. |
-| `duty create task <title> [--slug S] [--blocked-by ID…] [--section NAME] [--in PATH]` | Create in the **current board** (or the `--in` board). Validate that every `--blocked-by` id exists (anywhere in the tree). Next NN scans the whole tree. Write the template file (frontmatter + section skeleton). Append the board row (`todo`) to the section's table — default `Open tasks`, section created if absent. Print the created path. |
+| `duty create task <title> [--slug S] [--blocked-by ID…] [--section NAME] [--in PATH] [--body]` | Create in the **current board** (or the `--in` board). Validate that every `--blocked-by` id exists (anywhere in the tree). Next NN scans the whole tree. Write the task file (frontmatter + generated H1 + body) and append the board row (`todo`) to the section's table — default `Open tasks`, section created if absent — under one lock. Body: the section skeleton by default, or with **`--body`** the entire markdown body (everything below the H1) read from stdin — `## ` sections verbatim, gates as `- [ ]` checkboxes under `## Gates`; `--body` refuses empty stdin and requires the body to open at a `## ` heading. Print the created path. |
 | `duty create track <name> [--title T] [--in PATH]` | Create track `<name>/` (validated `[a-z0-9-]+`) under the current board (or the `--in` board): skeleton `BOARD.md` (H1 = title, default: the name) + `archive/`. Append its bullet to the parent's `## Boards` section (created if absent). Refuse if the folder already exists. |
 | `duty status <id> <status> [--force]` | Rewrite the frontmatter `status:` line + the row's status cell. Reject unknown statuses. Setting `in-progress` on a task already `in-progress` is refused (`T-x is already in-progress — someone claimed it; use --force to take it over`) unless `--force` — the one guarded transition, so a live claim is never silently stolen; every other transition stays free (the flat setter of §3). |
 | `duty move <id> [--track PATH] [--section NAME]` | At least one flag. `--track` moves the task to another track: `PATH` is relative to the tree root (`.` = root board); rename the file into the target folder (same filename — ids don't encode tracks), drop the source row (prune), append to the target's `--section` (default `Open tasks`), status preserved. `--section` alone moves the row under `## <section>` within its own board (created if absent, inserted above the footer); prune any section left empty. |
 | `duty report <id>` | Append stdin under `## Report` (heading created once, content accumulates). Refuse empty stdin. |
-| `duty set <id> <section>` | Replace that section's body from stdin, line-surgically (heading line and every byte outside the section survive). Section name matches the `## <name>` heading case-insensitively; a missing section is created before `## Report` (or at end of file). Refuse empty stdin. |
+| `duty set <id> [section]` | With a `section` argument, replace that one section's body from stdin, line-surgically (heading line and every byte outside the section survive); the name matches the `## <name>` heading case-insensitively, a missing section is created before `## Report` (or at end of file). With **no argument**, stdin is one or more `## Section` blocks and each is replaced (created if missing) in payload order, all under one lock in one file write — the bulk form must open at a `## ` heading. Refuse empty stdin either way. |
 | `duty gates <id> [list]` | List the task's gates, 1-based (`1 [x] build passes`); `--agent` emits `index<TAB>done<TAB>text` TSV. `gates add <id> <text>` appends a `- [ ]` gate (creating `## Gates` if absent); `gates check <id> <n>` / `gates uncheck <id> <n>` flip the n-th checkbox surgically, erroring when `n` is out of range. |
 | `duty archive [--in PATH]` | For every open task with `status: done`, in the current board (or the `--in` board) and every board below it: `os.Rename` → its own board's `archive/`, drop its row, prune empty sections, rewrite that board's footer count. Idempotent; "nothing to archive" is a clean no-op. |
 | `duty delete task <id> [--force]` | Refuse on `done` without `--force` (that's `archive`'s job). Remove the file, drop the row, prune. |
@@ -213,6 +216,15 @@ otherwise the command fails with `unknown track "api/auth"` — the one validato
 shape `move --track` uses. Id-addressed commands (`status`, `report`, `move`, `delete
 task`) take no `--in`: an id already resolves tree-wide. `move`'s own `--track` (the move
 *destination*) is unchanged.
+
+**One-shot authoring (the agent write path).** An agent authors a whole task in a
+single call: `duty create task <title> --body` pipes the entire markdown body in at
+once, and `duty set <id>` (no section arg) bulk-replaces every `## Section` block piped
+to it — each under one lock, one write. The body is fed as **markdown, not JSON**: the
+body *is* markdown, so markdown-in splices byte-for-byte, whereas JSON-in would
+double-encode it (escaped newlines) and re-render on the way out — the same drift the
+line-surgical writers exist to avoid. JSON stays a read-side concern; the write path is
+verbatim markdown.
 
 **Agent output.** Reading commands accept `--agent` (long-only, no shorthand): stable,
 token-lean TSV — one record per line, tab-separated fields, no alignment padding, no
