@@ -70,7 +70,7 @@ type Model struct {
 	list             list.Model
 	focus            focusArea
 	showAge          bool
-	ageToggled       bool
+	showGates        bool
 	statusSort       bool
 	preview          viewport.Model
 	previewOpen      bool
@@ -108,6 +108,8 @@ func New(f fsys.FS, root string, cfg config.Config) (Model, error) {
 		path:       ".",
 		memory:     map[string]int{},
 		list:       newList(),
+		showAge:    true,
+		showGates:  true,
 		statusSort: true,
 		spring:     harmonica.NewSpring(harmonica.FPS(scrollFPS), scrollFreq, 1.0),
 		lastClick:  -1,
@@ -213,7 +215,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.help.Width = msg.Width
-		return m.resizeAge(msg.Width).layout(), nil
+		return m.resizeGates(msg.Width).layout(), nil
 	case refreshMsg:
 		if m.refresh == nil {
 			return m, scanCmd(m.fsys, m.root)
@@ -281,7 +283,6 @@ func (m Model) handleGlobalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return model, cmd, true
 	case key.Matches(msg, m.keys.Age):
 		m.showAge = !m.showAge
-		m.ageToggled = true
 		return m.reskinList().layout(), nil, true
 	case key.Matches(msg, m.keys.Sort):
 		m.statusSort = !m.statusSort
@@ -291,25 +292,22 @@ func (m Model) handleGlobalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	return m, nil, false
 }
 
-// resizeAge re-derives the age column's default visibility from the new width —
-// wide terminals show it, narrow ones hide it — unless the user has toggled it,
+// resizeGates re-derives the gate column's visibility from the new width — wide
+// terminals show it, narrow ones drop it so the always-on age column keeps room —
 // re-skinning the list delegate only when the visibility actually flips.
-func (m Model) resizeAge(w int) Model {
-	if m.ageToggled {
-		return m
-	}
-	if show := w >= ageDefaultCols; show != m.showAge {
-		m.showAge = show
+func (m Model) resizeGates(w int) Model {
+	if show := w >= narrowCols; show != m.showGates {
+		m.showGates = show
 		return m.reskinList()
 	}
 	return m
 }
 
-// reskinList swaps in a fresh list delegate reflecting the current age
+// reskinList swaps in a fresh list delegate reflecting the current age and gate
 // visibility, leaving items, selection, and any filter untouched.
 func (m Model) reskinList() Model {
 	b, _ := m.board()
-	m.list.SetDelegate(newDelegate(m.zones, b, m.showAge, time.Now()))
+	m.list.SetDelegate(newDelegate(m.zones, b, m.showAge, m.showGates, time.Now()))
 	return m
 }
 
@@ -548,7 +546,7 @@ func (m Model) selectNth(n int) Model {
 // snapshot; the returned command re-runs an active filter.
 func (m Model) rebuildList() (Model, tea.Cmd) {
 	b, ok := m.board()
-	m.list.SetDelegate(newDelegate(m.zones, b, m.showAge, time.Now()))
+	m.list.SetDelegate(newDelegate(m.zones, b, m.showAge, m.showGates, time.Now()))
 	if !ok {
 		return m, m.list.SetItems(nil)
 	}

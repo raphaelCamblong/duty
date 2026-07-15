@@ -8,6 +8,36 @@ import (
 	"time"
 )
 
+func TestGateColumnNarrowPriority(t *testing.T) {
+	root := tuiTree(t)
+	path := filepath.Join(root, "T-01-alpha-task.md")
+	content := strings.Replace(readText(t, path), "## Gates\n",
+		"## Gates\n\n- [x] built\n- [ ] tested\n", 1)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("wide terminal shows both the gate and age columns", func(t *testing.T) {
+		frame := newTUIModelSize(t, root, 120, 35).View()
+		if !strings.Contains(frame, "1/2") {
+			t.Errorf("120-col frame missing the gate column:\n%s", frame)
+		}
+		if !strings.Contains(frame, "just now") {
+			t.Errorf("120-col frame missing the age column:\n%s", frame)
+		}
+	})
+
+	t.Run("narrow terminal keeps age and drops the gate column", func(t *testing.T) {
+		frame := newTUIModelSize(t, root, 80, 24).View()
+		if !strings.Contains(frame, "just now") {
+			t.Errorf("80-col frame dropped the always-on age column:\n%s", frame)
+		}
+		if strings.Contains(frame, "1/2") {
+			t.Errorf("80-col frame still shows the gate column, want it hidden:\n%s", frame)
+		}
+	})
+}
+
 func TestScanCarriesMtime(t *testing.T) {
 	root := tuiTree(t)
 	path := filepath.Join(root, "T-01-alpha-task.md")
@@ -57,17 +87,17 @@ func TestAgeColumnToggle(t *testing.T) {
 		}
 	})
 
-	t.Run("narrow terminal hides it by default, t still turns it on", func(t *testing.T) {
+	t.Run("narrow terminal still shows it by default, t toggles it off", func(t *testing.T) {
 		m := newTUIModelSize(t, root, 70, 20)
-		if m.ShowAge() {
-			t.Fatal("age column shown by default at 70 cols, want hidden")
+		if !m.ShowAge() {
+			t.Fatal("age column hidden by default at 70 cols, want shown (always-on)")
 		}
-		if frame := m.View(); strings.Contains(frame, "just now") {
-			t.Errorf("70-col frame shows the age column by default:\n%s", frame)
+		if frame := m.View(); !strings.Contains(frame, "just now") {
+			t.Errorf("70-col frame missing the always-on age column:\n%s", frame)
 		}
 		m, _ = press(t, m, "t")
-		if !m.ShowAge() {
-			t.Error("t did not turn the age column on below 100 cols")
+		if m.ShowAge() {
+			t.Error("t did not turn the age column off below 100 cols")
 		}
 	})
 }

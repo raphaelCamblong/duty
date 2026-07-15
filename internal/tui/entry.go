@@ -108,27 +108,30 @@ func statusRank(status string) int {
 // per-status rollup, tasks with status/gates/drift columns, section names
 // dim; selectable lines are wrapped in BubbleZone hit-zones.
 type compactDelegate struct {
-	zones   *zone.Manager
-	nameW   int
-	countW  int
-	idW     int
-	driftW  int
-	ageW    int
-	showAge bool
-	now     time.Time
+	zones     *zone.Manager
+	nameW     int
+	countW    int
+	idW       int
+	driftW    int
+	ageW      int
+	showAge   bool
+	showGates bool
+	now       time.Time
 }
 
-// newDelegate sizes a compact delegate's columns for one board; showAge and now
-// govern the trailing relative-age column, whose width is measured here.
-func newDelegate(z *zone.Manager, b Board, showAge bool, now time.Time) compactDelegate {
+// newDelegate sizes a compact delegate's columns for one board; showAge governs
+// the always-on relative-age column (whose width is measured here) and showGates
+// the gate column that a narrow terminal drops.
+func newDelegate(z *zone.Manager, b Board, showAge, showGates bool, now time.Time) compactDelegate {
 	d := compactDelegate{
-		zones:   z,
-		nameW:   maxSubNameWidth(b.Subs),
-		countW:  maxSubCountWidth(b.Subs),
-		idW:     maxIDWidth(b.Sections),
-		driftW:  maxDriftWidth(b.Sections),
-		showAge: showAge,
-		now:     now,
+		zones:     z,
+		nameW:     maxSubNameWidth(b.Subs),
+		countW:    maxSubCountWidth(b.Subs),
+		idW:       maxIDWidth(b.Sections),
+		driftW:    maxDriftWidth(b.Sections),
+		showAge:   showAge,
+		showGates: showGates,
+		now:       now,
 	}
 	if showAge {
 		d.ageW = maxAgeWidth(b.Sections, now)
@@ -204,41 +207,48 @@ func (d compactDelegate) trackLine(s Sub, selected bool, w int, nameM, titleM []
 	rightW := trackRightWidth(d.countW)
 	fixed := 2 + d.nameW + 2 + 2 + rightW
 	line := cursorMark(selected) +
-		pad(styleMatches(s.Name, nameM, accentStyle), d.nameW) + "  " +
-		pad(styleMatches(s.Title, titleM, titleStyle(selected)), max(w-fixed, minTitleWidth)) + "  " +
+		pad(styleMatches(s.Name, nameM, boldWhen(accentStyle, selected)), d.nameW) + "  " +
+		pad(styleMatches(s.Title, titleM, boldWhen(lipgloss.NewStyle(), selected)), max(w-fixed, minTitleWidth)) + "  " +
 		trackBarCell(s.Counts, d.countW)
 	return ansi.Truncate(line, w, "…")
 }
 
-// titleStyle is the entry title's style: bold when the row is selected, plain
-// otherwise.
-func titleStyle(selected bool) lipgloss.Style {
+// boldWhen adds bold to base when the row is selected, so the whole focused line
+// reads bold — the chevron alone is thin feedback.
+func boldWhen(base lipgloss.Style, selected bool) lipgloss.Style {
 	if selected {
-		return selStyle
+		return base.Bold(true)
 	}
-	return lipgloss.NewStyle()
+	return base
 }
 
 // taskLine renders one task: id, title, colored status, gate progress, drift
-// badge. The board's widest badge yields title room so badges stay aligned.
+// badge. The board's widest badge yields title room so badges stay aligned; a
+// narrow terminal drops the gate column so the always-on age column keeps room.
 func (d compactDelegate) taskLine(r Row, selected bool, w int, idM, titleM []int) string {
-	fixed := 2 + d.idW + 2 + 2 + statusColWidth + 2 + gatesColWidth
+	fixed := 2 + d.idW + 2 + 2 + statusColWidth
+	if d.showGates {
+		fixed += 2 + gatesColWidth
+	}
 	if d.showAge {
 		fixed += 2 + d.ageW
 	}
 	if d.driftW > 0 {
 		fixed += 2 + d.driftW
 	}
+	dim := boldWhen(dimStyle, selected)
 	line := cursorMark(selected) +
-		pad(styleMatches(r.ID, idM, accentStyle), d.idW) + "  " +
-		pad(styleMatches(r.Title, titleM, titleStyle(selected)), max(w-fixed, minTitleWidth)) + "  " +
-		statusStyle(r.Status).Render(pad(r.Status, statusColWidth)) + "  " +
-		dimStyle.Render(pad(gatesCell(r), gatesColWidth))
+		pad(styleMatches(r.ID, idM, boldWhen(accentStyle, selected)), d.idW) + "  " +
+		pad(styleMatches(r.Title, titleM, boldWhen(lipgloss.NewStyle(), selected)), max(w-fixed, minTitleWidth)) + "  " +
+		boldWhen(statusStyle(r.Status), selected).Render(pad(r.Status, statusColWidth))
+	if d.showGates {
+		line += "  " + dim.Render(pad(gatesCell(r), gatesColWidth))
+	}
 	if d.showAge {
-		line += "  " + dimStyle.Render(pad(ageCell(r, d.now), d.ageW))
+		line += "  " + dim.Render(pad(ageCell(r, d.now), d.ageW))
 	}
 	if r.Drift != "" {
-		line += "  " + driftStyle.Render(pad("⚠ "+r.Drift, d.driftW))
+		line += "  " + boldWhen(driftStyle, selected).Render(pad("⚠ "+r.Drift, d.driftW))
 	}
 	return ansi.Truncate(line, w, "…")
 }

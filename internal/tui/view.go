@@ -27,9 +27,10 @@ const (
 	minBarWidth = 8
 	// trackBarWidth is the fixed cell width of a track row's inline state bar.
 	trackBarWidth = 14
-	// ageDefaultCols is the terminal width at or above which the relative-age
-	// column shows by default; narrower terminals hide it until toggled.
-	ageDefaultCols = 100
+	// narrowCols is the terminal width below which the list drops the gate
+	// column, keeping the always-on age column room; the preview header keeps
+	// both regardless.
+	narrowCols = 100
 )
 
 // rollupOrder is the status sequence for track rollups and summaries: active
@@ -48,33 +49,37 @@ const (
 // crumbZone is the stable zone name of the breadcrumb segment for board path.
 func crumbZone(path string) string { return crumbZonePrefix + path }
 
-// The duty palette (§8): cream #e1ebaf, peach #e1af7d, bronze #af874b, indigo
-// #1e0f37, olive #9baf37. On dark terminals each status hue reads directly as
-// foreground. On light terminals those hues are too pale for ink (fg contrast on
-// white: cream 1.2, peach 1.9, olive 2.3 to 1), so a status word becomes a chip —
-// the raw hue as background under indigo (14 / 10 / 7 to 1) — while bars fill with
-// the raw hue. blocked keeps a plain red: the palette carries no alarm color, and
-// blocked must alarm (white on red).
+// The duty palette (§8): peach #e1af7d, bronze #af874b, olive #9baf37 fill the
+// distribution bars on both themes and, on dark terminals, ink the status words
+// directly. On light terminals those hues are too pale for ink (peach 1.9, olive
+// 2.3 to 1 on white), so each word shifts to a flat AA-readable tone measured on
+// white: in-progress blue #3a6ea5 (5.3:1), todo amber #8a6d00 (4.9:1), done olive
+// #6f7d27 (4.5:1), accent navy #1f3a5f (11.5:1). blocked stays red on both — the
+// palette carries no alarm color.
 var (
-	// colAccent tints focused borders, the breadcrumb, the selection, and the
-	// header title: cream on dark, indigo ink on light.
-	colAccent = lipgloss.AdaptiveColor{Light: "#1e0f37", Dark: "#e1ebaf"}
-	// colDim tints chrome — separators, ages, hints, blurred borders — in the
-	// terminal's own grays, untouched by the palette.
-	colDim = lipgloss.AdaptiveColor{Light: "245", Dark: "243"}
-	// colInk is indigo, the light-theme chip ink.
-	colInk = lipgloss.Color("#1e0f37")
-	// colChipText is white, the blocked chip's ink over its alarm red.
-	colChipText = lipgloss.Color("#ffffff")
-	// colPeach tints in-progress, raw on both themes.
+	// colAccent inks focused borders, the breadcrumb, the selection, ids, and
+	// the header title: cream on dark, navy on light (11.5:1 on white).
+	colAccent = lipgloss.AdaptiveColor{Light: "#1f3a5f", Dark: "#e1ebaf"}
+	// colDim inks chrome — separators, ages, hints, blurred borders — a medium
+	// grey the palette leaves alone (242 = 5.3:1 on white, terminal grey on dark).
+	colDim = lipgloss.AdaptiveColor{Light: "242", Dark: "243"}
+	// colPeach fills in-progress distribution bars on both themes.
 	colPeach = lipgloss.Color("#e1af7d")
-	// colOlive tints done, raw on both themes.
+	// colBronze fills todo distribution bars on both themes.
+	colBronze = lipgloss.Color("#af874b")
+	// colOlive fills done distribution bars on both themes.
 	colOlive = lipgloss.Color("#9baf37")
-	// colTodo tints todo: bronze on dark (reads as ink), cream on light (a chip
-	// background — cream is too pale to ink).
-	colTodo = lipgloss.AdaptiveColor{Light: "#e1ebaf", Dark: "#af874b"}
-	// colRed tints blocked, plus scan errors and drift.
+	// colRed inks blocked on both themes, plus scan errors and drift.
 	colRed = lipgloss.AdaptiveColor{Light: "160", Dark: "203"}
+	// colInProgressInk inks the in-progress word: raw peach on dark, medium blue
+	// on light (5.3:1 on white).
+	colInProgressInk = lipgloss.AdaptiveColor{Light: "#3a6ea5", Dark: "#e1af7d"}
+	// colTodoInk inks the todo word: raw bronze on dark, dark amber on light
+	// (4.9:1 on white).
+	colTodoInk = lipgloss.AdaptiveColor{Light: "#8a6d00", Dark: "#af874b"}
+	// colDoneInk inks the done word: raw olive on dark, dark olive on light
+	// (4.5:1 on white).
+	colDoneInk = lipgloss.AdaptiveColor{Light: "#6f7d27", Dark: "#9baf37"}
 
 	headerBox    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colAccent).Padding(0, 1)
 	focusedBox   = headerBox
@@ -88,30 +93,32 @@ var (
 	driftStyle   = lipgloss.NewStyle().Foreground(colRed)
 )
 
-// statusStyle styles a status word. On dark terminals the word carries its
-// palette hue as foreground; on light terminals the hues are too pale for ink,
-// so the word becomes a chip — the raw hue as background under indigo, padded a
-// space each side — with blocked a white-on-red alarm.
+// statusStyle inks a status word as flat colored text: on dark each word keeps
+// its raw palette hue, on light it shifts to an AA-readable tone measured on
+// white — in-progress blue, todo amber, done olive; blocked is red, unknown dim.
 func statusStyle(status string) lipgloss.Style {
-	if lipgloss.HasDarkBackground() {
-		return lipgloss.NewStyle().Foreground(statusColor(status))
+	switch status {
+	case task.StatusInProgress:
+		return lipgloss.NewStyle().Foreground(colInProgressInk)
+	case task.StatusTodo:
+		return lipgloss.NewStyle().Foreground(colTodoInk)
+	case task.StatusBlocked:
+		return lipgloss.NewStyle().Foreground(colRed)
+	case task.StatusDone:
+		return lipgloss.NewStyle().Foreground(colDoneInk)
 	}
-	ink := colInk
-	if status == task.StatusBlocked {
-		ink = colChipText
-	}
-	return lipgloss.NewStyle().Background(statusColor(status)).Foreground(ink).Padding(0, 1)
+	return lipgloss.NewStyle().Foreground(colDim)
 }
 
 // statusColor is a status's raw palette hue — the fill for its distribution-bar
-// segments and, on light, its chip background: in-progress peach, todo bronze on
-// dark and cream on light, blocked red, done olive; an unknown status stays dim.
+// segments on both themes: in-progress peach, todo bronze, blocked red, done
+// olive; an unknown status stays dim.
 func statusColor(status string) lipgloss.TerminalColor {
 	switch status {
 	case task.StatusInProgress:
 		return colPeach
 	case task.StatusTodo:
-		return colTodo
+		return colBronze
 	case task.StatusBlocked:
 		return colRed
 	case task.StatusDone:
@@ -317,8 +324,9 @@ func (m Model) headerAge(r Row) string {
 }
 
 // taskHeader joins a task's identity into the preview's pinned line: id ·
-// status · gates n/m · track title · age, with blocked-by ids and any drift
-// badge trailing dim. age is "" when the age column is hidden.
+// status · gates n/m · track title, then blocked-by ids, any drift badge, and
+// the relative age trailing dim. age trails last so a narrow header truncates
+// it before the blocked-by link; age is "" when the age column is hidden.
 func taskHeader(r Row, track, age string) string {
 	parts := []string{accentStyle.Render(r.ID), statusStyle(r.Status).Render(r.Status)}
 	if g := gatesCell(r); g != "" {
@@ -327,15 +335,15 @@ func taskHeader(r Row, track, age string) string {
 	if track != "" {
 		parts = append(parts, dimStyle.Render(track))
 	}
-	if age != "" {
-		parts = append(parts, dimStyle.Render(age))
-	}
 	line := strings.Join(parts, dimStyle.Render(" · "))
 	if len(r.BlockedBy) > 0 {
 		line += "  " + dimStyle.Render("blocked-by "+strings.Join(r.BlockedBy, ", "))
 	}
 	if r.Drift != "" {
 		line += "  " + driftStyle.Render("⚠ "+r.Drift)
+	}
+	if age != "" {
+		line += "  " + dimStyle.Render(age)
 	}
 	return line
 }
