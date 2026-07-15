@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
+    "prebuild": "cp ../internal/app/skill.md public/skill.md",
     "build": "astro build",
     "preview": "wrangler dev",
     "astro": "astro",

@@ -1,7 +1,7 @@
 ---
 id: T-46
 title: "duty skill: install the agent skill"
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -59,15 +59,73 @@ auto-install during `duty init` (maybe later); skill versioning/update logic
 beyond `--force`.
 
 ## Gates
-- [ ] `duty skill install claude|gemini|codex` each write their file
+- [x] `duty skill install claude|gemini|codex` each write their file
   correctly (tests); TTY selector appears only when interactive; `--force`
   and `--user` behave; second run without `--force` refuses.
-- [ ] Fetch path: a test server serves a marker skill → installed content is
+- [x] Fetch path: a test server serves a marker skill → installed content is
   the remote one; server down → embedded fallback, still exit 0; `--offline`
   never dials.
-- [ ] Skill text ≤ ~80 lines, leads with the 4-call loop, tells agents to use
+- [x] Skill text ≤ ~80 lines, leads with the 4-call loop, tells agents to use
   `--help` for parameters, and never enumerates flags (report includes the
   rendered text for review).
-- [ ] One canonical skill file (grep: embedded source + docs-site copy step,
+- [x] One canonical skill file (grep: embedded source + docs-site copy step,
   no third copy); https://duty-cli.xyz/skill.md serves it after deploy.
-- [ ] `just check` green; docs updated.
+- [x] `just check` green; docs updated.
+
+## Report
+
+Implemented `duty skill` (print) and `duty skill install [claude|codex|gemini]`
+with a remote-first, embedded-fallback skill and an interactive harness picker.
+
+Files changed / added:
+- internal/fetch/fetch.go — NEW network port: Fetcher interface + HTTP adapter
+  (short timeout, non-200 = error). Mirrors the fsys port; app depends on the
+  interface, cli constructs the adapter. Keeps net/http out of app/cli.
+- internal/app/skill.md — NEW canonical skill text (go:embed fallback), 54 lines.
+- internal/app/skill.go — NEW app.Skill (remote-first, silent fallback, offline
+  skips dial) + app.InstallSkill (per-target writers via fsys) + Target/ParseTarget
+  + pure helpers (frontmatter strip, marker block merge/replace).
+- internal/names/names.go — added ClaudeDir, SkillsDir, SkillFile, SkillName,
+  AgentsFile, GeminiFile (no filename literals outside names).
+- internal/cli/skill.go — NEW cobra skill cmd + install subcommand; huh selector
+  only on a TTY with no target arg; TTY detected via golang.org/x/term on the
+  command's *os.File in/out (never in tests). --user/--force/--offline flags.
+- internal/cli/cli.go — wired fetch.HTTP{} + os.UserHomeDir() into addCommands,
+  registered skill under the Interface group.
+- docs/cli.md — skill section under Interface + cheat-sheet row.
+- docs-site getting-started.mdx — `duty skill install claude` is now step one of
+  the agent section.
+- docs-site/package.json — one-line `prebuild` copies internal/app/skill.md to
+  public/skill.md; docs-site/.gitignore ignores that generated copy.
+- tests/cli_skill_test.go — NEW black-box tests for every gate.
+
+Per-target install:
+- claude → .claude/skills/duty/SKILL.md (verbatim, frontmatter and all; --user
+  writes under $HOME).
+- codex → AGENTS.md, gemini → GEMINI.md: frontmatter stripped, body wrapped in
+  <!-- duty:skill start/end --> markers; --force replaces exactly one block and
+  preserves surrounding hand-written content; refuses without --force.
+
+Gate output — `just check`:
+  gofumpt: clean · go vet: clean · golangci-lint: 0 issues
+  go test ./tests/... : ok, coverage 87.2% of ./internal/...
+
+Verification against the real binary (fresh go build -o bin/duty):
+- All three targets install correctly; refuse-without-force, --force, --user,
+  unknown-target, and no-target-non-tty all behave.
+- Fetch: httptest server → remote wins; server down / 404 → embedded, no error;
+  --offline records zero dials (recordingFetcher).
+- Docs deployed: `npm run build` (prebuild cp runs) + `npx wrangler deploy`.
+  https://duty-cli.xyz/skill.md → 200 text/markdown, byte-identical to
+  internal/app/skill.md. `duty skill` (live, no --offline) matches the served
+  file — full remote path confirmed end-to-end.
+
+Skill text: 54 lines, leads with the four-call loop, points agents at
+`duty --help` / `duty <command> --help`, enumerates no flags. Carries a
+`<!-- duty skill v1 -->` version line for future skew warnings (no acting logic,
+per out-of-scope).
+
+Deviations: install is quiet on success (no path printed) to honour the "quiet
+on success" rule for mutators, unlike `create task` which prints its path.
+Follow-ups deliberately left: no cursor/copilot installers, no auto-install in
+`duty init`, no version-skew acting logic — all explicitly out of scope.

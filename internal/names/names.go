@@ -21,3 +21,21 @@ const TreeDir = "duty"
 // LockFile is the tree-wide advisory write lock at the root; it is created on
 // demand, gitignored, and never committed.
 const LockFile = ".duty.lock"
+
+// ClaudeDir is the Claude Code config directory that holds installed skills.
+const ClaudeDir = ".claude"
+
+// SkillsDir is the subdirectory of ClaudeDir that Claude Code loads skills from.
+const SkillsDir = "skills"
+
+// SkillFile is the entry file of a Claude Code skill directory.
+const SkillFile = "SKILL.md"
+
+// SkillName is the installed skill's name: its directory and frontmatter name.
+const SkillName = "duty"
+
+// AgentsFile is the Codex instructions file at a repo root.
+const AgentsFile = "AGENTS.md"
+
+// GeminiFile is the Gemini instructions file at a repo root.
+const GeminiFile = "GEMINI.md"

@@ -46,21 +46,28 @@ each track keeps the order. Everything is yours to grep, diff, and commit.
 ## The agent loop
 
 duty was built to be driven by AI agents: commands are quiet, exit codes mean
-things, and `--agent` turns any read into clean TSV. An agent's whole loop is
-four calls:
+things, and `--agent` turns any read into clean TSV. Step one is to install the
+skill so your agent knows the rules:
+
+```sh
+duty skill install claude    # or: codex, gemini — run bare to pick interactively
+```
+
+That drops a short, token-lean brief where the harness loads it
+(`.claude/skills/duty/SKILL.md` for Claude Code, a block in `AGENTS.md` or
+`GEMINI.md` for the others). From there an agent's whole loop is four calls:
 
 ```sh
 duty get next --claim        # take the next actionable task
 # ...work...
-duty gates check --all       # tick the gates that pass
-duty report --status done    # report and flip status in one write
+duty gates check T-01 --all  # tick the gates that pass
+duty report T-01 --status done  # report and flip status in one write
 ```
 
 Each recurring step is one atomic write, so running a swarm just works —
 `get next --claim` hands each agent a distinct task under a tree-wide lock, and
-their writes never collide. Hand your agent [the convention](/convention/) and
-it knows the rules. Keep `duty tui` open and you see its progress the moment it
-moves.
+their writes never collide. Keep `duty tui` open and you see its progress the
+moment it moves.
 
 ## Read more
 

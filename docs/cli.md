@@ -254,6 +254,31 @@ change. See [TUI](/tui/).
 duty tui
 ```
 
+### skill
+
+`duty skill` — Print the duty agent skill to stdout: a short, token-lean brief
+that teaches an agent the four-call loop and the working rules. `duty skill
+install <harness>` writes it where a harness will load it:
+
+- `claude` → `.claude/skills/duty/SKILL.md` (a Claude Code skill, frontmatter
+  and all). `--user` installs it in your home directory instead of this repo.
+- `codex` → a marker-delimited block in `AGENTS.md` at the current directory.
+- `gemini` → the same block in `GEMINI.md`.
+
+Run `duty skill install` with no harness on a terminal and it prompts you to
+pick one. Both `skill` and `skill install` fetch the latest text from
+`https://duty-cli.xyz/skill.md` and fall back silently to the copy baked into
+the binary, so the skill can improve without a new release.
+
+```sh title="Install the skill for Claude Code"
+duty skill install claude
+```
+
+Flags:
+- `--user` — install for `claude` in your home directory, not this repo.
+- `--force` — replace an existing install (refused otherwise).
+- `--offline` — skip the network fetch and use the embedded copy.
+
 ## Board context (`--in`)
 
 `create task`, `create track`, `get tasks`, `get tracks`, `get next`, and
@@ -291,3 +316,4 @@ keep working. Mutating commands stay quiet either way.
 | `duty get tracks` | per-board counts |
 | `duty get next` | first actionable task; `--claim` takes it |
 | `duty tui` | live board viewer |
+| `duty skill` | print the agent skill; `install <harness>` writes it |

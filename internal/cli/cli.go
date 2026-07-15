@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/raphaelCamblong/duty/internal/app"
+	"github.com/raphaelCamblong/duty/internal/fetch"
 	"github.com/raphaelCamblong/duty/internal/fsys"
 )
 
@@ -157,6 +158,7 @@ func dispatchOnly(cmd *cobra.Command, missing error) {
 func addCommands(root *cobra.Command, cwd string, stdin io.Reader, stdout io.Writer) {
 	var f fsys.FS = fsys.OS{}
 	a := app.New(f)
+	home, _ := os.UserHomeDir()
 	root.SetCompletionCommandGroupID(groupInterface)
 	root.AddGroup(
 		&cobra.Group{ID: groupAuthor, Title: "Author Commands:"},
@@ -177,6 +179,7 @@ func addCommands(root *cobra.Command, cwd string, stdin io.Reader, stdout io.Wri
 		grouped(newArchiveCmd(a, cwd), groupWork),
 		grouped(newDeleteCmd(a, cwd), groupWork),
 		grouped(newTUICmd(f, cwd), groupInterface),
+		grouped(newSkillCmd(a, fetch.HTTP{}, cwd, home, stdout), groupInterface),
 	)
 }
 

@@ -2,6 +2,8 @@
 dist/
 # generated types
 .astro/
+# canonical skill copied from the Go tree by the prebuild step
+public/skill.md
 
 # dependencies
 node_modules/

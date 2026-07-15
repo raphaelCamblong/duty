@@ -13,6 +13,6 @@ Order top-to-bottom is the intended build order.
 | [T-19](T-19-kubectl-style-cli-grammar.md) | kubectl-style CLI grammar | done |
 | [T-20](T-20-agent-reads-get-task-tracks-next.md) | Agent reads: get task, tracks, next | done |
 | [T-21](T-21-cli-help-groups-examples-completion.md) | CLI help groups, examples, completion | done |
-| [T-46](T-46-duty-skill-install-the-agent-skill.md) | duty skill: install the agent skill | todo |
+| [T-46](T-46-duty-skill-install-the-agent-skill.md) | duty skill: install the agent skill | done |
 
 Completed tasks (0) archived: [archive/](archive/).
