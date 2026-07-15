@@ -1,0 +1,19 @@
+---
+import { getEntry, render } from 'astro:content';
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+
+const entry = await getEntry('topics', 'internals');
+if (!entry) throw new Error('docs/internals.md not found');
+const { Content, headings } = await render(entry);
+---
+
+<StarlightPage frontmatter={{ title: 'Internals' }} headings={headings}>
+	<Content />
+</StarlightPage>
+
+<style is:global>
+	/* The sourced file carries its own H1; Starlight already renders the title. */
+	.sl-markdown-content > h1:first-child {
+		display: none;
+	}
+</style>

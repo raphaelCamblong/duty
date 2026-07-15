@@ -1,9 +1,10 @@
 # duty
 
 File-based task system: markdown task files + nested board indexes + one Go binary
-(CLI + TUI). **`docs/spec.md` is the source of truth for behavior** — read it
-before writing any code. This file governs how the code is written. On conflict: the
-spec wins on behavior, this file wins on style and structure.
+(CLI + TUI). **The docs under `docs/` are the source of truth for behavior** — read
+`tasks.md`, `tracks.md`, `cli.md`, `config.md`, `tui.md`, and `internals.md` before
+writing any code. This file governs how the code is written. On conflict: the docs
+win on behavior, this file wins on style and structure.
 
 ## Build & test
 
@@ -96,5 +97,5 @@ layer — it goes through the port.
 
 - The spec is the full scope. Build each piece **complete** — no v1/v2/v3 passes, no
   `TODO` stubs, no placeholder implementations. A task is done when its gates pass.
-- Deviations from the spec are spec bugs: fix `docs/spec.md` in the same change,
-  don't silently diverge.
+- Deviations from the docs are doc bugs: fix the relevant file under `docs/` in the
+  same change, don't silently diverge.

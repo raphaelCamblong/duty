@@ -4,7 +4,7 @@ import starlight from '@astrojs/starlight';
 
 // https://astro.build/config
 export default defineConfig({
-	site: 'https://duty-docs.raph-camblong.workers.dev',
+	site: 'https://duty.raph-camblong.workers.dev',
 	integrations: [
 		starlight({
 			title: 'duty',
@@ -21,9 +21,30 @@ export default defineConfig({
         './src/styles/custom.css',
       ],
 			sidebar: [
-				{ label: 'Getting started', link: '/getting-started/' },
-				{ label: 'The task convention', link: '/convention/' },
-				{ label: 'The full spec', link: '/spec/' },
+				{
+					label: 'Start',
+					items: [
+						{ label: 'Overview', link: '/' },
+						{ label: 'Getting started', link: '/getting-started/' },
+					],
+				},
+				{
+					label: 'Guide',
+					items: [
+						{ label: 'Tasks', link: '/tasks/' },
+						{ label: 'Tracks & boards', link: '/tracks/' },
+						{ label: 'CLI', link: '/cli/' },
+						{ label: 'Config', link: '/config/' },
+						{ label: 'TUI', link: '/tui/' },
+					],
+				},
+				{
+					label: 'Reference',
+					items: [
+						{ label: 'Internals', link: '/internals/' },
+						{ label: 'Convention', link: '/convention/' },
+					],
+				},
 			],
 		}),
 	],

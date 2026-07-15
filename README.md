@@ -24,7 +24,7 @@ go install github.com/raphaelCamblong/duty/cmd/duty@latest
 
 Prebuilt binaries live on the [releases page](https://github.com/raphaelCamblong/duty/releases).
 
-Docs: the same pages, nicely rendered — [duty-docs.raph-camblong.workers.dev](https://duty-docs.raph-camblong.workers.dev).
+Docs: the same pages, nicely rendered — [duty.raph-camblong.workers.dev](https://duty.raph-camblong.workers.dev).
 
 ## Use it
 
@@ -50,9 +50,8 @@ tree-wide lock, and their writes never collide. Hand it
 [duty/README.md](duty/README.md) and it knows the rules — and since the TUI
 watches the files, you see its progress the moment it moves.
 
-Want more? The full behavior spec is in
-[docs/spec.md](docs/spec.md), and [CLAUDE.md](CLAUDE.md) covers
-hacking on the code.
+Want more? The docs under [docs/](docs/) cover tasks, tracks, the CLI, config, and
+the TUI in depth, and [CLAUDE.md](CLAUDE.md) covers hacking on the code.
 
 ## Hacking on it
 

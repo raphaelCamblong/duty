@@ -2,12 +2,12 @@
 import { getEntry, render } from 'astro:content';
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 
-const entry = await getEntry('spec', 'spec');
-if (!entry) throw new Error('docs/spec.md not found');
+const entry = await getEntry('topics', 'tui');
+if (!entry) throw new Error('docs/tui.md not found');
 const { Content, headings } = await render(entry);
 ---
 
-<StarlightPage frontmatter={{ title: 'The full spec' }} headings={headings}>
+<StarlightPage frontmatter={{ title: 'TUI' }} headings={headings}>
 	<Content />
 </StarlightPage>
 

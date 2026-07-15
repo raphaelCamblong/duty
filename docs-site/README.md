@@ -3,7 +3,7 @@
 The duty docs site — Astro Starlight, served as Cloudflare Workers static
 assets (`wrangler.jsonc`, no Worker code).
 
-The spec and the task convention are sourced live from `../docs/spec.md` and
+The topic pages and the task convention are sourced live from `../docs/*.md` and
 `../duty/README.md` at build time via glob loaders — no copies, no symlinks.
 Only the landing page and the getting-started page live here, in
 `src/content/docs/`.
