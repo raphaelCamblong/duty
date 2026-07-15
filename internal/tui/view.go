@@ -49,10 +49,12 @@ const (
 func crumbZone(path string) string { return crumbZonePrefix + path }
 
 // The duty palette (§8): cream #e1ebaf, peach #e1af7d, bronze #af874b, indigo
-// #1e0f37, olive #9baf37 — mapped to accent and status below. The palette skews
-// dark, so each AdaptiveColor's Light counterpart is a hand-darkened variant
-// (indigo is the light-theme ink) that stays legible on a pale terminal. blocked
-// keeps a plain red: the palette carries no alarm color, and blocked must alarm.
+// #1e0f37, olive #9baf37. On dark terminals each status hue reads directly as
+// foreground. On light terminals those hues are too pale for ink (fg contrast on
+// white: cream 1.2, peach 1.9, olive 2.3 to 1), so a status word becomes a chip —
+// the raw hue as background under indigo (14 / 10 / 7 to 1) — while bars fill with
+// the raw hue. blocked keeps a plain red: the palette carries no alarm color, and
+// blocked must alarm (white on red).
 var (
 	// colAccent tints focused borders, the breadcrumb, the selection, and the
 	// header title: cream on dark, indigo ink on light.
@@ -60,12 +62,17 @@ var (
 	// colDim tints chrome — separators, ages, hints, blurred borders — in the
 	// terminal's own grays, untouched by the palette.
 	colDim = lipgloss.AdaptiveColor{Light: "245", Dark: "243"}
-	// colPeach tints in-progress.
-	colPeach = lipgloss.AdaptiveColor{Light: "#a5652f", Dark: "#e1af7d"}
-	// colBronze tints todo, the palette's quiet earthy tone.
-	colBronze = lipgloss.AdaptiveColor{Light: "#8a6a38", Dark: "#af874b"}
-	// colOlive tints done.
-	colOlive = lipgloss.AdaptiveColor{Light: "#6f7d27", Dark: "#9baf37"}
+	// colInk is indigo, the light-theme chip ink.
+	colInk = lipgloss.Color("#1e0f37")
+	// colChipText is white, the blocked chip's ink over its alarm red.
+	colChipText = lipgloss.Color("#ffffff")
+	// colPeach tints in-progress, raw on both themes.
+	colPeach = lipgloss.Color("#e1af7d")
+	// colOlive tints done, raw on both themes.
+	colOlive = lipgloss.Color("#9baf37")
+	// colTodo tints todo: bronze on dark (reads as ink), cream on light (a chip
+	// background — cream is too pale to ink).
+	colTodo = lipgloss.AdaptiveColor{Light: "#e1ebaf", Dark: "#af874b"}
 	// colRed tints blocked, plus scan errors and drift.
 	colRed = lipgloss.AdaptiveColor{Light: "160", Dark: "203"}
 
@@ -81,21 +88,30 @@ var (
 	driftStyle   = lipgloss.NewStyle().Foreground(colRed)
 )
 
-// statusStyle maps a task status to a foreground style in its color — todo
-// bronze, in-progress peach, blocked red, done olive — the palette statusColor
-// owns.
+// statusStyle styles a status word. On dark terminals the word carries its
+// palette hue as foreground; on light terminals the hues are too pale for ink,
+// so the word becomes a chip — the raw hue as background under indigo, padded a
+// space each side — with blocked a white-on-red alarm.
 func statusStyle(status string) lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(statusColor(status))
+	if lipgloss.HasDarkBackground() {
+		return lipgloss.NewStyle().Foreground(statusColor(status))
+	}
+	ink := colInk
+	if status == task.StatusBlocked {
+		ink = colChipText
+	}
+	return lipgloss.NewStyle().Background(statusColor(status)).Foreground(ink).Padding(0, 1)
 }
 
-// statusColor is the fill for a status's segment of a distribution bar,
-// matching statusStyle's foregrounds; an unknown status stays dim.
+// statusColor is a status's raw palette hue — the fill for its distribution-bar
+// segments and, on light, its chip background: in-progress peach, todo bronze on
+// dark and cream on light, blocked red, done olive; an unknown status stays dim.
 func statusColor(status string) lipgloss.TerminalColor {
 	switch status {
 	case task.StatusInProgress:
 		return colPeach
 	case task.StatusTodo:
-		return colBronze
+		return colTodo
 	case task.StatusBlocked:
 		return colRed
 	case task.StatusDone:
@@ -496,7 +512,7 @@ func trackBar(counts map[string]int, width int) string {
 	var b strings.Builder
 	for _, st := range rollupOrder {
 		if c := cells[st]; c > 0 {
-			b.WriteString(statusStyle(st).Render(strings.Repeat("█", c)))
+			b.WriteString(lipgloss.NewStyle().Foreground(statusColor(st)).Render(strings.Repeat("█", c)))
 		}
 	}
 	return b.String()

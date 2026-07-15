@@ -296,7 +296,11 @@ selection change:
   per-status rollup lives in the track's preview card. Then tasks under their section headers, one line
   each: id, title, colored status in the duty palette (`todo` bronze, `in-progress`
   peach, `done` olive, and `blocked` a deliberate red — the palette carries no alarm
-  color; accents are cream on dark / indigo on light), gate progress `2/3`, a dim
+  color). On dark terminals the status word carries its hue as foreground; on light
+  the hues are too pale for ink (contrast on white ≈ 1–2:1), so the word becomes a
+  **chip** — the raw hue as background under indigo ink, `todo` shifting to cream for
+  a readable chip, `blocked` a white-on-red alarm — while bars fill with the raw hue.
+  Accents are cream on dark / indigo on light. Gate progress `2/3`, a dim
   relative-age column right of the gates
   (`6m ago` / `2h ago`, the absolute date past a week — §humanize), drift badge if any.
   The age column is toggled by `t` and shows by default at ≥100 columns, hidden below
