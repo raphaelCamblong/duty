@@ -13,32 +13,32 @@ import (
 )
 
 // CreateTask creates a task in the board in — a root-relative track path, or
-// the board containing cwd when empty — and returns the new file's path:
-// every blocked-by id is validated against the whole tree, the task is
-// numbered tree-wide, and the task file and its board row (status todo) are
-// written in one use-case. An empty slug is derived from the title; an empty
-// section means the default one. A non-nil body is the one-shot markdown read
-// from stdin (## sections verbatim below a generated H1); nil renders the
-// section skeleton instead.
-func (a App) CreateTask(cwd, title, slug, section, in string, blockedBy []string, body io.Reader) (string, error) {
+// the board containing cwd when empty — and returns the new task's id and
+// file path: every blocked-by id is validated against the whole tree, the
+// task is numbered tree-wide, and the task file and its board row (status
+// todo) are written in one use-case. An empty slug is derived from the title;
+// an empty section means the default one. A non-nil body is the one-shot
+// markdown read from stdin (## sections verbatim below a generated H1); nil
+// renders the section skeleton instead.
+func (a App) CreateTask(cwd, title, slug, section, in string, blockedBy []string, body io.Reader) (id, path string, err error) {
 	if slug != "" && !task.ValidSlug(slug) {
-		return "", fmt.Errorf("invalid slug %q: want 1-40 chars of [a-z0-9-], no leading or trailing hyphen", slug)
+		return "", "", fmt.Errorf("invalid slug %q: want 1-40 chars of [a-z0-9-], no leading or trailing hyphen", slug)
 	}
 	bodyBytes, err := readTaskBody(body)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	boardDir, err := a.contextBoard(cwd, in)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	root, err := tree.FindRoot(a.fs, cwd)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	unlock, err := a.lock(root)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer unlock()
 	return a.createTaskLocked(root, boardDir, title, slug, section, blockedBy, bodyBytes)
@@ -63,24 +63,26 @@ func readTaskBody(r io.Reader) ([]byte, error) {
 
 // createTaskLocked validates dependencies, numbers the task tree-wide, and
 // writes the task file and its board row. It must run under the tree lock.
-func (a App) createTaskLocked(root, boardDir, title, slug, section string, blockedBy []string, body []byte) (string, error) {
+func (a App) createTaskLocked(root, boardDir, title, slug, section string, blockedBy []string, body []byte) (id, path string, err error) {
 	if err := a.validateBlockedBy(root, blockedBy); err != nil {
-		return "", err
+		return "", "", err
 	}
 	nn, err := tree.NextNN(a.fs, root)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if slug == "" {
 		slug = task.Slugify(title)
 	}
 	if slug == "" {
-		return "", fmt.Errorf("cannot derive a slug from %q, pass --slug", title)
+		return "", "", fmt.Errorf("cannot derive a slug from %q, pass --slug", title)
 	}
 	if section == "" {
 		section = board.DefaultSection
 	}
-	return a.writeTask(boardDir, task.FormatID(nn), slug, title, section, blockedBy, body)
+	id = task.FormatID(nn)
+	path, err = a.writeTask(boardDir, id, slug, title, section, blockedBy, body)
+	return id, path, err
 }
 
 // validateBlockedBy checks every dependency id resolves somewhere in the

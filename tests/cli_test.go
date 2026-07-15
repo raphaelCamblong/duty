@@ -172,7 +172,10 @@ func TestCreate(t *testing.T) {
 			t.Fatalf("create: code=%d stderr=%q", code, stderr)
 		}
 		oneLine(t, "stdout", stdout)
-		printed := strings.TrimSuffix(stdout, "\n")
+		id, printed := splitCreateOutput(t, stdout)
+		if id != "T-01" {
+			t.Errorf("printed id %q, want T-01", id)
+		}
 		taskPath := filepath.Join(root, "T-01-first-task.md")
 		if !samePath(t, printed, taskPath) {
 			t.Errorf("printed path %q, want %q", printed, taskPath)

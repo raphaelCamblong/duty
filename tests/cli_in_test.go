@@ -32,7 +32,7 @@ func TestCreateTaskIn(t *testing.T) {
 		if code != 0 || stderr != "" {
 			t.Fatalf("create task --in api/auth: code=%d stderr=%q", code, stderr)
 		}
-		got := strings.TrimSpace(stdout)
+		_, got := splitCreateOutput(t, stdout)
 		want := filepath.Join(root, "api", "auth")
 		if filepath.Dir(got) != want {
 			t.Errorf("task created in %q, want under %q", got, want)
@@ -52,7 +52,8 @@ func TestCreateTaskIn(t *testing.T) {
 		if code != 0 || stderr != "" {
 			t.Fatalf("create task --in .: code=%d stderr=%q", code, stderr)
 		}
-		if dir := filepath.Dir(strings.TrimSpace(stdout)); dir != root {
+		_, path := splitCreateOutput(t, stdout)
+		if dir := filepath.Dir(path); dir != root {
 			t.Errorf("task created in %q, want the root %q", dir, root)
 		}
 	})

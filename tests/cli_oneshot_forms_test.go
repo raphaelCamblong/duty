@@ -290,7 +290,8 @@ func TestAgentLifecycleFourCalls(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("1/4 create --body: code=%d stderr=%q", code, stderr)
 	}
-	name := filepath.Base(strings.TrimSuffix(createOut, "\n"))
+	_, createPath := splitCreateOutput(t, createOut)
+	name := filepath.Base(createPath)
 
 	code, nextOut, stderr := runDuty(t, root, "get", "next", "--claim", "--agent")
 	if code != 0 || stderr != "" {

@@ -32,7 +32,8 @@ func TestCreateTaskBody(t *testing.T) {
 		if code != 0 || stderr != "" {
 			t.Fatalf("create --body: code=%d stderr=%q", code, stderr)
 		}
-		nameA := filepath.Base(strings.TrimSuffix(stdout, "\n"))
+		_, pathA := splitCreateOutput(t, stdout)
+		nameA := filepath.Base(pathA)
 		bodyA := bodyBelowH1(t, readText(t, filepath.Join(root, nameA)))
 		if bodyA != bodyB {
 			t.Errorf("one-shot body below H1 =\n%q\nwant (N set calls):\n%q", bodyA, bodyB)

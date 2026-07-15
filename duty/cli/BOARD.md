@@ -14,7 +14,7 @@ Order top-to-bottom is the intended build order.
 | [T-20](T-20-agent-reads-get-task-tracks-next.md) | Agent reads: get task, tracks, next | done |
 | [T-21](T-21-cli-help-groups-examples-completion.md) | CLI help groups, examples, completion | done |
 | [T-46](T-46-duty-skill-install-the-agent-skill.md) | duty skill: install the agent skill | done |
-| [T-47](T-47-create-prints-the-id-slugs-break-at-word.md) | Create prints the id, slugs break at words | todo |
+| [T-47](T-47-create-prints-the-id-slugs-break-at-word.md) | Create prints the id, slugs break at words | done |
 | [T-48](T-48-reorder-board-rows-from-the-cli.md) | Reorder board rows from the CLI | todo |
 | [T-49](T-49-reports-date-themselves.md) | Reports date themselves | todo |
 

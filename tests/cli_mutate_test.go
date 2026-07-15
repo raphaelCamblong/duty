@@ -27,7 +27,19 @@ func createTask(t *testing.T, boardDir, title string) string {
 	if code != 0 {
 		t.Fatalf("create %q: code=%d stderr=%q", title, code, stderr)
 	}
-	return filepath.Base(strings.TrimSuffix(stdout, "\n"))
+	_, path := splitCreateOutput(t, stdout)
+	return filepath.Base(path)
+}
+
+// splitCreateOutput parses a `create task` stdout line, "<id>\t<path>\n",
+// into its id and path.
+func splitCreateOutput(t *testing.T, stdout string) (id, path string) {
+	t.Helper()
+	id, path, ok := strings.Cut(strings.TrimSuffix(stdout, "\n"), "\t")
+	if !ok {
+		t.Fatalf("create stdout %q: want \"<id>\\t<path>\"", stdout)
+	}
+	return id, path
 }
 
 // mustRun runs a duty command that has to succeed quietly.

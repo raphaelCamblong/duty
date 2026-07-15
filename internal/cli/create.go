@@ -31,8 +31,9 @@ func newCreateCmd(a app.App, cwd string, stdin io.Reader, stdout io.Writer) *cob
 }
 
 // newCreateTaskCmd builds create task: new task in the current board,
-// printing the created path — the only output. With --body the whole markdown
-// body (## sections) is read from stdin instead of the section skeleton.
+// printing "<id>\t<path>" — the only output, same shape for humans and
+// agents. With --body the whole markdown body (## sections) is read from
+// stdin instead of the section skeleton.
 func newCreateTaskCmd(a app.App, cwd string, stdin io.Reader, stdout io.Writer) *cobra.Command {
 	var (
 		slug      string
@@ -53,11 +54,11 @@ func newCreateTaskCmd(a app.App, cwd string, stdin io.Reader, stdout io.Writer) 
 			if body {
 				bodyReader = stdin
 			}
-			path, err := a.CreateTask(cwd, args[0], slug, section, in, blockedBy, bodyReader)
+			id, path, err := a.CreateTask(cwd, args[0], slug, section, in, blockedBy, bodyReader)
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(stdout, path)
+			fmt.Fprintf(stdout, "%s\t%s\n", id, path)
 			return nil
 		},
 	}

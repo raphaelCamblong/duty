@@ -1,7 +1,7 @@
 ---
 id: T-47
 title: Create prints the id, slugs break at words
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -32,7 +32,11 @@ Output changes to any other command; slug charset rules; renaming existing
 task files.
 
 ## Gates
-- [ ] `duty create task "x"` in a scratch tree prints `T-NN<TAB>/abs/path`;
+- [x] `duty create task "x"` in a scratch tree prints `T-NN<TAB>/abs/path`;
   a 60-char multi-word title yields a slug cut at a word boundary ≤40.
-- [ ] All tests green (`just check`); pinned-output tests updated, none
+- [x] All tests green (`just check`); pinned-output tests updated, none
   weakened; docs updated.
+
+## Report
+
+Create task now prints "<id>\t<absolute path>" (same for humans and agents); task.Slugify truncates at the last word boundary within 40 chars, falling back to a hard cut only when the first word alone exceeds 40. Updated the pinned create-output tests and slug truncation cases in tests/, plus docs/cli.md. just check is green.

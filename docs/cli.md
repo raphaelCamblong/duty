@@ -36,10 +36,12 @@ duty init "Q3 roadmap"
 
 `duty create task <title>` — Add a task to the current board. The next id
 (`T-NN`) is picked across the whole tree, and the file plus the board row are
-written together.
+written together. Prints one line, `<id><TAB><path>` — the id you need next
+and the absolute file path, same shape for a human or an agent.
 
 ```sh title="A task that waits on another"
 duty create task "Add auth" --blocked-by T-03
+# T-04	/abs/path/to/duty/T-04-add-auth.md
 ```
 
 Flags:
@@ -291,7 +293,9 @@ root board): the tree root is found from cwd, then the board becomes
 Every read takes `--agent`: stable, token-lean TSV — one record per line, no
 padding, no color, the field order part of the contract. `updated` is always
 the trailing field (the file's mtime, RFC3339) so parsers of the earlier fields
-keep working. Mutating commands stay quiet either way.
+keep working. Mutating commands stay quiet either way, except `create task`,
+which always prints its one `<id><TAB><path>` line — there's no other way to
+learn the id it picked.
 
 - `get tasks` — `id  board-path  status  title  drift  updated` (drift empty, `board=<status>`, or `no-row`).
 - `get task` / `get next` — `id  track-path  status  title  gates-done  gates-total  blocked-by  path  updated` (blocked-by comma-joined; `get next` prints nothing when nothing's actionable).

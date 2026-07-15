@@ -90,7 +90,7 @@ func TestGetTask(t *testing.T) {
 		if code != 0 {
 			t.Fatalf("create: code=%d stderr=%q", code, stderr)
 		}
-		mainPath := strings.TrimSpace(createOut)
+		_, mainPath := splitCreateOutput(t, createOut)
 		mustRun(t, root, "status", "T-02", "in-progress")
 
 		code, stdout, stderr := runDuty(t, root, "get", "task", "T-02", "--agent")

@@ -476,9 +476,9 @@ func TestSlugify(t *testing.T) {
 			want:  "t-che-d-j-vue",
 		},
 		{
-			name:  "truncated to 40 without trailing hyphen",
-			title: "the quick brown fox jumps over the lazy dog",
-			want:  "the-quick-brown-fox-jumps-over-the-lazy",
+			name:  "truncated at word boundary within 40",
+			title: "restructure voice screenshot pipeline before saving",
+			want:  "restructure-voice-screenshot-pipeline",
 		},
 		{
 			name:  "exactly 40 kept",
@@ -486,9 +486,14 @@ func TestSlugify(t *testing.T) {
 			want:  strings.Repeat("a", 40),
 		},
 		{
-			name:  "over 40 same-run truncated",
+			name:  "over 40 same-run hard cut, no word boundary",
 			title: strings.Repeat("a", 45),
 			want:  strings.Repeat("a", 40),
+		},
+		{
+			name:  "first word alone over 40 falls back to hard cut",
+			title: strings.Repeat("x", 45) + " then some words",
+			want:  strings.Repeat("x", 40),
 		},
 		{
 			name:  "all junk yields empty",

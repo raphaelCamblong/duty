@@ -188,7 +188,9 @@ func CountGates(content []byte) (done, total int) {
 
 // Slugify derives a filename slug from a title: lowercased, every run of
 // non-alphanumeric characters collapsed to one hyphen, no leading or trailing
-// hyphen, at most 40 characters. Only ASCII letters and digits survive.
+// hyphen, at most 40 characters. Only ASCII letters and digits survive. A slug
+// longer than 40 characters breaks at the last word boundary that fits,
+// falling back to a hard cut only when the first word alone exceeds 40.
 func Slugify(title string) string {
 	var b strings.Builder
 	pending := false
@@ -206,9 +208,20 @@ func Slugify(title string) string {
 	}
 	s := b.String()
 	if len(s) > 40 {
-		s = strings.TrimRight(s[:40], "-")
+		s = truncateSlug(s)
 	}
 	return s
+}
+
+// truncateSlug cuts a slug longer than 40 characters at the last hyphen that
+// fits, so words never split; it hard-cuts at 40 only when the first word
+// alone exceeds the limit.
+func truncateSlug(s string) string {
+	cut := s[:40]
+	if i := strings.LastIndexByte(cut, '-'); i > 0 {
+		return cut[:i]
+	}
+	return strings.TrimRight(cut, "-")
 }
 
 // ValidSlug reports whether s is a slug of the shape Slugify produces: a
