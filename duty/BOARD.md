@@ -44,5 +44,6 @@ Order top-to-bottom is the intended build order.
 | [T-42](T-42-configurable-tui-theme-via-toml.md) | Configurable TUI theme via TOML | done |
 | [T-43](T-43-split-the-spec-and-docs-site-into-topic.md) | Split the spec and docs site into topic pages | done |
 | [T-44](T-44-docs-iteration-structure-voice-screensho.md) | Docs iteration: structure, voice, screenshots, custom domain | done |
+| [T-50](T-50-claim-identity-who-holds-each-task.md) | Claim identity: who holds each task | todo |
 
 Completed tasks (0) archived: [archive/](archive/).
