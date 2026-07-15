@@ -23,9 +23,8 @@ func RelTime(t, now time.Time) string {
 		return fmt.Sprintf("%dm ago", int(d.Minutes()))
 	case d < 24*time.Hour:
 		return fmt.Sprintf("%dh ago", int(d.Hours()))
-	}
-	if days := int(d.Hours()) / 24; days <= 7 {
-		return fmt.Sprintf("%dd ago", days)
+	case d < 8*24*time.Hour:
+		return fmt.Sprintf("%dd ago", int(d.Hours())/24)
 	}
 	return t.Format(dateFormat)
 }

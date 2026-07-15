@@ -88,3 +88,20 @@ narrowed to the stable [:5] prefix). No assertion was weakened — the counts ar
 stricter and the new trailing field has dedicated new coverage. The 't' binding
 lives in the FullHelp grid only, not the short bar, to keep the 100-col short-help
 line (already at capacity) from truncating "quit" and breaking an existing test.
+
+
+Simplify pass (T-31 quality bar): applied one reuse/altitude finding — folded
+humanize.RelTime's trailing `if days := int(d.Hours())/24; days <= 7` into the
+switch as `case d < 8*24*time.Hour` (days<=7 ⇔ d<192h), so the four age buckets
+now read as one uniform switch and the `days` local is gone. Behavior identical,
+pinned by the RelTime table (7d→"7d ago", 8d→date); suite green, golangci-lint 0,
+gofumpt clean, vet clean, build ok. Skipped three findings: (1) extracting a
+generic maxCellWidth over maxIDWidth/maxDriftWidth/maxAgeWidth — the two siblings
+are pre-existing (outside this diff) and the code deliberately uses small named
+width helpers with terse godocs; a second reviewer judged the current form fine,
+so it is a lateral move, not a clear win. (2) pushing the zero-mtime guard into
+RelTime (return "" for a zero time) — a behavior change (CLI would print "" not
+"0001-01-01" for an unstattable file), a consistency/bug concern out of scope for
+a behavior-preserving simplify pass. (3) efficiency angle reported 0 findings; the
+App.mtime vs scan.entryModTime pair stays as-is (layer-appropriate, cleared by
+multiple reviewers).
