@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/NimbleMarkets/ntcharts/barchart"
 	"github.com/charmbracelet/glamour"
@@ -26,6 +27,9 @@ const (
 	minBarWidth = 8
 	// trackBarWidth is the fixed cell width of a track row's inline state bar.
 	trackBarWidth = 14
+	// ageDefaultCols is the terminal width at or above which the relative-age
+	// column shows by default; narrower terminals hide it until toggled.
+	ageDefaultCols = 100
 )
 
 // rollupOrder is the status sequence for track rollups and summaries: active
@@ -264,22 +268,34 @@ func (m Model) previewTitle() string {
 		}
 	case previewTask:
 		if r, b, ok := m.findRowBoard(m.previewArg); ok {
-			return taskHeader(r, b.Title)
+			return taskHeader(r, b.Title, m.headerAge(r))
 		}
 	}
 	return dimStyle.Render("gone")
 }
 
+// headerAge is the preview header's relative age, "" when the age column is
+// hidden or the row has no file.
+func (m Model) headerAge(r Row) string {
+	if !m.showAge {
+		return ""
+	}
+	return ageCell(r, time.Now())
+}
+
 // taskHeader joins a task's identity into the preview's pinned line: id ·
-// status · gates n/m · track title, with blocked-by ids and any drift badge
-// trailing dim.
-func taskHeader(r Row, track string) string {
+// status · gates n/m · track title · age, with blocked-by ids and any drift
+// badge trailing dim. age is "" when the age column is hidden.
+func taskHeader(r Row, track, age string) string {
 	parts := []string{accentStyle.Render(r.ID), statusStyle(r.Status).Render(r.Status)}
 	if g := gatesCell(r); g != "" {
 		parts = append(parts, dimStyle.Render(g))
 	}
 	if track != "" {
 		parts = append(parts, dimStyle.Render(track))
+	}
+	if age != "" {
+		parts = append(parts, dimStyle.Render(age))
 	}
 	line := strings.Join(parts, dimStyle.Render(" · "))
 	if len(r.BlockedBy) > 0 {

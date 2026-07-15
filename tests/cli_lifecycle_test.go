@@ -390,8 +390,8 @@ func TestGetTasks(t *testing.T) {
 		records := make(map[string][]string, len(lines))
 		for _, line := range lines {
 			fields := strings.Split(line, "\t")
-			if len(fields) != 5 {
-				t.Fatalf("record %q: got %d fields, want 5", line, len(fields))
+			if len(fields) != 6 {
+				t.Fatalf("record %q: got %d fields, want 6", line, len(fields))
 			}
 			records[fields[0]] = fields
 		}
@@ -400,16 +400,16 @@ func TestGetTasks(t *testing.T) {
 		if !ok {
 			t.Fatalf("no record for T-01 in %q", stdout)
 		}
-		if want := []string{"T-01", ".", "todo", "Root task", "board=done"}; !equalFields(root01, want) {
-			t.Errorf("T-01 record = %v, want %v", root01, want)
+		if want := []string{"T-01", ".", "todo", "Root task", "board=done"}; !equalFields(root01[:5], want) {
+			t.Errorf("T-01 record = %v, want %v", root01[:5], want)
 		}
 
 		sub02, ok := records["T-02"]
 		if !ok {
 			t.Fatalf("no record for T-02 in %q", stdout)
 		}
-		if want := []string{"T-02", "backend", "todo", "Backend task", ""}; !equalFields(sub02, want) {
-			t.Errorf("T-02 record = %v, want %v", sub02, want)
+		if want := []string{"T-02", "backend", "todo", "Backend task", ""}; !equalFields(sub02[:5], want) {
+			t.Errorf("T-02 record = %v, want %v", sub02[:5], want)
 		}
 	})
 

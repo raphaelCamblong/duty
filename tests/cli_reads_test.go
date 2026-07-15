@@ -99,8 +99,8 @@ func TestGetTask(t *testing.T) {
 		}
 		oneLine(t, "stdout", stdout)
 		fields := strings.Split(strings.TrimRight(stdout, "\n"), "\t")
-		if len(fields) != 8 {
-			t.Fatalf("record %q: got %d fields, want 8", stdout, len(fields))
+		if len(fields) != 9 {
+			t.Fatalf("record %q: got %d fields, want 9", stdout, len(fields))
 		}
 		if want := []string{"T-02", ".", "in-progress", "Main task", "0", "0", "T-01"}; !equalFields(fields[:7], want) {
 			t.Errorf("fields[:7] = %v, want %v", fields[:7], want)
@@ -323,8 +323,8 @@ func TestGetNext(t *testing.T) {
 		}
 		oneLine(t, "stdout", stdout)
 		fields := strings.Split(strings.TrimRight(stdout, "\n"), "\t")
-		if len(fields) != 8 {
-			t.Fatalf("record %q: got %d fields, want 8", stdout, len(fields))
+		if len(fields) != 9 {
+			t.Fatalf("record %q: got %d fields, want 9", stdout, len(fields))
 		}
 		if want := []string{"T-01", ".", "todo", "First", "0", "0", ""}; !equalFields(fields[:7], want) {
 			t.Errorf("fields[:7] = %v, want %v", fields[:7], want)

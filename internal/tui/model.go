@@ -69,6 +69,8 @@ type Model struct {
 
 	list             list.Model
 	focus            focusArea
+	showAge          bool
+	ageToggled       bool
 	preview          viewport.Model
 	previewOpen      bool
 	previewKind      string
@@ -153,6 +155,9 @@ func (m Model) PreviewFocused() bool { return m.focus == focusPreview }
 // browsing the full-width list).
 func (m Model) PreviewOpen() bool { return m.previewOpen }
 
+// ShowAge reports whether the relative-age column is visible.
+func (m Model) ShowAge() bool { return m.showAge }
+
 // Cursor returns the selected item index — sub-tracks then tasks, section
 // headers not counted.
 func (m Model) Cursor() int {
@@ -206,7 +211,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.help.Width = msg.Width
-		return m.layout(), nil
+		return m.resizeAge(msg.Width).layout(), nil
 	case refreshMsg:
 		if m.refresh == nil {
 			return m, scanCmd(m.fsys, m.root)
@@ -272,8 +277,34 @@ func (m Model) handleGlobalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	case key.Matches(msg, m.keys.Filter):
 		model, cmd := m.filterList(msg)
 		return model, cmd, true
+	case key.Matches(msg, m.keys.Age):
+		m.showAge = !m.showAge
+		m.ageToggled = true
+		return m.reskinList().layout(), nil, true
 	}
 	return m, nil, false
+}
+
+// resizeAge re-derives the age column's default visibility from the new width —
+// wide terminals show it, narrow ones hide it — unless the user has toggled it,
+// re-skinning the list delegate only when the visibility actually flips.
+func (m Model) resizeAge(w int) Model {
+	if m.ageToggled {
+		return m
+	}
+	if show := w >= ageDefaultCols; show != m.showAge {
+		m.showAge = show
+		return m.reskinList()
+	}
+	return m
+}
+
+// reskinList swaps in a fresh list delegate reflecting the current age
+// visibility, leaving items, selection, and any filter untouched.
+func (m Model) reskinList() Model {
+	b, _ := m.board()
+	m.list.SetDelegate(newDelegate(m.zones, b, m.showAge, time.Now()))
+	return m
 }
 
 // handleActionKey handles the keys acting on the selected entry: edit, back,
@@ -511,7 +542,7 @@ func (m Model) selectNth(n int) Model {
 // snapshot; the returned command re-runs an active filter.
 func (m Model) rebuildList() (Model, tea.Cmd) {
 	b, ok := m.board()
-	m.list.SetDelegate(newDelegate(m.zones, b))
+	m.list.SetDelegate(newDelegate(m.zones, b, m.showAge, time.Now()))
 	if !ok {
 		return m, m.list.SetItems(nil)
 	}

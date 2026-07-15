@@ -189,8 +189,8 @@ exits `0`. An id that resolves nowhere hints at the fix: `unknown task id "T-99"
 | `duty report <id>` | Append stdin under `## Report` (heading created once, content accumulates). Refuse empty stdin. |
 | `duty archive [--in PATH]` | For every open task with `status: done`, in the current board (or the `--in` board) and every board below it: `os.Rename` → its own board's `archive/`, drop its row, prune empty sections, rewrite that board's footer count. Idempotent; "nothing to archive" is a clean no-op. |
 | `duty delete task <id> [--force]` | Refuse on `done` without `--force` (that's `archive`'s job). Remove the file, drop the row, prune. |
-| `duty get tasks [--status S] [--in PATH]` | Recursive from the current board (or the `--in` board). One line per open task **from the files**: `id  status  title`, prefixed with the track path when not local (`backend/ T-12 …`). If the board row's status disagrees (or the row is missing), append a `⚠ board says …` drift flag. `list` survives as a hidden alias. |
-| `duty get task <id>` | One task's metadata **from its file** — never its body (the path is printed; readers `cat` it). Resolves the id anywhere in the tree. Human: aligned `key: value` lines (id, title, status, track, blocked-by, gates `n/m`, path). |
+| `duty get tasks [--status S] [--in PATH]` | Recursive from the current board (or the `--in` board). One line per open task **from the files**: `id  status  title`, prefixed with the track path when not local (`backend/ T-12 …`) and closed by a dim relative-age column (`6m ago` / `2h ago`, the absolute date past a week — §humanize). If the board row's status disagrees (or the row is missing), append a `⚠ board says …` drift flag. `list` survives as a hidden alias. |
+| `duty get task <id>` | One task's metadata **from its file** — never its body (the path is printed; readers `cat` it). Resolves the id anywhere in the tree. Human: aligned `key: value` lines (id, title, status, track, blocked-by, gates `n/m`, updated (relative age), path). |
 | `duty get tracks [--in PATH]` | One line per board — the starting board included as `.` — recursive from the current board (or the `--in` board): path, title, per-status counts of its **own** (directly-filed) tasks (todo/in-progress/done/blocked) and its archived count. |
 | `duty get next [--claim] [--in PATH]` | The first **actionable** task: walk the current board's (or the `--in` board's) rows in board order (build order is priority), then sub-tracks depth-first in scan order, and return the first `todo` whose `blocked-by` are all `done` (an archived dependency counts as done). Output shape = `get task`. **Nothing actionable → no output, exit 0** (empty means nothing to do). With **`--claim`** it atomically marks that task `in-progress` (file + board row) under the tree-wide lock before printing it — the printed status is the truthful `in-progress`, the `--agent` shape unchanged — so parallel agents each get a distinct task and losers of the race transparently receive the following one; a claim with nothing to do stays a pure read (no lock-file side effect). |
 | `duty tui` | Launch the live board viewer (§8). |
@@ -211,14 +211,18 @@ token-lean TSV — one record per line, tab-separated fields, no alignment paddi
 color, no badges. TSV, not JSON: fewer tokens, trivially `cut`/`awk`-able, and the field
 order is part of the contract. Mutating commands stay quiet either way.
 
-- `duty get tasks --agent` — `id<TAB>board-path<TAB>status<TAB>title<TAB>drift` (drift
-  empty, or `board=<status>`, or `no-row`).
+- `duty get tasks --agent` — `id<TAB>board-path<TAB>status<TAB>title<TAB>drift<TAB>updated`
+  (drift empty, or `board=<status>`, or `no-row`; `updated` the file's RFC3339 mtime).
 - `duty get task --agent` / `duty get next --agent` — one record
-  `id<TAB>track-path<TAB>status<TAB>title<TAB>gates-done<TAB>gates-total<TAB>blocked-by<TAB>path`
-  (blocked-by comma-joined, empty when none). `get next` prints nothing when nothing is
-  actionable.
+  `id<TAB>track-path<TAB>status<TAB>title<TAB>gates-done<TAB>gates-total<TAB>blocked-by<TAB>path<TAB>updated`
+  (blocked-by comma-joined, empty when none; `updated` the file's RFC3339 mtime). `get
+  next` prints nothing when nothing is actionable.
 - `duty get tracks --agent` — one record per board
   `path<TAB>title<TAB>todo<TAB>in-progress<TAB>done<TAB>blocked<TAB>archived`.
+
+The `updated` field is appended **trailing** so a parser reading the earlier positional
+fields keeps working unchanged; it is the file's modification time (mtime), not a
+frontmatter timestamp — no task file gains a field.
 
 **Behavioral invariants (test these):**
 - **Lossless round-trip:** create → status → report → move to a section → move to
@@ -281,7 +285,10 @@ selection change:
   for a track with no tasks; the textual per-status rollup lives in the track's
   preview card. Then tasks under their section headers, one line
   each: id, title, colored status (`todo` dim, `in-progress` yellow, `blocked` red,
-  `done` green), gate progress `2/3`, drift badge if any. The list's built-in fuzzy
+  `done` green), gate progress `2/3`, a dim relative-age column right of the gates
+  (`6m ago` / `2h ago`, the absolute date past a week — §humanize), drift badge if any.
+  The age column is toggled by `t` and shows by default at ≥100 columns, hidden below
+  (the toggle still works on any width). The list's built-in fuzzy
   filter opens on `/`. **Empty states are intentional:** a board with no tracks or
   tasks shows a centered dim hint (a fresh tree names itself, any other empty track
   nudges toward `duty create task`), and a filter that matches nothing shows the
@@ -293,7 +300,8 @@ selection change:
   already open, `enter` on a track instead opens its summary card (title, per-status
   counts, distribution bar, sections with row counts, subtree drift count). A task
   preview is topped by a pinned header — `id · status (colored) · gates n/m · track
-  title`, with any `blocked-by` ids and drift flag trailing dim. The preview
+  title · age` (the age segment dim, present only while the age column is on), with any
+  `blocked-by` ids and drift flag trailing dim. The preview
   reads from the same scan snapshot as the rows (zero extra file I/O), rendered by one
   glamour renderer built lazily on the first open and reused, rebuilt only on a width
   change; content re-renders on re-scan.
@@ -304,9 +312,10 @@ selection change:
 **Keys:** `j/k` move, `enter` open (descend into a track / open the selection in the
 preview), `esc` back (close the preview / clear the filter / up one track), `tab`
 toggle panel focus while a preview is open, `/` filter, `e` open the selected task in
-`$EDITOR` (suspend TUI, resume on exit), `r` re-scan the tree now (the fsnotify watcher
-already refreshes on any change; `r` is manual reassurance), `?` key-hint footer, `q`
-quit.
+`$EDITOR` (suspend TUI, resume on exit), `t` toggle the relative-age column (default on
+at ≥100 columns, off below; listed in the `?` help grid), `r` re-scan the tree now (the
+fsnotify watcher already refreshes on any change; `r` is manual reassurance), `?`
+key-hint footer, `q` quit.
 
 **Mouse:** panels, rows, and breadcrumb segments are BubbleZone hit-zones — a click
 selects a row (left panel), focuses an open preview (right panel), or jumps to the

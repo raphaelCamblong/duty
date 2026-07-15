@@ -1,7 +1,7 @@
 ---
 id: T-31
 title: Relative task age in TUI and reads
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -41,14 +41,50 @@ created/author metadata (mtime only — no frontmatter change); git-based
 history; config keys for the threshold; sorting by age.
 
 ## Gates
-- [ ] `RelTime` boundary table green; `get task`/`get next`/`get tasks` show
+- [x] `RelTime` boundary table green; `get task`/`get next`/`get tasks` show
   ages (human) and RFC3339 trailing field (`--agent`) — verified in a scratch
   tree with a back-dated file (`touch -t`).
-- [ ] TUI: `t` toggles the column; 120×35 frame shows it, 70×20 hides it by
+- [x] TUI: `t` toggles the column; 120×35 frame shows it, 70×20 hides it by
   default — recorded in the report. `TestStartupPerformance` stays green.
-- [ ] Full suite green (`go test ./tests/... -coverpkg=./internal/... -count=1`);
+- [x] Full suite green (`go test ./tests/... -coverpkg=./internal/... -count=1`);
   `golangci-lint run` 0 issues; `gofumpt -l .` empty; `go vet ./...` clean;
   `go build -o bin/duty ./cmd/duty` ok.
-- [ ] Spec §6 + §8 updated in the same change.
+- [x] Spec §6 + §8 updated in the same change.
 
 ## Report
+
+Done. Relative task age now surfaces in the reads and the TUI.
+
+New leaf package internal/humanize (zero internal deps): RelTime(t, now) — "just
+now" under a minute, "Nm/Nh/Nd ago" up to 7 days, absolute date (2006-01-02)
+past a week. Imported by both cli and tui so the rule lives once.
+
+Data: app.TaskInfo and app.Row gained UpdatedAt (time.Time) from fsys.Stat mtime
+(best-effort helper App.mtime); TUI scan Row likewise, sourced from the ReadDir
+entry's Info() — same directory visit, no extra walk.
+
+CLI: get task / get next human gained an "updated:" line; get tasks human gained
+a trailing dim age column (lipgloss faint, auto-stripped when piped). --agent
+TSV appends the RFC3339 mtime as a new TRAILING field on get tasks (5→6), get
+task and get next (8→9) — existing positional parsers unaffected.
+
+TUI: dim age column right of the gates on task rows + a "· age" segment in the
+preview header; keybind "t" toggles it (in the ? help grid); default ON at >=100
+cols, OFF below, re-derived on resize until the user toggles. Verified frames:
+120x35 shows "just now", 70x20 hides it by default, 70x20 + "t" turns it on.
+
+Spec §6 (field lists) and §8 (row/header/keys) updated in this change.
+
+Gates: go test ./tests/... -coverpkg=./internal/... -count=1 -> ok, coverage
+85.9%. golangci-lint run -> 0 issues. gofumpt -l . empty. go vet clean. build ok.
+Tests added: RelTime boundary table (59s/61s/23h/25h/6d23h/7d/8d + future),
+scan/TaskInfo mtime from a touched file, TUI toggle transitions + on/off frames,
+and the --agent trailing-field shape for get task/tasks/next.
+
+Deviation (necessary): the trailing --agent field changes record widths, so the
+field-count guards in three existing tests were bumped to the new contract
+(cli_reads_test.go 8->9 x2; cli_lifecycle_test.go 5->6, its full-record equality
+narrowed to the stable [:5] prefix). No assertion was weakened — the counts are
+stricter and the new trailing field has dedicated new coverage. The 't' binding
+lives in the FullHelp grid only, not the short bar, to keep the 100-col short-help
+line (already at capacity) from truncating "quit" and breaking an existing test.

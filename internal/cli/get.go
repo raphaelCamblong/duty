@@ -6,11 +6,17 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
 	"github.com/raphaelCamblong/duty/internal/app"
+	"github.com/raphaelCamblong/duty/internal/humanize"
 )
+
+// ageStyle dims the trailing relative-age column of get tasks' human output.
+var ageStyle = lipgloss.NewStyle().Faint(true)
 
 const (
 	getUsage       = "usage: duty get <task|tasks|tracks|next> [args]"
@@ -72,7 +78,7 @@ func newGetTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: id, track, status, title, gates-done, gates-total, blocked-by, path")
+	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: id, track, status, title, gates-done, gates-total, blocked-by, path, updated")
 	return cmd
 }
 
@@ -183,7 +189,7 @@ func newGetTasksCmd(a app.App, cwd string, stdout io.Writer, use string, hidden 
 		},
 	}
 	cmd.Flags().StringVar(&status, "status", "", "list only this status")
-	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: id, board-path, status, title, drift")
+	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: id, board-path, status, title, drift, updated")
 	addInFlag(cmd, &in)
 	return cmd
 }
@@ -198,6 +204,7 @@ func taskHuman(info app.TaskInfo) string {
 	kv(&b, "track", info.Track)
 	kv(&b, "blocked-by", blockedByHuman(info.BlockedBy))
 	kv(&b, "gates", fmt.Sprintf("%d/%d", info.GatesDone, info.GatesTotal))
+	kv(&b, "updated", humanize.RelTime(info.UpdatedAt, time.Now()))
 	kv(&b, "path", info.Path)
 	return strings.TrimRight(b.String(), "\n")
 }
@@ -217,7 +224,8 @@ func blockedByHuman(ids []string) string {
 }
 
 // taskAgent renders info as one agent-output TSV record: id, track, status,
-// title, gates-done, gates-total, blocked-by (comma-joined), path.
+// title, gates-done, gates-total, blocked-by (comma-joined), path, updated
+// (RFC3339 mtime, the trailing field so existing parsers keep working).
 func taskAgent(info app.TaskInfo) string {
 	return strings.Join([]string{
 		info.ID,
@@ -228,6 +236,7 @@ func taskAgent(info app.TaskInfo) string {
 		strconv.Itoa(info.GatesTotal),
 		strings.Join(info.BlockedBy, ","),
 		info.Path,
+		info.UpdatedAt.Format(time.RFC3339),
 	}, "\t")
 }
 
@@ -282,6 +291,8 @@ func humanLine(r app.Row) string {
 		b.WriteString("  ")
 		b.WriteString(drift)
 	}
+	b.WriteString("  ")
+	b.WriteString(ageStyle.Render(humanize.RelTime(r.UpdatedAt, time.Now())))
 	return b.String()
 }
 
@@ -297,9 +308,10 @@ func humanDrift(r app.Row) string {
 }
 
 // tsvLine renders r as one agent-output record:
-// id<TAB>board-path<TAB>status<TAB>title<TAB>drift.
+// id<TAB>board-path<TAB>status<TAB>title<TAB>drift<TAB>updated (RFC3339 mtime,
+// the trailing field so existing parsers keep working).
 func tsvLine(r app.Row) string {
-	return strings.Join([]string{r.ID, r.Board, r.Status, r.Title, agentDrift(r)}, "\t")
+	return strings.Join([]string{r.ID, r.Board, r.Status, r.Title, agentDrift(r), r.UpdatedAt.Format(time.RFC3339)}, "\t")
 }
 
 // agentDrift renders r's drift flag for --agent output: "", "board=<status>",

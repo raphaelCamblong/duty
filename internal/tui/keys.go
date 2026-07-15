@@ -12,6 +12,7 @@ type keyMap struct {
 	Focus   key.Binding
 	Filter  key.Binding
 	Edit    key.Binding
+	Age     key.Binding
 	Refresh key.Binding
 	Help    key.Binding
 	Quit    key.Binding
@@ -27,6 +28,7 @@ func defaultKeys() keyMap {
 		Focus:   key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "panel")),
 		Filter:  key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
 		Edit:    key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit")),
+		Age:     key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "age")),
 		Refresh: key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
 		Help:    key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "keys")),
 		Quit:    key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
@@ -43,7 +45,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down},
 		{k.Open, k.Back, k.Focus},
-		{k.Filter, k.Edit, k.Refresh},
+		{k.Filter, k.Edit, k.Age, k.Refresh},
 		{k.Help, k.Quit},
 	}
 }

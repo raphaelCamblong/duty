@@ -2,6 +2,7 @@ package app
 
 import (
 	"path/filepath"
+	"time"
 
 	"github.com/raphaelCamblong/duty/internal/board"
 	"github.com/raphaelCamblong/duty/internal/names"
@@ -15,9 +16,10 @@ type Row struct {
 	ID         string
 	Title      string
 	Status     string
-	Board      string // slash path of the task's board relative to the listed board; "." when local
-	RowMissing bool   // the board index has no row for the task
-	RowStatus  string // the board row's status when it disagrees with the file, "" when in sync
+	Board      string    // slash path of the task's board relative to the listed board; "." when local
+	RowMissing bool      // the board index has no row for the task
+	RowStatus  string    // the board row's status when it disagrees with the file, "" when in sync
+	UpdatedAt  time.Time // file modification time
 }
 
 // List returns one Row per open task in the board in — a root-relative track
@@ -76,7 +78,8 @@ func (a App) boardRows(root, b string) ([]Row, error) {
 // taskRow assembles filename's Row from its file in dir, its drift computed
 // against its row in the board index.
 func (a App) taskRow(index []byte, dir, filename, boardPath string) (Row, error) {
-	t, _, err := a.readTask(filepath.Join(dir, filename))
+	path := filepath.Join(dir, filename)
+	t, _, err := a.readTask(path)
 	if err != nil {
 		return Row{}, err
 	}
@@ -85,6 +88,7 @@ func (a App) taskRow(index []byte, dir, filename, boardPath string) (Row, error)
 	return Row{
 		ID: t.ID, Title: t.Title, Status: t.Status,
 		Board: boardPath, RowMissing: missing, RowStatus: rowStatus,
+		UpdatedAt: a.mtime(path),
 	}, nil
 }
 

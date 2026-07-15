@@ -5,9 +5,11 @@ package tui
 
 import (
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/raphaelCamblong/duty/internal/board"
 	"github.com/raphaelCamblong/duty/internal/fsys"
@@ -84,6 +86,8 @@ type Row struct {
 	Drift string
 	// Content is the raw task file, kept for the detail view.
 	Content []byte
+	// UpdatedAt is the task file's modification time, zero when it has no file.
+	UpdatedAt time.Time
 }
 
 // Scan reads every board under root into a Snapshot. Archived tasks are
@@ -180,9 +184,20 @@ func readTasks(f fsys.FS, dir string) (files map[string]Row, bad map[string][]by
 			GatesDone: gd, GatesTotal: gt,
 			BlockedBy: t.BlockedBy,
 			Content:   content,
+			UpdatedAt: entryModTime(e),
 		}
 	}
 	return files, bad, nil
+}
+
+// entryModTime returns e's modification time from the same directory listing,
+// the zero time when its info cannot be read.
+func entryModTime(e fs.DirEntry) time.Time {
+	info, err := e.Info()
+	if err != nil {
+		return time.Time{}
+	}
+	return info.ModTime()
 }
 
 // joinRow merges one board row with its task file: the file wins on status

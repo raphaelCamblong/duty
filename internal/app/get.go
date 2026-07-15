@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/fs"
 	"path/filepath"
+	"time"
 
 	"github.com/raphaelCamblong/duty/internal/board"
 	"github.com/raphaelCamblong/duty/internal/names"
@@ -22,7 +23,8 @@ type TaskInfo struct {
 	BlockedBy  []string
 	GatesDone  int
 	GatesTotal int
-	Path       string // absolute path of the task file
+	Path       string    // absolute path of the task file
+	UpdatedAt  time.Time // file modification time
 }
 
 // TrackInfo is one board's line for GetTracks: its path, title, per-status
@@ -134,11 +136,11 @@ func (a App) taskInfo(root, path string) (TaskInfo, error) {
 	if err != nil {
 		return TaskInfo{}, err
 	}
-	return buildTaskInfo(root, path, content, t), nil
+	return buildTaskInfo(root, path, content, t, a.mtime(path)), nil
 }
 
 // buildTaskInfo assembles a TaskInfo from an already-read task file.
-func buildTaskInfo(root, path string, content []byte, t task.Task) TaskInfo {
+func buildTaskInfo(root, path string, content []byte, t task.Task, updated time.Time) TaskInfo {
 	done, total := task.CountGates(content)
 	return TaskInfo{
 		ID:         t.ID,
@@ -149,7 +151,19 @@ func buildTaskInfo(root, path string, content []byte, t task.Task) TaskInfo {
 		GatesDone:  done,
 		GatesTotal: total,
 		Path:       path,
+		UpdatedAt:  updated,
 	}
+}
+
+// mtime returns the modification time of the file at path, the zero time when
+// it cannot be stat'd. Age is display metadata, so a stat miss degrades to no
+// age rather than failing the read.
+func (a App) mtime(path string) time.Time {
+	info, err := a.fs.Stat(path)
+	if err != nil {
+		return time.Time{}
+	}
+	return info.ModTime()
 }
 
 // trackInfo assembles one board's TrackInfo, its path taken relative to root.
@@ -225,7 +239,7 @@ func (a App) actionable(root, b, filename string) (*TaskInfo, error) {
 	if !ready {
 		return nil, nil
 	}
-	info := buildTaskInfo(root, path, content, t)
+	info := buildTaskInfo(root, path, content, t, a.mtime(path))
 	return &info, nil
 }
 

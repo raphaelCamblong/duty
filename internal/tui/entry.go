@@ -3,12 +3,15 @@ package tui
 import (
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone"
+
+	"github.com/raphaelCamblong/duty/internal/humanize"
 )
 
 // entry is one line of the left panel: a sub-track, a task row, or a bare
@@ -75,20 +78,30 @@ func boardEntries(b Board) []list.Item {
 // per-status rollup, tasks with status/gates/drift columns, section names
 // dim; selectable lines are wrapped in BubbleZone hit-zones.
 type compactDelegate struct {
-	zones  *zone.Manager
-	nameW  int
-	idW    int
-	driftW int
+	zones   *zone.Manager
+	nameW   int
+	idW     int
+	driftW  int
+	ageW    int
+	showAge bool
+	now     time.Time
 }
 
-// newDelegate sizes a compact delegate's columns for one board.
-func newDelegate(z *zone.Manager, b Board) compactDelegate {
-	return compactDelegate{
-		zones:  z,
-		nameW:  maxSubNameWidth(b.Subs),
-		idW:    maxIDWidth(b.Sections),
-		driftW: maxDriftWidth(b.Sections),
+// newDelegate sizes a compact delegate's columns for one board; showAge and now
+// govern the trailing relative-age column, whose width is measured here.
+func newDelegate(z *zone.Manager, b Board, showAge bool, now time.Time) compactDelegate {
+	d := compactDelegate{
+		zones:   z,
+		nameW:   maxSubNameWidth(b.Subs),
+		idW:     maxIDWidth(b.Sections),
+		driftW:  maxDriftWidth(b.Sections),
+		showAge: showAge,
+		now:     now,
 	}
+	if showAge {
+		d.ageW = maxAgeWidth(b.Sections, now)
+	}
+	return d
 }
 
 // Height is one line per entry, satisfying list.ItemDelegate.
@@ -174,6 +187,9 @@ func titleStyle(selected bool) lipgloss.Style {
 // badge. The board's widest badge yields title room so badges stay aligned.
 func (d compactDelegate) taskLine(r Row, selected bool, w int, idM, titleM []int) string {
 	fixed := 2 + d.idW + 2 + 2 + statusColWidth + 2 + gatesColWidth
+	if d.showAge {
+		fixed += 2 + d.ageW
+	}
 	if d.driftW > 0 {
 		fixed += 2 + d.driftW
 	}
@@ -182,8 +198,31 @@ func (d compactDelegate) taskLine(r Row, selected bool, w int, idM, titleM []int
 		pad(styleMatches(r.Title, titleM, titleStyle(selected)), max(w-fixed, minTitleWidth)) + "  " +
 		statusStyle(r.Status).Render(pad(r.Status, statusColWidth)) + "  " +
 		dimStyle.Render(pad(gatesCell(r), gatesColWidth))
+	if d.showAge {
+		line += "  " + dimStyle.Render(pad(ageCell(r, d.now), d.ageW))
+	}
 	if r.Drift != "" {
 		line += "  " + driftStyle.Render(pad("⚠ "+r.Drift, d.driftW))
 	}
 	return ansi.Truncate(line, w, "…")
+}
+
+// ageCell renders a task row's relative file age, "" when the row has no file
+// (its modification time is unknown).
+func ageCell(r Row, now time.Time) string {
+	if r.UpdatedAt.IsZero() {
+		return ""
+	}
+	return humanize.RelTime(r.UpdatedAt, now)
+}
+
+// maxAgeWidth sizes the relative-age column across every section.
+func maxAgeWidth(sections []Section, now time.Time) int {
+	w := 0
+	for _, s := range sections {
+		for _, r := range s.Rows {
+			w = max(w, lipgloss.Width(ageCell(r, now)))
+		}
+	}
+	return w
 }
