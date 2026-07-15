@@ -1,4 +1,5 @@
 # duty
+![logo](docs/logo.png).
 
 A little task system that lives in your repo as plain markdown files. No app, no
 database, no account — just files you can grep, diff, and commit, and one binary
