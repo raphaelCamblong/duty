@@ -43,5 +43,6 @@ Order top-to-bottom is the intended build order.
 | [T-41](T-41-relocate-and-condense-the-spec.md) | Relocate and condense the spec | done |
 | [T-42](T-42-configurable-tui-theme-via-toml.md) | Configurable TUI theme via TOML | done |
 | [T-43](T-43-split-the-spec-and-docs-site-into-topic.md) | Split the spec and docs site into topic pages | done |
+| [T-44](T-44-docs-iteration-structure-voice-screensho.md) | Docs iteration: structure, voice, screenshots, custom domain | todo |
 
 Completed tasks (0) archived: [archive/](archive/).
