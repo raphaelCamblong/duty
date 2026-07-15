@@ -35,6 +35,16 @@ func Gates(content []byte) []Gate {
 	return gates
 }
 
+// AddGates appends a "- [ ] <text>" gate per text, in order, to the "## Gates"
+// section, creating the section on the first when it is absent. Existing gate
+// lines survive byte-for-byte; each new gate goes after the last.
+func AddGates(content []byte, texts []string) []byte {
+	for _, text := range texts {
+		content = AddGate(content, text)
+	}
+	return content
+}
+
 // AddGate appends a "- [ ] <text>" gate to the "## Gates" section, creating the
 // section like ReplaceSection when it is absent. Existing gate lines survive
 // byte-for-byte; the new gate goes after the last one.
@@ -74,6 +84,25 @@ func SetGate(content []byte, n int, done bool) ([]byte, error) {
 	return nil, fmt.Errorf("no gate %d: task has %d", n, count)
 }
 
+// SetAllGates ticks or unticks every gate under "## Gates", flipping only each
+// gate line's checkbox character. Content with no Gates section is returned
+// unchanged.
+func SetAllGates(content []byte, done bool) []byte {
+	start, end, found := sectionBounds(content, gatesHeading)
+	if !found {
+		return content
+	}
+	out := bytes.Clone(content)
+	for pos := start; pos < end; {
+		line, next := lineAt(out, pos)
+		if _, ok := parseGate(strings.TrimRight(string(line), " \t\r")); ok {
+			out[pos+boxIndex] = boxByte(done)
+		}
+		pos = next
+	}
+	return out
+}
+
 // parseGate decodes a right-trimmed line as a gate; ok is false for any other
 // line. Indented checkboxes do not match, mirroring CountGates.
 func parseGate(line string) (Gate, bool) {
@@ -102,11 +131,15 @@ func lastGateEnd(content []byte, start, end int) (int, bool) {
 
 // flipBox returns content with the checkbox byte at at set ticked or unticked.
 func flipBox(content []byte, at int, done bool) []byte {
-	box := byte(' ')
-	if done {
-		box = 'x'
-	}
 	out := bytes.Clone(content)
-	out[at] = box
+	out[at] = boxByte(done)
 	return out
+}
+
+// boxByte is the checkbox character for a gate's ticked state: 'x' or a space.
+func boxByte(done bool) byte {
+	if done {
+		return 'x'
+	}
+	return ' '
 }

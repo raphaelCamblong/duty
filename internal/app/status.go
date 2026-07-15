@@ -35,7 +35,16 @@ func (a App) setStatusLocked(taskPath, id, status string, force bool) error {
 	if err != nil {
 		return err
 	}
-	if err := guardClaim(id, status, t.Status, force); err != nil {
+	return a.statusWrite(taskPath, id, status, force, content, t.Status)
+}
+
+// statusWrite applies the synced status change onto content — the task file's
+// bytes, already read (and possibly already edited, as by report --status) —
+// with current its parsed status: it guards the claim, rewrites the status line
+// and the board cell, then writes both files, every new content computed before
+// either write so an error leaves both untouched. It must run under the tree lock.
+func (a App) statusWrite(taskPath, id, status string, force bool, content []byte, current string) error {
+	if err := guardClaim(id, status, current, force); err != nil {
 		return err
 	}
 	updated, err := task.SetStatus(content, status)

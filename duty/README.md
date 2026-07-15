@@ -10,15 +10,16 @@ the truth; the board is a projection. A track is a folder; its board defines its
 Frontmatter (`id`, `title`, `status`, `blocked-by`) + sections: `## Goal`, `## Read
 first`, `## Scope` (decisions are pre-made — don't re-decide), `## Out of scope`,
 `## Gates` (a `- [ ]` checklist; all ticked = done), `## Report` (append, never overwrite).
-Author it CLI-first — no editor needed: `duty set <id> <section>` fills a section body
-from stdin, `duty gates add/check/uncheck <id>` manage the checklist.
+Author it in one shot — no editor needed: `duty create task <title> --body` pipes the whole
+markdown body in at once, `duty set <id> [section]` fills one section or bulk-replaces every
+`## ` block from stdin, `duty gates add/check/uncheck <id>` manage the checklist.
 
 Statuses: `todo | in-progress | done | blocked`.
 
 ## Lifecycle → command
 
-0. Author → `duty create task <title>`, then `duty set <id> goal` / `set <id> scope`
-   from stdin and `duty gates add <id> <text>` — no editor involved.
+0. Author → `duty create task <title> --body` pipes the whole markdown body in one call,
+   or `duty set <id>` bulk-replaces `## ` sections from stdin afterward — no editor involved.
 1. Start → `duty get next` (the first actionable task), then `duty status <id> in-progress`.
 2. Blocked (missing input, failed dep, unmade decision) → `duty status <id> blocked`
    + pipe a report naming exactly what's missing (`duty report <id>`), then stop.

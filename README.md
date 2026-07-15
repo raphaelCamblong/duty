@@ -40,10 +40,11 @@ duty tui                          # watch it all live
 ## Agents like it too
 
 duty was built to be driven by AI agents: commands are quiet, exit codes mean
-things, and `--agent` turns any read into clean TSV. An agent's whole loop is
-`duty get next` → work → `duty status` + `duty report`. Running a swarm?
-`duty get next --claim` hands each agent a distinct task under a tree-wide lock,
-so their writes never collide. Hand it
+things, and `--agent` turns any read into clean TSV. An agent's whole loop is four
+calls: `duty get next --claim` → work → `duty gates check --all` →
+`duty report --status done`. Each recurring step is one atomic write, so running a
+swarm just works — `get next --claim` hands each agent a distinct task under a
+tree-wide lock, and their writes never collide. Hand it
 [duty/README.md](duty/README.md) and it knows the rules — and since the TUI
 watches the files, you see its progress the moment it moves.
 

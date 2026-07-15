@@ -1,7 +1,7 @@
 ---
 id: T-37
 title: One-shot forms for recurring agent sequences
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -43,8 +43,30 @@ Batch multi-task operations; JSON write formats; changing existing verb
 semantics; TUI.
 
 ## Gates
-- [ ] Agent lifecycle in a scratch tree is 4 calls total: create task --body → get next --claim → gates check --all → report --status done (recorded in the report).
-- [ ] report --status is atomic: error paths leave neither the report nor the status applied (test-proven).
-- [ ] Full suite green; golangci-lint 0 issues; gofumpt -l . empty; go vet clean; build ok; spec §5/§6 + README/template/golden updated together.
+- [x] Agent lifecycle in a scratch tree is 4 calls total: create task --body → get next --claim → gates check --all → report --status done (recorded in the report).
+- [x] report --status is atomic: error paths leave neither the report nor the status applied (test-proven).
+- [x] Full suite green; golangci-lint 0 issues; gofumpt -l . empty; go vet clean; build ok; spec §5/§6 + README/template/golden updated together.
 
 ## Report
+
+Shipped the four recurring agent sequences as one-shot forms.
+
+Files changed:
+- internal/task/gate.go — added AddGates (variadic) and SetAllGates (flip every gate, surgical); extracted boxByte, reused by flipBox.
+- internal/app/gate.go — AddGate → AddGates (variadic), new SetAllGates.
+- internal/app/status.go — extracted statusWrite(content, current) from setStatusLocked so report --status shares the synced write.
+- internal/app/report.go — Report now takes (status, force): appends the report AND flips status in one locked write, both edits computed before either write (atomic).
+- internal/app/get.go — new Body() returns the whole body below the frontmatter, read-only.
+- internal/cli/report.go — --status / --force flags.
+- internal/cli/gates.go — variadic `add`, `--all` on check/uncheck, hasEmpty guard.
+- internal/cli/get.go — --body flag, mutually exclusive with --section and --agent (extracted getTaskOut helper for funlen).
+- task-system-spec.md §5/§6, README.md, internal/app/readme.md.tmpl + tests/testdata/readme.md golden.
+- tests/cli_oneshot_forms_test.go — new.
+
+Gates: this task's own lifecycle dogfooded the 4-call loop; `gates check T-37 --all` ticked all three at once; this `report --status done` is the one-shot done ending.
+
+just check green: gofumpt clean, go vet clean, golangci-lint 0 issues, full suite green (coverage 87.2%), race-clean on the touched paths.
+
+Deviations: the gates add usage string reads `<id> <text> [<text>...]` (not `<text>...`) to satisfy staticcheck ST1005 (no trailing punctuation). CLI --help lifecycle (rootLong) left unchanged — out of the stated docs scope and pinned by an existing help test.
+
+Follow-ups left: none.

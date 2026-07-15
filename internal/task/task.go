@@ -103,6 +103,21 @@ func Render(id, title string, blockedBy []string) []byte {
 	return b.Bytes()
 }
 
+// RenderWithBody produces a brand-new task file from a caller-supplied body:
+// the generated frontmatter (status todo) and H1, then body verbatim below the
+// H1's blank line. body is expected to open at a "## " heading (OpensAtSection);
+// its bytes are spliced unchanged save leading blank lines and a guaranteed
+// trailing newline, so a task authored in one shot is byte-identical below the
+// H1 to the same task filled section by section.
+func RenderWithBody(id, title string, blockedBy []string, body []byte) []byte {
+	head := Render(id, title, blockedBy)
+	head = head[:nextHeadingFrom(head, 0)]
+	var b bytes.Buffer
+	b.Write(head)
+	writeEndingNL(&b, bytes.TrimLeft(body, " \t\r\n"))
+	return b.Bytes()
+}
+
 // SetStatus rewrites the first `status:` line to the given status and leaves
 // every other byte untouched. It returns an error for a status outside the
 // known set or for content without a status line.

@@ -49,6 +49,20 @@ func (a App) GetTask(cwd, id string) (TaskInfo, error) {
 	return a.taskInfo(root, path)
 }
 
+// Body returns the whole markdown body below the frontmatter of the task id
+// resolves to, verbatim. Archived ids are read-only and rejected.
+func (a App) Body(cwd, id string) (string, error) {
+	_, path, err := a.resolveOpenWithRoot(cwd, id)
+	if err != nil {
+		return "", err
+	}
+	content, err := a.fs.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(task.Body(content)), nil
+}
+
 // GetTracks returns one TrackInfo per board in the board in — a root-relative
 // track path, or the board containing cwd when empty — and every board below
 // it, that board included as ".". Counts tally the board's own

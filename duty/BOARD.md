@@ -35,8 +35,8 @@ Order top-to-bottom is the intended build order.
 | [T-33](T-33-justfile-for-developer-experience.md) | Justfile for developer experience | done |
 | [T-34](T-34-status-sorted-task-rows-in-the-tui.md) | Status-sorted task rows in the TUI | done |
 | [T-35](T-35-right-align-the-track-state-bar.md) | Right-align the track state bar | done |
-| [T-36](T-36-one-shot-task-authoring-for-agents.md) | One-shot task authoring for agents | todo |
-| [T-37](T-37-one-shot-forms-for-recurring-agent-seque.md) | One-shot forms for recurring agent sequences | todo |
+| [T-36](T-36-one-shot-task-authoring-for-agents.md) | One-shot task authoring for agents | done |
+| [T-37](T-37-one-shot-forms-for-recurring-agent-seque.md) | One-shot forms for recurring agent sequences | done |
 | [T-38](T-38-apply-the-duty-color-palette-to-the-tui.md) | Apply the duty color palette to the TUI | done |
 | [T-39](T-39-palette-true-light-theme-via-status-chip.md) | Palette-true light theme via status chips | done |
 | [T-40](T-40-light-theme-flat-colors-bold-selection-s.md) | Light theme flat colors, bold selection, small-screen priority | done |
