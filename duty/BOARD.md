@@ -28,5 +28,7 @@ Order top-to-bottom is the intended build order.
 | [T-26](T-26-goreleaser-release-pipeline.md) | GoReleaser release pipeline | done |
 | [T-27](T-27-code-quality-sweep-function-length-and-s.md) | Code quality sweep: function length and smells | done |
 | [T-28](T-28-apply-simplify-pass-findings.md) | Apply simplify-pass findings | done |
+| [T-29](T-29-track-path-addressing-across-commands.md) | Track path addressing across commands | todo |
+| [T-30](T-30-atomic-claim-and-write-locking.md) | Atomic claim and write locking | todo |
 
 Completed tasks (0) archived: [archive/](archive/).
