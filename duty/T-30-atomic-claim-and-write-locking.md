@@ -1,7 +1,7 @@
 ---
 id: T-30
 title: Atomic claim and write locking
-status: todo
+status: done
 blocked-by: [T-29]
 ---
 
@@ -53,15 +53,55 @@ agent leaves in-progress — `--force` is the manual recovery, note it in spec
 §10); locking reads; TUI.
 
 ## Gates
-- [ ] Concurrency test green under `-race`: N parallel claims → N distinct
+- [x] Concurrency test green under `-race`: N parallel claims → N distinct
   tasks, tree hash-consistent (every file/row pair in sync).
-- [ ] `status <id> in-progress` refusal + `--force` override covered by tests;
+- [x] `status <id> in-progress` refusal + `--force` override covered by tests;
   roundtrip and all existing tests still green (transition tightening is the
   ONLY sanctioned behavior change).
-- [ ] Full suite green (`go test ./tests/... -coverpkg=./internal/... -count=1`
+- [x] Full suite green (`go test ./tests/... -coverpkg=./internal/... -count=1`
   and `-race`); `golangci-lint run` clean; `gofumpt -l .` empty;
   `go vet ./...` clean; `go build -o bin/duty ./cmd/duty` ok.
-- [ ] Spec §6 + §10, README, `.gitignore`, `internal/names` all updated
+- [x] Spec §6 + §10, README, `.gitignore`, `internal/names` all updated
   together.
 
 ## Report
+
+Delivered atomic claim + tree-wide write locking.
+
+fsys port: FS gains Lock(path) (unlock, err). OS adapter (internal/fsys/os.go)
+uses github.com/gofrs/flock — blocking acquire with a 5s timeout, "tree is
+locked" on timeout. Mem adapter (mem.go) uses a per-path buffered-channel lock
+with a configurable LockTimeout (default 5s) for the same error path. Shared
+sentinel message errLocked lives in fsys.go. Lock file <root>/.duty.lock named
+in internal/names, gitignored.
+
+app: one guard (App.lock → fs.Lock(root/.duty.lock)) wraps every mutating
+use-case for its duration — CreateTask, CreateTrack, SetStatus, Report, Move,
+Archive, Delete (Init and reads excluded). Read-modify-write bodies extracted
+into *Locked helpers to stay under funlen 35. get next --claim (app/get.go
+claim) peeks unlocked, then under the lock re-scans (authoritative) and marks
+the first actionable task in-progress, returning it with the truthful status;
+an empty claim never touches the lock file. SetStatus gained a force param;
+guardClaim refuses in-progress→in-progress without --force, all other
+transitions stay free.
+
+cli: status --force, get next --claim, get next usage/example updated.
+
+Gate tails: gofmt/gofumpt clean; go vet clean; golangci-lint "0 issues";
+go test ./tests/... -coverpkg=./internal/... → ok, coverage 85.7%;
+go test -race → ok (incl. TestClaimParallel: 8 goroutines → 8 distinct tasks,
+board+files in sync). New tests: tests/cli_claim_test.go (parallel claims,
+single claim, empty-claim no-lock-file, status --force guard),
+tests/fsys_test.go TestLock (OS mutual exclusion, Mem timeout, re-acquire).
+
+Docs updated together: spec §6 (status --force row, get next --claim row, lock
+note in intro) + §10 (retired "No locking", describes the flock design, notes
+--force as stale-claim recovery); root README agents paragraph; agent template
+readme.md.tmpl + regenerated golden tests/testdata/readme.md; .gitignore;
+internal/names.LockFile.
+
+Design note: the .duty.lock artifact is created on demand and gitignored, so
+the two byte-identity test fingerprints (hashTree, snapshotTree) now skip it —
+the task-content round-trip invariant is unchanged. init does not pre-create a
+per-tree .gitignore (YAGNI; the file is gitignored in this repo and lives only
+transiently). No follow-ups; scope complete.

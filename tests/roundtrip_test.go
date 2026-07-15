@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/raphaelCamblong/duty/internal/board"
+	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/task"
 )
 
@@ -162,6 +163,9 @@ func hashTree(t *testing.T, root string) string {
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if d.Name() == names.LockFile {
+			return nil
 		}
 		rel, err := filepath.Rel(root, path)
 		if err != nil {

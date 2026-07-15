@@ -17,13 +17,14 @@ const (
 	getTaskUsage   = "usage: duty get task <id> [--agent]"
 	getTasksUsage  = "usage: duty get tasks [--status S] [--agent]"
 	getTracksUsage = "usage: duty get tracks [--agent]"
-	getNextUsage   = "usage: duty get next [--agent]"
+	getNextUsage   = "usage: duty get next [--claim] [--agent]"
 
 	getExample = `  duty get next --agent
   duty get task T-07`
 	getTaskExample   = `  duty get task T-07`
 	getTracksExample = `  duty get tracks --agent`
-	getNextExample   = `  duty get next --agent`
+	getNextExample   = `  duty get next --agent
+  duty get next --claim`
 )
 
 // taskKeyWidth pads the key column of get task's human output; it is the
@@ -112,10 +113,12 @@ func newGetTracksCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 }
 
 // newGetNextCmd builds get next: the first actionable task, or no output when
-// nothing is ready.
+// nothing is ready. With --claim it atomically marks that task in-progress and
+// prints it, so parallel agents each receive a distinct task.
 func newGetNextCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var (
 		agent bool
+		claim bool
 		in    string
 	)
 	cmd := &cobra.Command{
@@ -126,7 +129,7 @@ func newGetNextCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 			if len(args) != 0 {
 				return errors.New(getNextUsage)
 			}
-			info, err := a.GetNext(cwd, in)
+			info, err := a.GetNext(cwd, in, claim)
 			if err != nil {
 				return err
 			}
@@ -142,6 +145,7 @@ func newGetNextCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output, same fields as get task")
+	cmd.Flags().BoolVar(&claim, "claim", false, "atomically mark the task in-progress and print it")
 	addInFlag(cmd, &in)
 	return cmd
 }

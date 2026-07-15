@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/raphaelCamblong/duty/internal/board"
+	"github.com/raphaelCamblong/duty/internal/names"
 )
 
 // snapshotTree captures the content of every regular file under root, keyed
@@ -18,7 +19,7 @@ func snapshotTree(t *testing.T, root string) map[string]string {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() {
+		if d.IsDir() || d.Name() == names.LockFile {
 			return nil
 		}
 		rel, err := filepath.Rel(root, path)

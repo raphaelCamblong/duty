@@ -1,10 +1,22 @@
 package fsys
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
+
+	"github.com/gofrs/flock"
+)
+
+// lockWait bounds how long Lock blocks for the tree lock before reporting it
+// held elsewhere; lockRetryDelay is how often it re-tries while waiting.
+const (
+	lockWait       = 5 * time.Second
+	lockRetryDelay = 20 * time.Millisecond
 )
 
 // OS is the FS backed by the real operating-system filesystem.
@@ -32,6 +44,25 @@ func (OS) Stat(name string) (fs.FileInfo, error) { return os.Stat(name) }
 
 // WalkDir walks the tree rooted at root in lexical order, calling fn per entry.
 func (OS) WalkDir(root string, fn fs.WalkDirFunc) error { return filepath.WalkDir(root, fn) }
+
+// Lock takes an exclusive flock on path, blocking up to lockWait, and returns
+// a release function. A wait that times out reports the tree held elsewhere.
+func (OS) Lock(path string) (func(), error) {
+	fl := flock.New(path)
+	ctx, cancel := context.WithTimeout(context.Background(), lockWait)
+	defer cancel()
+	locked, err := fl.TryLockContext(ctx, lockRetryDelay)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, errLocked
+		}
+		return nil, fmt.Errorf("lock %s: %w", path, err)
+	}
+	if !locked {
+		return nil, errLocked
+	}
+	return func() { _ = fl.Unlock() }, nil
+}
 
 // WriteFile writes data to name atomically: a temp file in the same directory,
 // then a rename over the target. The resulting file has 0644 permissions.

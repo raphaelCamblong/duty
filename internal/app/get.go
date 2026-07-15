@@ -71,12 +71,47 @@ func (a App) GetTracks(cwd, in string) ([]TrackInfo, error) {
 // root-relative track path, or the board containing cwd when empty — and
 // every board below it in scan order, and within each its rows in board
 // order, it returns the first todo whose blocked-by are all done — archived
-// dependencies count as done. It returns nil when nothing is actionable.
-func (a App) GetNext(cwd, in string) (*TaskInfo, error) {
+// dependencies count as done. It returns nil when nothing is actionable. With
+// claim set it atomically marks that task in-progress under the tree lock and
+// returns it with the truthful post-claim status, so parallel callers each get
+// a distinct task.
+func (a App) GetNext(cwd, in string, claim bool) (*TaskInfo, error) {
 	root, err := tree.FindRoot(a.fs, cwd)
 	if err != nil {
 		return nil, err
 	}
+	info, err := a.nextActionable(root, cwd, in)
+	if err != nil || info == nil || !claim {
+		return info, err
+	}
+	return a.claim(root, cwd, in)
+}
+
+// claim marks the next actionable task in-progress under the tree lock and
+// returns it with the truthful post-claim status. Re-scanning under the lock —
+// the authoritative pass — is what makes parallel claims each pick a distinct
+// task; the caller's earlier unlocked scan only decides whether to lock at all,
+// so a claim with nothing to do leaves no lock-file side effect.
+func (a App) claim(root, cwd, in string) (*TaskInfo, error) {
+	unlock, err := a.lock(root)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	info, err := a.nextActionable(root, cwd, in)
+	if err != nil || info == nil {
+		return info, err
+	}
+	if err := a.setStatusLocked(info.Path, info.ID, task.StatusInProgress, false); err != nil {
+		return nil, err
+	}
+	info.Status = task.StatusInProgress
+	return info, nil
+}
+
+// nextActionable scans the board in and every board below it and returns the
+// first actionable task, or nil when none is ready.
+func (a App) nextActionable(root, cwd, in string) (*TaskInfo, error) {
 	_, boards, err := a.walkBoards(cwd, in)
 	if err != nil {
 		return nil, err

@@ -17,6 +17,15 @@ import (
 // with nothing to archive is left untouched, which makes a second run a clean
 // no-op.
 func (a App) Archive(cwd, in string) error {
+	root, err := tree.FindRoot(a.fs, cwd)
+	if err != nil {
+		return err
+	}
+	unlock, err := a.lock(root)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	_, boards, err := a.walkBoards(cwd, in)
 	if err != nil {
 		return err

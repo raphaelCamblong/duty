@@ -16,7 +16,8 @@ const (
 // newStatusCmd builds the status command: set a task's status in its file
 // and board row.
 func newStatusCmd(a app.App, cwd string) *cobra.Command {
-	return &cobra.Command{
+	var force bool
+	cmd := &cobra.Command{
 		Use:     "status <id> <status>",
 		Short:   "set a task's status in its file and board row",
 		Example: statusExample,
@@ -24,7 +25,9 @@ func newStatusCmd(a app.App, cwd string) *cobra.Command {
 			if len(args) != 2 || args[0] == "" || args[1] == "" {
 				return errors.New(statusUsage)
 			}
-			return a.SetStatus(cwd, args[0], args[1])
+			return a.SetStatus(cwd, args[0], args[1], force)
 		},
 	}
+	cmd.Flags().BoolVar(&force, "force", false, "take over a task already in-progress")
+	return cmd
 }

@@ -164,7 +164,8 @@ Completed tasks (12) archived: [archive/](archive/).
 Verb → resource, kubectl-style: `create`, `get`, and `delete` take a resource
 subcommand (`task`, `track`, `tasks`); the agent hot path stays verb-only (`init`,
 `status`, `report`, `move`, `archive`, `tui`). Every mutating command maintains the
-sync invariant (file + board in one shot). Exit codes: `0` ok, `≠0` error with a
+sync invariant (file + board in one shot) and serializes on a tree-wide write
+lock (§10). Exit codes: `0` ok, `≠0` error with a
 one-line stderr message; `2` for a missing or unknown command.
 
 **Help & discovery.** `duty --help` groups the tree — `Author` (`init`, `create`),
@@ -183,7 +184,7 @@ exits `0`. An id that resolves nowhere hints at the fix: `unknown task id "T-99"
 | `duty init [title]` | Bootstrap: create `duty/` in cwd with skeleton `BOARD.md` (H1 = title, default `Board`), `README.md`, `archive/`. Refuse if already inside a tree. |
 | `duty create task <title> [--slug S] [--blocked-by ID…] [--section NAME] [--in PATH]` | Create in the **current board** (or the `--in` board). Validate that every `--blocked-by` id exists (anywhere in the tree). Next NN scans the whole tree. Write the template file (frontmatter + section skeleton). Append the board row (`todo`) to the section's table — default `Open tasks`, section created if absent. Print the created path. |
 | `duty create track <name> [--title T] [--in PATH]` | Create track `<name>/` (validated `[a-z0-9-]+`) under the current board (or the `--in` board): skeleton `BOARD.md` (H1 = title, default: the name) + `archive/`. Append its bullet to the parent's `## Boards` section (created if absent). Refuse if the folder already exists. |
-| `duty status <id> <status>` | Rewrite the frontmatter `status:` line + the row's status cell. Reject unknown statuses. |
+| `duty status <id> <status> [--force]` | Rewrite the frontmatter `status:` line + the row's status cell. Reject unknown statuses. Setting `in-progress` on a task already `in-progress` is refused (`T-x is already in-progress — someone claimed it; use --force to take it over`) unless `--force` — the one guarded transition, so a live claim is never silently stolen; every other transition stays free (the flat setter of §3). |
 | `duty move <id> [--track PATH] [--section NAME]` | At least one flag. `--track` moves the task to another track: `PATH` is relative to the tree root (`.` = root board); rename the file into the target folder (same filename — ids don't encode tracks), drop the source row (prune), append to the target's `--section` (default `Open tasks`), status preserved. `--section` alone moves the row under `## <section>` within its own board (created if absent, inserted above the footer); prune any section left empty. |
 | `duty report <id>` | Append stdin under `## Report` (heading created once, content accumulates). Refuse empty stdin. |
 | `duty archive [--in PATH]` | For every open task with `status: done`, in the current board (or the `--in` board) and every board below it: `os.Rename` → its own board's `archive/`, drop its row, prune empty sections, rewrite that board's footer count. Idempotent; "nothing to archive" is a clean no-op. |
@@ -191,7 +192,7 @@ exits `0`. An id that resolves nowhere hints at the fix: `unknown task id "T-99"
 | `duty get tasks [--status S] [--in PATH]` | Recursive from the current board (or the `--in` board). One line per open task **from the files**: `id  status  title`, prefixed with the track path when not local (`backend/ T-12 …`). If the board row's status disagrees (or the row is missing), append a `⚠ board says …` drift flag. `list` survives as a hidden alias. |
 | `duty get task <id>` | One task's metadata **from its file** — never its body (the path is printed; readers `cat` it). Resolves the id anywhere in the tree. Human: aligned `key: value` lines (id, title, status, track, blocked-by, gates `n/m`, path). |
 | `duty get tracks [--in PATH]` | One line per board — the starting board included as `.` — recursive from the current board (or the `--in` board): path, title, per-status counts of its **own** (directly-filed) tasks (todo/in-progress/done/blocked) and its archived count. |
-| `duty get next [--in PATH]` | The first **actionable** task: walk the current board's (or the `--in` board's) rows in board order (build order is priority), then sub-tracks depth-first in scan order, and return the first `todo` whose `blocked-by` are all `done` (an archived dependency counts as done). Output shape = `get task`. **Nothing actionable → no output, exit 0** (empty means nothing to do). |
+| `duty get next [--claim] [--in PATH]` | The first **actionable** task: walk the current board's (or the `--in` board's) rows in board order (build order is priority), then sub-tracks depth-first in scan order, and return the first `todo` whose `blocked-by` are all `done` (an archived dependency counts as done). Output shape = `get task`. **Nothing actionable → no output, exit 0** (empty means nothing to do). With **`--claim`** it atomically marks that task `in-progress` (file + board row) under the tree-wide lock before printing it — the printed status is the truthful `in-progress`, the `--agent` shape unchanged — so parallel agents each get a distinct task and losers of the race transparently receive the following one; a claim with nothing to do stays a pure read (no lock-file side effect). |
 | `duty tui` | Launch the live board viewer (§8). |
 
 **Board context (`--in PATH`).** The board-scoped commands — `create task`, `create
@@ -388,8 +389,17 @@ Add TUI mutations only if that round-trip proves too slow in practice.
 - **No board delete/move commands** — tasks move (`duty move`); boards don't. Delete a
   board by deleting the folder and fixing the parent's `## Boards` bullet by hand; it's
   cosmetic anyway (tooling scans, never reads it).
-- **No locking** — concurrent CLI writers can race on a `BOARD.md`. In practice: one
-  human, agents run commands serially. Add an flock on the root when it actually hurts.
+- **Tree-wide write lock, nothing finer** — every mutating command (`create`, `status`,
+  `report`, `move`, `archive`, `delete`; not `init`, not reads) holds one advisory
+  `flock` on `<root>/.duty.lock` (gofrs/flock; the lock file is created on demand,
+  gitignored, and never committed) for its whole duration, and `duty get next --claim`
+  computes the next actionable task and marks it `in-progress` under that same lock — so
+  parallel agents are safe: each claim hands back a distinct task, and a writer that
+  can't take the lock within ~5s fails with `tree is locked` rather than racing on a
+  `BOARD.md`. Deliberately coarse: no per-task lock granularity, no lease / heartbeat /
+  stale-claim recovery. A crashed agent leaves its task `in-progress`;
+  `duty status <id> in-progress --force` is the manual recovery — take over a stale
+  claim. Reads never lock.
 - **No stored rollups** — track counts (`1 in-progress · 2 todo`) are computed live from
   files by the TUI, written nowhere. Anything derived and stored is future drift.
 - **No semantic config** — `duty.toml` tunes presentation (§7); statuses, naming, and

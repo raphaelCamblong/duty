@@ -24,6 +24,15 @@ func (a App) Move(cwd, id, track, section string) error {
 	if track == "" && section == "" {
 		return errors.New("move: pass --track, --section, or both")
 	}
+	root, err := tree.FindRoot(a.fs, cwd)
+	if err != nil {
+		return err
+	}
+	unlock, err := a.lock(root)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	if track == "" {
 		return a.moveRow(cwd, id, section)
 	}

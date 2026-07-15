@@ -6,6 +6,7 @@ import (
 
 	"github.com/raphaelCamblong/duty/internal/board"
 	"github.com/raphaelCamblong/duty/internal/names"
+	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
 // CreateTrack creates the track name/ under the board in — a root-relative
@@ -17,11 +18,25 @@ func (a App) CreateTrack(cwd, name, title, in string) error {
 	if !nameRE.MatchString(name) {
 		return fmt.Errorf("invalid track name %q: must match [a-z0-9-]+", name)
 	}
-
+	root, err := tree.FindRoot(a.fs, cwd)
+	if err != nil {
+		return err
+	}
 	parentDir, err := a.contextBoard(cwd, in)
 	if err != nil {
 		return err
 	}
+	unlock, err := a.lock(root)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	return a.createTrackLocked(parentDir, name, title)
+}
+
+// createTrackLocked writes the track's skeleton board and archive/ and appends
+// the courtesy bullet to the parent board. It must run under the tree lock.
+func (a App) createTrackLocked(parentDir, name, title string) error {
 	sub := filepath.Join(parentDir, name)
 	if _, err := a.fs.Stat(sub); err == nil {
 		return fmt.Errorf("cannot create track: %s already exists", sub)
@@ -38,7 +53,6 @@ func (a App) CreateTrack(cwd, name, title, in string) error {
 	if err != nil {
 		return err
 	}
-
 	if err := a.fs.MkdirAll(filepath.Join(sub, names.ArchiveDir)); err != nil {
 		return fmt.Errorf("create track: %w", err)
 	}

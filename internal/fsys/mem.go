@@ -4,14 +4,24 @@ import (
 	"io/fs"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 )
+
+// memLockWait is the default acquire timeout for Mem.Lock; tests override it
+// through LockTimeout to exercise the "tree is locked" path quickly.
+const memLockWait = 5 * time.Second
 
 // Mem is a map-backed in-memory FS for fast tests. Files carry mode 0644,
 // directories 0755; a file's parent directory must exist before it is written.
 type Mem struct {
 	files map[string][]byte
 	dirs  map[string]bool
+	// LockTimeout bounds how long Lock blocks before reporting the tree
+	// locked; zero uses memLockWait.
+	LockTimeout time.Duration
+	mu          sync.Mutex
+	locks       map[string]chan struct{}
 }
 
 var _ FS = (*Mem)(nil)
@@ -21,6 +31,7 @@ func NewMem() *Mem {
 	return &Mem{
 		files: map[string][]byte{},
 		dirs:  map[string]bool{filepath.Clean("/"): true},
+		locks: map[string]chan struct{}{},
 	}
 }
 
@@ -152,6 +163,37 @@ func (m *Mem) walkDir(path string, d fs.DirEntry, fn fs.WalkDirFunc) error {
 		}
 	}
 	return nil
+}
+
+// Lock acquires the per-path in-process lock, blocking up to LockTimeout
+// (memLockWait when zero) before reporting the tree held elsewhere.
+func (m *Mem) Lock(path string) (func(), error) {
+	ch := m.lockChan(path)
+	wait := m.LockTimeout
+	if wait == 0 {
+		wait = memLockWait
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case ch <- struct{}{}:
+		return func() { <-ch }, nil
+	case <-timer.C:
+		return nil, errLocked
+	}
+}
+
+// lockChan returns the token channel guarding path, creating it once.
+func (m *Mem) lockChan(path string) chan struct{} {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c := filepath.Clean(path)
+	ch, ok := m.locks[c]
+	if !ok {
+		ch = make(chan struct{}, 1)
+		m.locks[c] = ch
+	}
+	return ch
 }
 
 // info returns the FileInfo for an existing clean path.

@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/raphaelCamblong/duty/internal/fsys"
 )
@@ -181,4 +182,67 @@ func TestFSAdapters(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLock(t *testing.T) {
+	t.Run("OS serializes a second acquire until the first releases", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), ".duty.lock")
+		unlock, err := fsys.OS{}.Lock(path)
+		if err != nil {
+			t.Fatalf("first lock: %v", err)
+		}
+		acquired := make(chan struct{})
+		go func() {
+			u2, err := fsys.OS{}.Lock(path)
+			if err != nil {
+				t.Errorf("second lock: %v", err)
+				return
+			}
+			u2()
+			close(acquired)
+		}()
+		select {
+		case <-acquired:
+			t.Fatal("second lock acquired while the first was held")
+		case <-time.After(100 * time.Millisecond):
+		}
+		unlock()
+		select {
+		case <-acquired:
+		case <-time.After(2 * time.Second):
+			t.Fatal("second lock never acquired after release")
+		}
+	})
+
+	t.Run("Mem reports the tree locked when held past the timeout", func(t *testing.T) {
+		m := fsys.NewMem()
+		m.LockTimeout = 30 * time.Millisecond
+		unlock, err := m.Lock("/.duty.lock")
+		if err != nil {
+			t.Fatalf("first lock: %v", err)
+		}
+		defer unlock()
+		if _, err := m.Lock("/.duty.lock"); err == nil || err.Error() != "tree is locked" {
+			t.Errorf("second lock err = %v, want \"tree is locked\"", err)
+		}
+	})
+
+	t.Run("a released lock can be re-acquired", func(t *testing.T) {
+		for _, a := range fsAdapters {
+			t.Run(a.name, func(t *testing.T) {
+				f, root := a.make(t)
+				path := filepath.Join(root, ".duty.lock")
+				unlock, err := f.Lock(path)
+				if err != nil {
+					t.Fatalf("first lock: %v", err)
+				}
+				unlock()
+				u2, err := f.Lock(path)
+				if err != nil {
+					t.Fatalf("re-lock after release: %v", err)
+				}
+				u2()
+			})
+		}
+	})
 }

@@ -29,6 +29,17 @@ func (a App) CreateTask(cwd, title, slug, section, in string, blockedBy []string
 	if err != nil {
 		return "", err
 	}
+	unlock, err := a.lock(root)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+	return a.createTaskLocked(root, boardDir, title, slug, section, blockedBy)
+}
+
+// createTaskLocked validates dependencies, numbers the task tree-wide, and
+// writes the template file and its board row. It must run under the tree lock.
+func (a App) createTaskLocked(root, boardDir, title, slug, section string, blockedBy []string) (string, error) {
 	if err := a.validateBlockedBy(root, blockedBy); err != nil {
 		return "", err
 	}

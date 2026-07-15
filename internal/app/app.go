@@ -56,6 +56,13 @@ func (a App) resolveOpen(cwd, id string) (string, error) {
 	return path, err
 }
 
+// lock takes the tree-wide write lock for the tree at root and returns its
+// release function. Every mutating use-case holds it for its whole duration so
+// parallel writers serialize on the board rather than racing on a shared file.
+func (a App) lock(root string) (func(), error) {
+	return a.fs.Lock(filepath.Join(root, names.LockFile))
+}
+
 // walkBoards returns the board an --in-scoped read targets and every board
 // below it — the contextBoard→Boards prelude the multi-board reads share.
 func (a App) walkBoards(cwd, in string) (boardDir string, boards []string, err error) {

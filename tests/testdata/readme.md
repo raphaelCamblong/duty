@@ -19,7 +19,7 @@ Statuses: `todo | in-progress | done | blocked`.
 |---|---|
 | `duty create task <title>` | New task in the current board (`--slug`, `--blocked-by`, `--section`). |
 | `duty create track <name>` | New track — a folder with its own board — under the current one (`--title`). |
-| `duty status <id> <status>` | Set status in the task file AND its board row. |
+| `duty status <id> <status>` | Set status in the task file AND its board row. Claiming a task already `in-progress` needs `--force` (take over a stale claim). |
 | `duty move <id>` | `--track PATH` moves the task to another track (path from the tree root); `--section NAME` moves its board row under `## <section>`. At least one flag. |
 | `duty report <id>` | Append stdin under the task's `## Report`. |
 | `duty archive` | Move every `done` task into its board's `archive/`. |
@@ -27,7 +27,7 @@ Statuses: `todo | in-progress | done | blocked`.
 | `duty get tasks` | Open tasks from the files, with drift flags (`--agent` for TSV). |
 | `duty get task <id>` | One task's metadata and file path — not its body (`--agent` for TSV). |
 | `duty get tracks` | Per-status task counts for every board (`--agent` for TSV). |
-| `duty get next` | The first actionable task in board order; empty when nothing is ready (`--agent` for TSV). |
+| `duty get next` | The first actionable task in board order; empty when nothing is ready (`--agent` for TSV). `--claim` atomically marks it `in-progress` — parallel agents each get a distinct task. |
 | `duty tui` | Live board viewer. |
 
 `--in PATH` targets a board by its track path from the tree root (`.` = root), from

@@ -17,3 +17,7 @@ const ArchiveDir = "archive"
 
 // TreeDir is the conventional folder a tree lives in below a project root.
 const TreeDir = "duty"
+
+// LockFile is the tree-wide advisory write lock at the root; it is created on
+// demand, gitignored, and never committed.
+const LockFile = ".duty.lock"

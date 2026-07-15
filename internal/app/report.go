@@ -14,7 +14,7 @@ import (
 // nothing already in the file is rewritten. Empty (or blank) input is
 // refused; r is read only after the id resolves.
 func (a App) Report(cwd, id string, r io.Reader) error {
-	taskPath, err := a.resolveOpen(cwd, id)
+	root, taskPath, err := a.resolveOpenWithRoot(cwd, id)
 	if err != nil {
 		return err
 	}
@@ -25,6 +25,11 @@ func (a App) Report(cwd, id string, r io.Reader) error {
 	if len(bytes.TrimSpace(text)) == 0 {
 		return errors.New("empty report: pipe the report text on stdin")
 	}
+	unlock, err := a.lock(root)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	content, err := a.fs.ReadFile(taskPath)
 	if err != nil {
 		return err
