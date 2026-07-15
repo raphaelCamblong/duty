@@ -1,17 +1,27 @@
 ---
 title: duty
-description: A little task system that lives in your repo as plain markdown files.
+
+description: A tiny task tracker that lives in your repo as Markdown.
+
 template: splash
+
 hero:
   title: duty
-  tagline: A little task system that lives in your repo as plain markdown files. No app, no database, no account. Built for working with your coding agent.
+
+  tagline: >
+    A tiny task tracker that lives in your repo as Markdown. No accounts, no
+    database, no web app—just files your coding agent and your team can read,
+    edit, and commit together.
+
   image:
     file: ../../assets/duty-tui.png
     alt: The duty TUI showing a board of tasks and their statuses.
+
   actions:
     - text: Get started
       link: /getting-started/
       icon: right-arrow
+
     - text: GitHub
       link: https://github.com/raphaelCamblong/duty
       icon: github
@@ -21,16 +31,27 @@ hero:
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
 <CardGrid stagger>
-	<Card title="Markdown all the way down" icon="document">
-		One file is one task. A `BOARD.md` keeps the order. You can grep, diff, and
-		commit all of it — that's the whole model.
-	</Card>
-	<Card title="One binary: CLI + TUI" icon="laptop">
-		The CLI does the writing. The TUI just watches the files — keep `duty tui`
-		open and see every status change land in real time.
-	</Card>
-	<Card title="Tracks that nest" icon="seti:folder">
-		A track is just a folder, and folders nest. Any folder with a `BOARD.md` is
-		a board — no registration, no config.
-	</Card>
+
+  <Card title="Just Markdown" icon="document">
+    Every task is a Markdown file. Organize them however you like, review them
+    in pull requests, search them with <code>grep</code>, and version them with
+    Git. Nothing hidden, nothing proprietary.
+  </Card>
+
+  <Card title="Built for coding agents" icon="robot">
+    Give your coding agent a shared place to plan work, record progress, and
+    leave context behind. Since everything is plain text, both humans and AI can
+    work with it naturally.
+  </Card>
+
+  <Card title="Tiny Go binary" icon="rocket">
+    Written in Go and shipped as a single binary. No runtimes, no dependencies,
+    and virtually no startup time—just drop it into your workflow and go.
+  </Card>
+
+  <Card title="CLI for work, TUI for awareness" icon="laptop">
+    Create and update tasks from the CLI while keeping <code>duty tui</code>
+    open to watch your board update live as work progresses.
+  </Card>
+
 </CardGrid>

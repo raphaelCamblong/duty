@@ -8,14 +8,18 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'duty',
-			logo: { src: './src/assets/logo.png', alt: 'duty' },
+      logo: { src: './src/assets/logo.png', alt: 'duty' },
 			social: [
 				{
 					icon: 'github',
 					label: 'GitHub',
 					href: 'https://github.com/raphaelCamblong/duty',
 				},
-			],
+      ],
+      customCss: [
+        './src/fonts/font-face.css',
+        './src/styles/custom.css',
+      ],
 			sidebar: [
 				{ label: 'Getting started', link: '/getting-started/' },
 				{ label: 'The task convention', link: '/convention/' },
