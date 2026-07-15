@@ -20,7 +20,7 @@ var ageStyle = lipgloss.NewStyle().Faint(true)
 
 const (
 	getUsage       = "usage: duty get <task|tasks|tracks|next> [args]"
-	getTaskUsage   = "usage: duty get task <id> [--agent]"
+	getTaskUsage   = "usage: duty get task <id> [--agent] [--section NAME]"
 	getTasksUsage  = "usage: duty get tasks [--status S] [--agent]"
 	getTracksUsage = "usage: duty get tracks [--agent]"
 	getNextUsage   = "usage: duty get next [--claim] [--agent]"
@@ -55,9 +55,13 @@ func newListCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 }
 
 // newGetTaskCmd builds get task: one task's metadata and file path, human
-// aligned or a single --agent TSV record.
+// aligned or a single --agent TSV record; --section prints one section's body
+// instead.
 func newGetTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
-	var agent bool
+	var (
+		agent   bool
+		section string
+	)
 	cmd := &cobra.Command{
 		Use:     "task <id>",
 		Short:   "show one task's metadata and file path",
@@ -65,6 +69,14 @@ func newGetTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			if len(args) != 1 || args[0] == "" {
 				return errors.New(getTaskUsage)
+			}
+			if section != "" {
+				body, err := a.Section(cwd, args[0], section)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintln(stdout, body)
+				return nil
 			}
 			info, err := a.GetTask(cwd, args[0])
 			if err != nil {
@@ -79,6 +91,7 @@ func newGetTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: id, track, status, title, gates-done, gates-total, blocked-by, path, updated")
+	cmd.Flags().StringVar(&section, "section", "", "print only this section's body")
 	return cmd
 }
 

@@ -156,26 +156,13 @@ func endsBlank(b []byte) bool {
 	return len(b) >= 2 && b[len(b)-1] == '\n' && b[len(b)-2] == '\n'
 }
 
-// CountGates counts gate checkboxes under the first ## Gates heading,
-// stopping at the next ## heading: done is the number of ticked `- [x]`
-// lines, total additionally includes the unticked `- [ ]` lines.
+// CountGates counts gate checkboxes under the "## Gates" section: done is the
+// number of ticked gates, total every gate.
 func CountGates(content []byte) (done, total int) {
-	inGates := false
-	for _, raw := range strings.Split(string(content), "\n") {
-		line := strings.TrimRight(raw, " \t\r")
-		if inGates && strings.HasPrefix(line, "## ") {
-			break
-		}
-		if !inGates {
-			inGates = line == "## Gates"
-			continue
-		}
-		switch {
-		case strings.HasPrefix(line, "- [x]"):
+	for _, g := range Gates(content) {
+		total++
+		if g.Done {
 			done++
-			total++
-		case strings.HasPrefix(line, "- [ ]"):
-			total++
 		}
 	}
 	return done, total

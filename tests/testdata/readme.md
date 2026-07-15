@@ -9,7 +9,8 @@ the truth; the board is a projection the `duty` CLI keeps in sync.
 Frontmatter (`id`, `title`, `status`, `blocked-by`) + sections: `## Goal`,
 `## Read first`, `## Scope` (decisions are pre-made — don't re-decide),
 `## Out of scope`, `## Gates` (a `- [ ]` checklist; all ticked = done),
-`## Report` (append, never overwrite).
+`## Report` (append, never overwrite). Author it CLI-first — no editor needed:
+`set` fills a section, `gates add`/`check` manage the checklist.
 
 Statuses: `todo | in-progress | done | blocked`.
 
@@ -19,13 +20,15 @@ Statuses: `todo | in-progress | done | blocked`.
 |---|---|
 | `duty create task <title>` | New task in the current board (`--slug`, `--blocked-by`, `--section`). |
 | `duty create track <name>` | New track — a folder with its own board — under the current one (`--title`). |
+| `duty set <id> <section>` | Replace a task section's body from stdin (`set T-07 goal < goal.md`) — line-surgical; a missing section is created. |
+| `duty gates <id>` | List a task's gates 1-based (`--agent` for TSV). `gates add <id> <text>` appends one; `gates check`/`uncheck <id> <n>` flip the n-th. |
 | `duty status <id> <status>` | Set status in the task file AND its board row. Claiming a task already `in-progress` needs `--force` (take over a stale claim). |
 | `duty move <id>` | `--track PATH` moves the task to another track (path from the tree root); `--section NAME` moves its board row under `## <section>`. At least one flag. |
 | `duty report <id>` | Append stdin under the task's `## Report`. |
 | `duty archive` | Move every `done` task into its board's `archive/`. |
 | `duty delete task <id>` | Remove an open task (`--force` for `done`). |
 | `duty get tasks` | Open tasks from the files, with drift flags (`--agent` for TSV). |
-| `duty get task <id>` | One task's metadata and file path — not its body (`--agent` for TSV). |
+| `duty get task <id>` | One task's metadata and file path — not its body (`--agent` for TSV, `--section NAME` for one section's body). |
 | `duty get tracks` | Per-status task counts for every board (`--agent` for TSV). |
 | `duty get next` | The first actionable task in board order; empty when nothing is ready (`--agent` for TSV). `--claim` atomically marks it `in-progress` — parallel agents each get a distinct task. |
 | `duty tui` | Live board viewer. |
@@ -36,11 +39,13 @@ anywhere in the tree — on `create task`, `create track`, `get tasks`, `get tra
 
 ## Lifecycle → command
 
+0. Author → `duty create task <title>`, then `duty set <id> goal` / `set <id> scope`
+   from stdin and `duty gates add <id> <text>` — no editor needed.
 1. Start → `duty get next` (the first actionable task), then `duty status <id> in-progress`.
 2. Blocked (missing input, failed dep, unmade decision) → `duty status <id> blocked`
    + pipe a report naming exactly what's missing (`duty report <id>`), then stop.
    Never guess past a blocker.
-3. Working → tick gate checkboxes in the task file as they pass.
+3. Working → tick gates as they pass (`duty gates check <id> <n>`).
 4. Done (all gates ticked) → `duty status <id> done` + pipe a report: files changed,
    gate output tails, deviations (with why), follow-ups deliberately left.
 5. Respect `blocked-by`: don't start a task whose dependencies aren't `done`.

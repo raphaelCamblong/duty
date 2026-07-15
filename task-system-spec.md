@@ -89,8 +89,13 @@ What NOT to touch. YAGNI with teeth.
   real sections in any markdown renderer, and give agents unambiguous structure.
 - **Gates are a `- [ ]` checklist.** Workers tick boxes as gates pass; tooling counts
   `[x]` vs `[ ]` for a progress readout (`2/3` in the TUI) without parsing prose.
-- **Frontmatter is the only machine-owned region.** Everything below it is freeform
-  markdown the tooling appends to but never rewrites.
+- **Frontmatter is the machine-owned region; the body is user-owned but CLI-editable.**
+  *Automated* sync writes (`status`, `create`, `move`, `archive`) touch only frontmatter
+  and the board — they never rewrite the body. *Explicit user-invoked* section edits
+  (`set`, `gates`) are the sanctioned exception: they rewrite one section body or flip one
+  gate checkbox, and they stay line-surgical — every byte outside the target section or
+  checkbox survives. The body is still never re-rendered from a model; edits splice the
+  target lines and write the rest back verbatim.
 
 **Naming:** `T-NN-<slug>.md`. `NN` is the next integer across the **entire tree** — all
 boards, open AND archived (an archived T-07 anywhere blocks reuse) — zero-padded to two
@@ -151,7 +156,8 @@ Completed tasks (12) archived: [archive/](archive/).
 2. **Blocked** (missing input, failed dependency, a decision the task doesn't pre-make) →
    `duty status <id> blocked` + pipe a report naming *exactly* what's missing, then stop.
    Never guess past a blocker.
-3. **Working** → tick gate checkboxes in the task file as they pass.
+3. **Working** → tick gate checkboxes as they pass (`duty gates check <id> <n>`, or edit
+   the box by hand).
 4. **Done** (all gates ticked) → `duty status <id> done` + pipe a report: files changed,
    gate output tails, deviations (with why), follow-ups deliberately left.
 5. Reports **accumulate** in the file — appended, never overwritten.
@@ -168,9 +174,9 @@ sync invariant (file + board in one shot) and serializes on a tree-wide write
 lock (§10). Exit codes: `0` ok, `≠0` error with a
 one-line stderr message; `2` for a missing or unknown command.
 
-**Help & discovery.** `duty --help` groups the tree — `Author` (`init`, `create`),
-`Work` (`status`, `report`, `move`, `archive`, `delete`), `Read` (`get`), `Interface`
-(`tui`, `completion`) — and opens with the five-step lifecycle (`get next` → `status
+**Help & discovery.** `duty --help` groups the tree — `Author` (`init`, `create`, `set`),
+`Work` (`status`, `report`, `gates`, `move`, `archive`, `delete`), `Read` (`get`),
+`Interface` (`tui`, `completion`) — and opens with the five-step lifecycle (`get next` → `status
 in-progress` → tick gates → `status done` + `report` → `archive`); every command
 carries a copy-pasteable `Example`. Typos on a command name suggest the closest match
 within edit distance 2 (`duty creat` → "did you mean \"create\"?"), still exit `2`.
@@ -187,10 +193,12 @@ exits `0`. An id that resolves nowhere hints at the fix: `unknown task id "T-99"
 | `duty status <id> <status> [--force]` | Rewrite the frontmatter `status:` line + the row's status cell. Reject unknown statuses. Setting `in-progress` on a task already `in-progress` is refused (`T-x is already in-progress — someone claimed it; use --force to take it over`) unless `--force` — the one guarded transition, so a live claim is never silently stolen; every other transition stays free (the flat setter of §3). |
 | `duty move <id> [--track PATH] [--section NAME]` | At least one flag. `--track` moves the task to another track: `PATH` is relative to the tree root (`.` = root board); rename the file into the target folder (same filename — ids don't encode tracks), drop the source row (prune), append to the target's `--section` (default `Open tasks`), status preserved. `--section` alone moves the row under `## <section>` within its own board (created if absent, inserted above the footer); prune any section left empty. |
 | `duty report <id>` | Append stdin under `## Report` (heading created once, content accumulates). Refuse empty stdin. |
+| `duty set <id> <section>` | Replace that section's body from stdin, line-surgically (heading line and every byte outside the section survive). Section name matches the `## <name>` heading case-insensitively; a missing section is created before `## Report` (or at end of file). Refuse empty stdin. |
+| `duty gates <id> [list]` | List the task's gates, 1-based (`1 [x] build passes`); `--agent` emits `index<TAB>done<TAB>text` TSV. `gates add <id> <text>` appends a `- [ ]` gate (creating `## Gates` if absent); `gates check <id> <n>` / `gates uncheck <id> <n>` flip the n-th checkbox surgically, erroring when `n` is out of range. |
 | `duty archive [--in PATH]` | For every open task with `status: done`, in the current board (or the `--in` board) and every board below it: `os.Rename` → its own board's `archive/`, drop its row, prune empty sections, rewrite that board's footer count. Idempotent; "nothing to archive" is a clean no-op. |
 | `duty delete task <id> [--force]` | Refuse on `done` without `--force` (that's `archive`'s job). Remove the file, drop the row, prune. |
 | `duty get tasks [--status S] [--in PATH]` | Recursive from the current board (or the `--in` board). One line per open task **from the files**: `id  status  title`, prefixed with the track path when not local (`backend/ T-12 …`) and closed by a dim relative-age column (`6m ago` / `2h ago`, the absolute date past a week — §humanize). If the board row's status disagrees (or the row is missing), append a `⚠ board says …` drift flag. `list` survives as a hidden alias. |
-| `duty get task <id>` | One task's metadata **from its file** — never its body (the path is printed; readers `cat` it). Resolves the id anywhere in the tree. Human: aligned `key: value` lines (id, title, status, track, blocked-by, gates `n/m`, updated (relative age), path). |
+| `duty get task <id> [--section NAME]` | One task's metadata **from its file** — never its body (the path is printed; readers `cat` it). Resolves the id anywhere in the tree. Human: aligned `key: value` lines (id, title, status, track, blocked-by, gates `n/m`, updated (relative age), path). `--section NAME` instead prints that one section's body (exit 1 `no section "x" in T-05` when absent). |
 | `duty get tracks [--in PATH]` | One line per board — the starting board included as `.` — recursive from the current board (or the `--in` board): path, title, per-status counts of its **own** (directly-filed) tasks (todo/in-progress/done/blocked) and its archived count. |
 | `duty get next [--claim] [--in PATH]` | The first **actionable** task: walk the current board's (or the `--in` board's) rows in board order (build order is priority), then sub-tracks depth-first in scan order, and return the first `todo` whose `blocked-by` are all `done` (an archived dependency counts as done). Output shape = `get task`. **Nothing actionable → no output, exit 0** (empty means nothing to do). With **`--claim`** it atomically marks that task `in-progress` (file + board row) under the tree-wide lock before printing it — the printed status is the truthful `in-progress`, the `--agent` shape unchanged — so parallel agents each get a distinct task and losers of the race transparently receive the following one; a claim with nothing to do stays a pure read (no lock-file side effect). |
 | `duty tui` | Launch the live board viewer (§8). |
@@ -399,7 +407,7 @@ Add TUI mutations only if that round-trip proves too slow in practice.
   board by deleting the folder and fixing the parent's `## Boards` bullet by hand; it's
   cosmetic anyway (tooling scans, never reads it).
 - **Tree-wide write lock, nothing finer** — every mutating command (`create`, `status`,
-  `report`, `move`, `archive`, `delete`; not `init`, not reads) holds one advisory
+  `report`, `set`, `gates`, `move`, `archive`, `delete`; not `init`, not reads) holds one advisory
   `flock` on `<root>/.duty.lock` (gofrs/flock; the lock file is created on demand,
   gitignored, and never committed) for its whole duration, and `duty get next --claim`
   computes the next actionable task and marks it `in-progress` under that same lock — so

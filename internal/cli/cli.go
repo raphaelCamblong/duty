@@ -167,10 +167,12 @@ func addCommands(root *cobra.Command, cwd string, stdin io.Reader, stdout io.Wri
 	root.AddCommand(
 		grouped(newInitCmd(a, cwd), groupAuthor),
 		grouped(newCreateCmd(a, cwd, stdout), groupAuthor),
+		grouped(newSetCmd(a, cwd, stdin), groupAuthor),
 		grouped(newGetCmd(a, cwd, stdout), groupRead),
 		newListCmd(a, cwd, stdout),
 		grouped(newStatusCmd(a, cwd), groupWork),
 		grouped(newReportCmd(a, cwd, stdin), groupWork),
+		grouped(newGatesCmd(a, cwd, stdout), groupWork),
 		grouped(newMoveCmd(a, cwd), groupWork),
 		grouped(newArchiveCmd(a, cwd), groupWork),
 		grouped(newDeleteCmd(a, cwd), groupWork),

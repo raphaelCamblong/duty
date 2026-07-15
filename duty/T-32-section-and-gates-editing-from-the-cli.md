@@ -1,7 +1,7 @@
 ---
 id: T-32
 title: Section and gates editing from the CLI
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -56,15 +56,36 @@ Frontmatter edits beyond what exists (`status` has its verb); editing archived
 tasks (still read-only); TUI mutation; multi-section batch edits.
 
 ## Gates
-- [ ] Full authoring flow works in a scratch tree using ONLY the CLI: create →
+- [x] Full authoring flow works in a scratch tree using ONLY the CLI: create →
   set goal → set scope → gates add ×2 → gates check 1 → get task --section
   goal → gates — no editor involved.
-- [ ] Byte-identity tests: `set`/`gates` change nothing outside the target
+- [x] Byte-identity tests: `set`/`gates` change nothing outside the target
   lines; round-trip suite still green.
-- [ ] Full suite green (`go test ./tests/... -coverpkg=./internal/... -count=1`);
+- [x] Full suite green (`go test ./tests/... -coverpkg=./internal/... -count=1`);
   `golangci-lint run` 0 issues; `gofumpt -l .` empty; `go vet ./...` clean;
   build ok.
-- [ ] Spec §3 amendment + §5/§6 rows, README, template + golden all in the
+- [x] Spec §3 amendment + §5/§6 rows, README, template + golden all in the
   same change.
 
 ## Report
+
+Section and gates editing from the CLI — task authored end to end without an editor.
+
+Files changed:
+- internal/task/section.go (new): Section, ReplaceSection (create-if-missing before ## Report / at EOF), plus the line-surgical splice helpers (headingIndex, nextHeadingFrom, lineAt, splice).
+- internal/task/gate.go (new): Gate type, Gates, AddGate (surgical append after the last gate), SetGate (1-based single-byte checkbox flip).
+- internal/task/task.go: CountGates reimplemented atop Gates (kills the duplicate gate scanner).
+- internal/app/section.go (new): App.Section (read, trimmed) and App.SetSection (stdin, empty-refusal, under the tree lock, mirrors report.go).
+- internal/app/gate.go (new): App.Gates/AddGate/SetGate over a shared editGates spine (tree lock).
+- internal/cli/set.go, internal/cli/gates.go (new); get.go gains get task --section; cli.go wires set (Author) and gates (Work).
+- Spec §3 amendment (automated writes never touch the body; set/gates are the sanctioned line-surgical exception), §5 step 3, §6 rows + get task --section, §10 lock list.
+- duty/README.md + internal/app/readme.md.tmpl + tests/testdata/readme.md golden: CLI-first authoring workflow.
+- tests/section_test.go, tests/cli_section_gates_test.go (new): byte-identity around every edit, create-if-missing placement, surgical flip, unknown section/index errors, empty-stdin refusal, --agent TSV, the editor-free authoring flow, and concurrent gates check under the lock (passes -race).
+
+Gate output tails:
+- go build -o bin/duty ./cmd/duty: ok
+- go test ./tests/... -coverpkg=./internal/... -count=1: ok, coverage 86.6%
+- golangci-lint run: 0 issues; gofumpt -l . empty; go vet ./...: clean
+- Dogfood: all four gates ticked via `duty gates check`, multi-line gate text preserved byte-for-byte.
+
+Deviations: none. ReplaceSection returns ([]byte, error) per the task's mandated signature; the error path is a rejected empty heading (also gives SetSection a real guard). No follow-ups left.

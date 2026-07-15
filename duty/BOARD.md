@@ -31,7 +31,7 @@ Order top-to-bottom is the intended build order.
 | [T-29](T-29-track-path-addressing-across-commands.md) | Track path addressing across commands | done |
 | [T-30](T-30-atomic-claim-and-write-locking.md) | Atomic claim and write locking | done |
 | [T-31](T-31-relative-task-age-in-tui-and-reads.md) | Relative task age in TUI and reads | done |
-| [T-32](T-32-section-and-gates-editing-from-the-cli.md) | Section and gates editing from the CLI | todo |
+| [T-32](T-32-section-and-gates-editing-from-the-cli.md) | Section and gates editing from the CLI | done |
 | [T-33](T-33-justfile-for-developer-experience.md) | Justfile for developer experience | todo |
 | [T-34](T-34-status-sorted-task-rows-in-the-tui.md) | Status-sorted task rows in the TUI | todo |
 
