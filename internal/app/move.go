@@ -8,6 +8,7 @@ import (
 	"github.com/raphaelCamblong/duty/internal/board"
 	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/task"
+	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
 // Move relocates a task. With a track path — relative to the tree root, "."
@@ -39,7 +40,7 @@ func (a App) moveTrack(cwd, id, track, section string) error {
 	if err != nil {
 		return err
 	}
-	target, err := a.resolveTrack(root, track)
+	target, err := tree.ResolveTrack(a.fs, root, track)
 	if err != nil {
 		return err
 	}

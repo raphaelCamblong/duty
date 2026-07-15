@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
-	"strings"
 
 	"github.com/raphaelCamblong/duty/internal/fsys"
 	"github.com/raphaelCamblong/duty/internal/names"
@@ -82,31 +81,7 @@ func (a App) contextBoard(cwd, in string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return a.resolveTrack(root, in)
-}
-
-// resolveTrack resolves track — a slash path relative to root, "." naming the
-// root board — to an existing board directory inside the tree. It is the one
-// track-path validator, shared by move --track and contextBoard: an absolute
-// or escaping path and a path naming no board are the one same failure,
-// unknown track %q.
-func (a App) resolveTrack(root, track string) (string, error) {
-	dir := filepath.Join(root, filepath.FromSlash(track))
-	rel, err := filepath.Rel(root, dir)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", unknownTrackErr(track)
-	}
-	info, err := a.fs.Stat(filepath.Join(dir, names.BoardFile))
-	if err != nil || info.IsDir() {
-		return "", unknownTrackErr(track)
-	}
-	return dir, nil
-}
-
-// unknownTrackErr is the one-line error a root-relative track path naming no
-// board in the tree returns, shared by move --track and contextBoard.
-func unknownTrackErr(track string) error {
-	return fmt.Errorf("unknown track %q", track)
+	return tree.ResolveTrack(a.fs, root, in)
 }
 
 // boardBeside returns the path of the board index in the same directory as

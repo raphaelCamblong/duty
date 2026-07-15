@@ -126,6 +126,18 @@ func ResolveTask(f fsys.FS, root, id string) (string, error) {
 	return found, nil
 }
 
+// ResolveTrack resolves track — a slash path relative to root, "." naming the
+// root board — to an existing board directory inside the tree. An absolute or
+// escaping path, or a path naming no board, is the one failure: unknown track %q.
+func ResolveTrack(f fsys.FS, root, track string) (string, error) {
+	dir := filepath.Join(root, filepath.FromSlash(track))
+	rel, err := filepath.Rel(root, dir)
+	if err != nil || !filepath.IsLocal(rel) || !hasFile(f, dir, names.BoardFile) {
+		return "", fmt.Errorf("unknown track %q", track)
+	}
+	return dir, nil
+}
+
 // IsTaskFile reports whether name is a task filename: T-NN-<slug>.md.
 func IsTaskFile(name string) bool {
 	return taskNN.MatchString(name)
