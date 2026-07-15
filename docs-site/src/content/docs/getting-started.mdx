@@ -1,0 +1,68 @@
+---
+title: Getting started
+description: Install duty, make your first board, and hand it to your agent.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+duty is one binary. Install it, run `duty init`, and you have a task system —
+plain markdown files in your repo, nothing else.
+
+## Install
+
+<Tabs>
+	<TabItem label="Homebrew">
+		```sh
+		brew install raphaelCamblong/tap/duty
+		```
+	</TabItem>
+	<TabItem label="Go">
+		```sh
+		go install github.com/raphaelCamblong/duty/cmd/duty@latest
+		```
+	</TabItem>
+	<TabItem label="Binaries">
+		Prebuilt binaries live on the
+		[releases page](https://github.com/raphaelCamblong/duty/releases).
+	</TabItem>
+</Tabs>
+
+## Use it
+
+```sh
+duty init "My project"            # scaffolds ./duty
+duty create track api             # a track is just a folder
+duty create task "Ship the thing"
+duty create task "Add auth" --in api   # target any board by path, from anywhere
+duty get next                     # what should I work on?
+duty status T-01 in-progress
+duty status T-01 done
+duty tui                          # watch it all live
+```
+
+That's it. Tasks are markdown files, tracks are folders, and a `BOARD.md` in
+each track keeps the order. Everything is yours to grep, diff, and commit.
+
+## The agent loop
+
+duty was built to be driven by AI agents: commands are quiet, exit codes mean
+things, and `--agent` turns any read into clean TSV. An agent's whole loop is
+four calls:
+
+```sh
+duty get next --claim        # take the next actionable task
+# ...work...
+duty gates check --all       # tick the gates that pass
+duty report --status done    # report and flip status in one write
+```
+
+Each recurring step is one atomic write, so running a swarm just works —
+`get next --claim` hands each agent a distinct task under a tree-wide lock, and
+their writes never collide. Hand your agent [the convention](/convention/) and
+it knows the rules. Keep `duty tui` open and you see its progress the moment it
+moves.
+
+## Read more
+
+- [The task convention](/convention/) — the one-page contract, for humans and agents.
+- [The full spec](/spec/) — every behavior, invariant, and exit code.

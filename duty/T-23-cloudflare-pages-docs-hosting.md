@@ -1,7 +1,7 @@
 ---
 id: T-23
 title: Cloudflare Pages docs hosting
-status: todo
+status: blocked
 blocked-by: []
 ---
 
@@ -56,12 +56,40 @@ Anything beyond docs hosting; CI beyond the Pages build.
 ## Gates
 - [ ] `docs-site/` builds locally and `wrangler deploy` serves the site on a
   *.workers.dev URL: splash landing + spec + convention README all rendered.
-- [ ] Spec and duty/README are sourced LIVE from their real locations (glob
+- [x] Spec and duty/README are sourced LIVE from their real locations (glob
   loaders — zero copies, zero symlinks); editing the spec and rebuilding
   updates the page.
 - [ ] Cloudflare git integration: a docs-only push triggers exactly one
   build; a Go-only push triggers none (watch paths proven both ways).
-- [ ] Root Go module untouched except `docs-site/` and README link; full Go
+- [x] Root Go module untouched except `docs-site/` and README link; full Go
   suite still green.
 
 ## Report
+
+Site built and verified locally; deploy blocked on wrangler auth.
+
+Done and proven:
+- `docs-site/` scaffolded (Astro 7 + Starlight 0.41), splash landing +
+  getting-started hand-authored; convention and spec pages rendered via
+  `StarlightPage` from two glob-loader collections (`base: '../docs'` /
+  `base: '../duty'`) — zero copies, zero symlinks. Live sourcing proven:
+  marker appended to docs/spec.md appeared in dist/spec/index.html after
+  rebuild, gone again after revert.
+- `npm run build` clean (4 pages + 404 + pagefind index + optimized
+  screenshot). `wrangler dev` smoke check: /, /getting-started/,
+  /convention/, /spec/ and the hero image all 200; unknown path 404.
+- `wrangler.jsonc`: name duty-docs, assets-only (no `main`).
+- Root README gained one Docs line. Go module untouched: gofmt/vet clean,
+  tests green (87.2% coverage).
+
+Blocked — wrangler is not authenticated here, so no deploy. To finish:
+1. `cd docs-site && npx wrangler login`, then `npx wrangler deploy`
+   (or `npm run deploy`) → *.workers.dev URL. Swap the README Docs link to
+   the live URL, then tick gate 1.
+2. Cloudflare dashboard: import the repo as a Workers Builds project —
+   root directory `docs-site`, build command `npm run build`, deploy
+   command `npx wrangler deploy`. Build watch paths: include `docs-site/*`,
+   `docs/*`, `duty/README.md` (the plan's `task-system-spec.md` is stale
+   since T-41; `docs/*` covers docs/spec.md); exclude `*.go`, `internal/*`,
+   `cmd/*`, `tests/*`, `go.mod`, `go.sum`. Prove both ways (docs-only push
+   → one build; Go-only push → none), then tick gate 3.

@@ -1,0 +1,8 @@
+// Static-assets-only Worker: no `main`, just the built site.
+{
+	"name": "duty-docs",
+	"compatibility_date": "2026-07-15",
+	"assets": {
+		"directory": "./dist"
+	}
+}

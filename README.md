@@ -24,6 +24,8 @@ go install github.com/raphaelCamblong/duty/cmd/duty@latest
 
 Prebuilt binaries live on the [releases page](https://github.com/raphaelCamblong/duty/releases).
 
+Docs: the same pages, nicely rendered — see [docs-site/](docs-site/) (Cloudflare Workers; live URL lands after first deploy).
+
 ## Use it
 
 ```sh
