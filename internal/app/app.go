@@ -24,7 +24,7 @@ type App struct {
 
 // New returns an App operating on f, dating reports with the real clock.
 func New(f fsys.FS) App {
-	return App{fs: f, now: time.Now}
+	return NewWithClock(f, time.Now)
 }
 
 // NewWithClock returns an App like New, but reading the current time from now

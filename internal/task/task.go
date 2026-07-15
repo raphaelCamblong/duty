@@ -148,6 +148,12 @@ func ReportHeading(at time.Time, status string) string {
 	return heading
 }
 
+// ReportBlock builds the report block AppendReport appends: the heading
+// ReportHeading formats for at and status, a blank line, then text.
+func ReportBlock(at time.Time, status string, text []byte) []byte {
+	return append([]byte(ReportHeading(at, status)+"\n\n"), text...)
+}
+
 // AppendReport appends text under the ## Report heading, creating the heading
 // at the end of the file when missing. Reports accumulate: existing content is
 // never rewritten, each call appends one blank-line-separated block.

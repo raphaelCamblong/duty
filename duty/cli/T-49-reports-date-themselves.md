@@ -77,3 +77,12 @@ done", first block untouched.
 
 gofmt/gofumpt clean, go vet clean, golangci-lint 0 issues, go test
 ./tests/... -coverpkg=./internal/... green (87.4%), `just check` green.
+
+Applied dx-round /simplify findings (behavior-preserving):
+
+- app.New now delegates to NewWithClock instead of re-writing the App{} literal (internal/app/app.go).
+- task.ReportBlock now owns the whole dated report block (heading + blank line + body); app.Report collapses to task.AppendReport(content, task.ReportBlock(a.now(), status, text)), removing the app-layer byte splice (internal/task/task.go, internal/app/report.go).
+
+Skipped: board.ReorderAdjacent consolidation (tests pin board.ReorderBefore/ReorderAfter directly — dropping the wrappers needs test edits, and the referee is fixed); Position.validate() and the cli/app flag-guard merge (both add/alter error paths = behavior changes).
+
+just check green (golangci-lint 0 issues, tests 87.4%), build ok. No test edits.

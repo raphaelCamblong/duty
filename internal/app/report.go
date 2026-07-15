@@ -38,8 +38,7 @@ func (a App) Report(cwd, id string, r io.Reader, status string, force bool) erro
 	if err != nil {
 		return err
 	}
-	dated := append([]byte(task.ReportHeading(a.now(), status)+"\n\n"), text...)
-	withReport := task.AppendReport(content, dated)
+	withReport := task.AppendReport(content, task.ReportBlock(a.now(), status, text))
 	if status == "" {
 		return a.fs.WriteFile(taskPath, withReport)
 	}
