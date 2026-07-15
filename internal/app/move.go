@@ -9,7 +9,6 @@ import (
 	"github.com/raphaelCamblong/duty/internal/board"
 	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/task"
-	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
 // Move relocates a task. With a track path — relative to the tree root, "."
@@ -37,11 +36,7 @@ func (a App) Move(cwd, id, track, section string) error {
 // moveTrack relocates id's file into track's folder, dropping its source row
 // and appending one to the target's section, the file's status preserved.
 func (a App) moveTrack(cwd, id, track, section string) error {
-	root, err := tree.FindRoot(a.fs, cwd)
-	if err != nil {
-		return err
-	}
-	taskPath, err := tree.ResolveTask(a.fs, root, id)
+	root, taskPath, err := a.resolveOpenWithRoot(cwd, id)
 	if err != nil {
 		return err
 	}
@@ -49,22 +44,18 @@ func (a App) moveTrack(cwd, id, track, section string) error {
 	if err != nil {
 		return err
 	}
+	if filepath.Dir(taskPath) == target {
+		return a.moveRowInBoard(taskPath, section)
+	}
 	t, _, err := a.readTask(taskPath)
 	if err != nil {
 		return err
 	}
 	filename := filepath.Base(taskPath)
-	srcPath := filepath.Join(filepath.Dir(taskPath), names.BoardFile)
+	srcPath := boardBeside(taskPath)
 	pruned, err := a.dropFromBoard(srcPath, filename)
 	if err != nil {
 		return err
-	}
-	if filepath.Dir(taskPath) == target {
-		withRow, err := board.AddRow(pruned, section, t.ID, filename, t.Title, t.Status)
-		if err != nil {
-			return err
-		}
-		return a.fs.WriteFile(srcPath, withRow)
 	}
 	return a.moveAcross(id, taskPath, target, section, pruned, t)
 }
@@ -88,7 +79,7 @@ func (a App) dropFromBoard(boardPath, filename string) ([]byte, error) {
 // untouched.
 func (a App) moveAcross(id, taskPath, target, section string, pruned []byte, t task.Task) error {
 	filename := filepath.Base(taskPath)
-	srcPath := filepath.Join(filepath.Dir(taskPath), names.BoardFile)
+	srcPath := boardBeside(taskPath)
 	dstPath := filepath.Join(target, names.BoardFile)
 	dst, err := a.fs.ReadFile(dstPath)
 	if err != nil {
@@ -115,7 +106,14 @@ func (a App) moveRow(cwd, id, section string) error {
 	if err != nil {
 		return err
 	}
-	boardPath := filepath.Join(filepath.Dir(taskPath), names.BoardFile)
+	return a.moveRowInBoard(taskPath, section)
+}
+
+// moveRowInBoard moves the row of the task at taskPath under "## <section>"
+// within its own board, byte-preserving the row line and pruning any section
+// left empty. It is the same-board case of both --section and --track moves.
+func (a App) moveRowInBoard(taskPath, section string) error {
+	boardPath := boardBeside(taskPath)
 	index, err := a.fs.ReadFile(boardPath)
 	if err != nil {
 		return err

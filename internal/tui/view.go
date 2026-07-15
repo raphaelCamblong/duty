@@ -52,7 +52,7 @@ var (
 	colGreen  = lipgloss.AdaptiveColor{Light: "28", Dark: "78"}
 
 	headerBox    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colAccent).Padding(0, 1)
-	focusedBox   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colAccent).Padding(0, 1)
+	focusedBox   = headerBox
 	blurredBox   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colDim).Padding(0, 1)
 	crumbStyle   = lipgloss.NewStyle().Bold(true).Foreground(colAccent)
 	accentStyle  = lipgloss.NewStyle().Foreground(colAccent)
@@ -61,23 +61,12 @@ var (
 	errStyle     = lipgloss.NewStyle().Foreground(colRed)
 	selStyle     = lipgloss.NewStyle().Bold(true)
 	driftStyle   = lipgloss.NewStyle().Foreground(colRed)
-	yellowStyle  = lipgloss.NewStyle().Foreground(colYellow)
-	redStyle     = lipgloss.NewStyle().Foreground(colRed)
-	greenStyle   = lipgloss.NewStyle().Foreground(colGreen)
 )
 
-// statusStyle maps a task status to its color: todo dim, in-progress
-// yellow, blocked red, done green.
+// statusStyle maps a task status to a foreground style in its color, todo dim,
+// in-progress yellow, blocked red, done green — the palette statusColor owns.
 func statusStyle(status string) lipgloss.Style {
-	switch status {
-	case task.StatusInProgress:
-		return yellowStyle
-	case task.StatusBlocked:
-		return redStyle
-	case task.StatusDone:
-		return greenStyle
-	}
-	return dimStyle
+	return lipgloss.NewStyle().Foreground(statusColor(status))
 }
 
 // statusColor is the fill for a status's segment of a distribution bar,
@@ -112,7 +101,7 @@ func (m Model) View() string {
 	case m.split():
 		body = lipgloss.JoinHorizontal(lipgloss.Top, m.leftPanel(), m.rightPanel())
 	case m.previewOpen:
-		title := ansi.Truncate(" "+m.previewTitle(), max(w-1, 1), "…")
+		title := ansi.Truncate(" "+m.previewTitleText, max(w-1, 1), "…")
 		body = lipgloss.JoinVertical(lipgloss.Left, title, m.preview.View())
 	default:
 		body = m.leftPanel()
@@ -177,7 +166,7 @@ func (m Model) emptyHint() string {
 // rightPanel is the preview — pinned title line over the viewport — in its
 // focus-colored border, a full-panel mouse zone.
 func (m Model) rightPanel() string {
-	title := ansi.Truncate(m.previewTitle(), m.preview.Width, "…")
+	title := ansi.Truncate(m.previewTitleText, m.preview.Width, "…")
 	box := panelBox(m.focus == focusPreview).Width(m.preview.Width + 2).Height(m.preview.Height + 1)
 	content := lipgloss.JoinVertical(lipgloss.Left, title, m.preview.View())
 	return m.zones.Mark(zonePreview, box.Render(content))
@@ -224,21 +213,19 @@ func statusBar(counts map[string]int, w int) string {
 	return bar.View()
 }
 
-// barData turns status counts into one stacked horizontal bar, segments in
-// lifecycle order and colored to match the row statuses.
+// barData turns status counts into one stacked horizontal bar, its segments in
+// rollupOrder so the header bar and the inline track bars agree on screen.
 func barData(counts map[string]int) barchart.BarData {
-	seg := func(status string) barchart.BarValue {
+	values := make([]barchart.BarValue, 0, len(rollupOrder))
+	for _, status := range rollupOrder {
 		c := statusColor(status)
-		return barchart.BarValue{
+		values = append(values, barchart.BarValue{
 			Name:  status,
 			Value: float64(counts[status]),
 			Style: lipgloss.NewStyle().Foreground(c).Background(c),
-		}
+		})
 	}
-	return barchart.BarData{Values: []barchart.BarValue{
-		seg(task.StatusTodo), seg(task.StatusInProgress),
-		seg(task.StatusBlocked), seg(task.StatusDone),
-	}}
+	return barchart.BarData{Values: values}
 }
 
 // footerView is the bubbles/help hint bar, topped by the last scan error
@@ -270,16 +257,13 @@ func (m Model) helpView(w int) string {
 // blocked-by ids and drift appended dim when present; name and title for a
 // track.
 func (m Model) previewTitle() string {
-	kind, arg, ok := splitKey(m.previewKey)
-	switch {
-	case !ok:
-		return dimStyle.Render("nothing open")
-	case kind == "track":
-		if s, ok := m.findSub(arg); ok {
+	switch m.previewKind {
+	case previewTrack:
+		if s, ok := m.findSub(m.previewArg); ok {
 			return accentStyle.Render(s.Name) + "  " + selStyle.Render(s.Title)
 		}
-	case kind == "task":
-		if r, b, ok := m.findRowBoard(arg); ok {
+	case previewTask:
+		if r, b, ok := m.findRowBoard(m.previewArg); ok {
 			return taskHeader(r, b.Title)
 		}
 	}
@@ -311,18 +295,15 @@ func taskHeader(r Row, track string) string {
 // markdown through the shared renderer, or a track's summary card. It returns
 // the possibly-updated model because building the renderer mutates it.
 func (m Model) previewContent() (Model, string) {
-	kind, arg, ok := splitKey(m.previewKey)
 	w := max(m.preview.Width, 1)
-	switch {
-	case !ok:
-		return m, dimStyle.Render("nothing open")
-	case kind == "track":
-		if s, ok := m.findSub(arg); ok {
+	switch m.previewKind {
+	case previewTrack:
+		if s, ok := m.findSub(m.previewArg); ok {
 			return m, m.trackCard(s, w)
 		}
 		return m, dimStyle.Render("track gone")
-	case kind == "task":
-		r, ok := m.findRow(arg)
+	case previewTask:
+		r, _, ok := m.findRowBoard(m.previewArg)
 		switch {
 		case !ok:
 			return m, dimStyle.Render("task gone")
@@ -482,7 +463,7 @@ func trackBar(counts map[string]int, width int) string {
 	var b strings.Builder
 	for _, st := range rollupOrder {
 		if c := cells[st]; c > 0 {
-			b.WriteString(lipgloss.NewStyle().Foreground(statusColor(st)).Render(strings.Repeat("█", c)))
+			b.WriteString(statusStyle(st).Render(strings.Repeat("█", c)))
 		}
 	}
 	return b.String()

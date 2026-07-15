@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"path/filepath"
 
 	"github.com/raphaelCamblong/duty/internal/board"
@@ -29,11 +28,7 @@ func (a App) List(cwd, status string) ([]Row, error) {
 		return nil, unknownStatusErr(status)
 	}
 
-	boardDir, err := tree.CurrentBoard(a.fs, cwd)
-	if err != nil {
-		return nil, err
-	}
-	boards, err := tree.Boards(a.fs, boardDir)
+	boardDir, boards, err := a.walkBoards(cwd)
 	if err != nil {
 		return nil, err
 	}
@@ -62,16 +57,13 @@ func (a App) boardRows(root, b string) ([]Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	entries, err := a.fs.ReadDir(b)
+	files, err := tree.TaskFileNames(a.fs, b)
 	if err != nil {
-		return nil, fmt.Errorf("list %s: %w", b, err)
+		return nil, err
 	}
-	var rows []Row
-	for _, e := range entries {
-		if e.IsDir() || !tree.IsTaskFile(e.Name()) {
-			continue
-		}
-		row, err := a.taskRow(index, b, e.Name(), boardPath)
+	rows := make([]Row, 0, len(files))
+	for _, name := range files {
+		row, err := a.taskRow(index, b, name, boardPath)
 		if err != nil {
 			return nil, err
 		}

@@ -31,6 +31,16 @@ const (
 	StatusBlocked = "blocked"
 )
 
+// IDPrefix is the fixed prefix of every task id and task filename, before the
+// zero-padded number.
+const IDPrefix = "T-"
+
+// FormatID returns the task id for the zero-padded number nn, e.g. "07" yields
+// "T-07".
+func FormatID(nn string) string {
+	return IDPrefix + nn
+}
+
 // Task is the machine-owned frontmatter of a task file. Everything below
 // the frontmatter is freeform markdown that tooling appends to but never
 // rewrites.
@@ -122,19 +132,23 @@ func AppendReport(content, text []byte) []byte {
 		b.WriteByte('\n')
 	}
 	if !reportHeadRE.Match(content) {
-		if b.Len() > 0 && !endsBlank(b.Bytes()) {
-			b.WriteByte('\n')
-		}
+		ensureBlankLine(&b)
 		b.WriteString("## Report\n")
 	}
-	if b.Len() > 0 && !endsBlank(b.Bytes()) {
-		b.WriteByte('\n')
-	}
+	ensureBlankLine(&b)
 	b.Write(text)
 	if n := len(text); n > 0 && text[n-1] != '\n' {
 		b.WriteByte('\n')
 	}
 	return b.Bytes()
+}
+
+// ensureBlankLine writes a newline to b when its content is non-empty and does
+// not already end on a blank line, so the next block reads blank-line separated.
+func ensureBlankLine(b *bytes.Buffer) {
+	if b.Len() > 0 && !endsBlank(b.Bytes()) {
+		b.WriteByte('\n')
+	}
 }
 
 // endsBlank reports whether b ends with a blank line.
@@ -190,6 +204,21 @@ func Slugify(title string) string {
 		s = strings.TrimRight(s[:40], "-")
 	}
 	return s
+}
+
+// ValidSlug reports whether s is a slug of the shape Slugify produces: a
+// non-empty run of at most 40 lowercase letters, digits, and hyphens, with no
+// leading or trailing hyphen.
+func ValidSlug(s string) bool {
+	if s == "" || len(s) > 40 || s[0] == '-' || s[len(s)-1] == '-' {
+		return false
+	}
+	for _, r := range s {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 // ValidStatus reports whether s is one of the four task statuses.

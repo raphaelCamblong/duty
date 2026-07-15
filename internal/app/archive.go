@@ -16,11 +16,7 @@ import (
 // rewritten. A board with nothing to archive is left untouched, which makes
 // a second run a clean no-op.
 func (a App) Archive(cwd string) error {
-	boardDir, err := tree.CurrentBoard(a.fs, cwd)
-	if err != nil {
-		return err
-	}
-	boards, err := tree.Boards(a.fs, boardDir)
+	_, boards, err := a.walkBoards(cwd)
 	if err != nil {
 		return err
 	}
@@ -92,21 +88,18 @@ func (a App) moveToArchive(b string, filenames []string) (int, error) {
 // doneTasks returns the filenames of every status: done task filed directly
 // in dir.
 func (a App) doneTasks(dir string) ([]string, error) {
-	entries, err := a.fs.ReadDir(dir)
+	files, err := tree.TaskFileNames(a.fs, dir)
 	if err != nil {
-		return nil, fmt.Errorf("archive %s: %w", dir, err)
+		return nil, err
 	}
 	var done []string
-	for _, e := range entries {
-		if e.IsDir() || !tree.IsTaskFile(e.Name()) {
-			continue
-		}
-		t, _, err := a.readTask(filepath.Join(dir, e.Name()))
+	for _, name := range files {
+		t, _, err := a.readTask(filepath.Join(dir, name))
 		if err != nil {
 			return nil, err
 		}
 		if t.Status == task.StatusDone {
-			done = append(done, e.Name())
+			done = append(done, name)
 		}
 	}
 	return done, nil
@@ -114,15 +107,9 @@ func (a App) doneTasks(dir string) ([]string, error) {
 
 // countTaskFiles counts the task files directly in dir.
 func (a App) countTaskFiles(dir string) (int, error) {
-	entries, err := a.fs.ReadDir(dir)
+	files, err := tree.TaskFileNames(a.fs, dir)
 	if err != nil {
-		return 0, fmt.Errorf("count %s: %w", dir, err)
+		return 0, err
 	}
-	n := 0
-	for _, e := range entries {
-		if !e.IsDir() && tree.IsTaskFile(e.Name()) {
-			n++
-		}
-	}
-	return n, nil
+	return len(files), nil
 }

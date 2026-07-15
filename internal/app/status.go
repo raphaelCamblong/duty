@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 
 	"github.com/raphaelCamblong/duty/internal/board"
-	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/task"
 )
 
@@ -30,7 +29,7 @@ func (a App) SetStatus(cwd, id, status string) error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", taskPath, err)
 	}
-	boardPath := filepath.Join(filepath.Dir(taskPath), names.BoardFile)
+	boardPath := boardBeside(taskPath)
 	index, err := a.fs.ReadFile(boardPath)
 	if err != nil {
 		return err

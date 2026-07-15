@@ -125,22 +125,30 @@ func newRoot(cwd string, stdin io.Reader, stdout, stderr io.Writer, version stri
 // rootCmd builds the bare root command: identity, help text, and cobra's own
 // error and usage printing silenced.
 func rootCmd(version string) *cobra.Command {
-	return &cobra.Command{
-		Use:                        "duty <command> [args]",
-		Short:                      "file-based task system: markdown tasks + board indexes",
-		Long:                       rootLong,
-		Example:                    rootExample,
-		Version:                    version,
-		Args:                       cobra.ArbitraryArgs,
-		SilenceErrors:              true,
-		SilenceUsage:               true,
-		SuggestionsMinimumDistance: 2,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return errNoCommand
-			}
-			return unknownCommand(cmd, args[0])
-		},
+	cmd := &cobra.Command{
+		Use:     "duty <command> [args]",
+		Short:   "file-based task system: markdown tasks + board indexes",
+		Long:    rootLong,
+		Example: rootExample,
+		Version: version,
+	}
+	dispatchOnly(cmd, errNoCommand)
+	return cmd
+}
+
+// dispatchOnly turns cmd into a pure dispatcher: arbitrary args, cobra's own
+// error and usage printing silenced, and a RunE that returns missing when
+// invoked bare or the unknown-command error otherwise — both mapping to exit 2.
+func dispatchOnly(cmd *cobra.Command, missing error) {
+	cmd.Args = cobra.ArbitraryArgs
+	cmd.SilenceErrors = true
+	cmd.SilenceUsage = true
+	cmd.SuggestionsMinimumDistance = 2
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return missing
+		}
+		return unknownCommand(cmd, args[0])
 	}
 }
 
@@ -180,21 +188,13 @@ func grouped(cmd *cobra.Command, id string) *cobra.Command {
 // subcommands: invoked bare it reports usage, with an unknown resource it
 // reports the unknown command — both map to exit 2.
 func newGroupCmd(use, short, usage, example string) *cobra.Command {
-	return &cobra.Command{
-		Use:                        use,
-		Short:                      short,
-		Example:                    example,
-		Args:                       cobra.ArbitraryArgs,
-		SilenceErrors:              true,
-		SilenceUsage:               true,
-		SuggestionsMinimumDistance: 2,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return missingCommandError(usage)
-			}
-			return unknownCommand(cmd, args[0])
-		},
+	cmd := &cobra.Command{
+		Use:     use,
+		Short:   short,
+		Example: example,
 	}
+	dispatchOnly(cmd, missingCommandError(usage))
+	return cmd
 }
 
 // stringList is a repeatable string flag; each occurrence may also carry

@@ -17,8 +17,8 @@ import (
 // (status todo) are written in one use-case. An empty slug is derived from
 // the title; an empty section means the default one.
 func (a App) CreateTask(cwd, title, slug, section string, blockedBy []string) (string, error) {
-	if slug != "" && !nameRE.MatchString(slug) {
-		return "", fmt.Errorf("invalid slug %q: must match [a-z0-9-]+", slug)
+	if slug != "" && !task.ValidSlug(slug) {
+		return "", fmt.Errorf("invalid slug %q: want 1-40 chars of [a-z0-9-], no leading or trailing hyphen", slug)
 	}
 	boardDir, err := tree.CurrentBoard(a.fs, cwd)
 	if err != nil {
@@ -44,7 +44,7 @@ func (a App) CreateTask(cwd, title, slug, section string, blockedBy []string) (s
 	if section == "" {
 		section = board.DefaultSection
 	}
-	return a.writeTask(boardDir, "T-"+nn, slug, title, section, blockedBy)
+	return a.writeTask(boardDir, task.FormatID(nn), slug, title, section, blockedBy)
 }
 
 // validateBlockedBy checks every dependency id resolves somewhere in the

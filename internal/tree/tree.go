@@ -14,6 +14,7 @@ import (
 
 	"github.com/raphaelCamblong/duty/internal/fsys"
 	"github.com/raphaelCamblong/duty/internal/names"
+	"github.com/raphaelCamblong/duty/internal/task"
 )
 
 // ErrArchived reports that an id resolved to a task inside an archive/
@@ -21,7 +22,7 @@ import (
 var ErrArchived = errors.New("archived tasks are read-only")
 
 // taskNN extracts the numeric part of a task filename (T-NN-<slug>.md).
-var taskNN = regexp.MustCompile(`^T-(\d+)-.*\.md$`)
+var taskNN = regexp.MustCompile(`^` + regexp.QuoteMeta(task.IDPrefix) + `(\d+)-.*\.md$`)
 
 // FindRoot returns the root of the duty tree containing cwd. It walks up to
 // the nearest directory holding a board index, then keeps ascending while the
@@ -128,6 +129,23 @@ func ResolveTask(f fsys.FS, root, id string) (string, error) {
 // IsTaskFile reports whether name is a task filename: T-NN-<slug>.md.
 func IsTaskFile(name string) bool {
 	return taskNN.MatchString(name)
+}
+
+// TaskFileNames returns the task filenames directly in dir, in ReadDir order,
+// skipping subdirectories and non-task files.
+func TaskFileNames(f fsys.FS, dir string) ([]string, error) {
+	entries, err := f.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("read dir %s: %w", dir, err)
+	}
+	var out []string
+	for _, e := range entries {
+		if e.IsDir() || !IsTaskFile(e.Name()) {
+			continue
+		}
+		out = append(out, e.Name())
+	}
+	return out, nil
 }
 
 // NextNN walks every task filename under root — open and archived, every

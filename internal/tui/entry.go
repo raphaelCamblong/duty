@@ -154,15 +154,20 @@ func styleMatches(s string, matches []int, base lipgloss.Style) string {
 // status-distribution bar of its subtree with a dim total count (dim "empty"
 // when the subtree holds no tasks).
 func (d compactDelegate) trackLine(s Sub, selected bool, w int, nameM, titleM []int) string {
-	title := lipgloss.NewStyle()
-	if selected {
-		title = selStyle
-	}
 	line := cursorMark(selected) +
 		pad(styleMatches(s.Name, nameM, accentStyle), d.nameW) + "  " +
-		styleMatches(s.Title, titleM, title) + "  " +
+		styleMatches(s.Title, titleM, titleStyle(selected)) + "  " +
 		trackBarCell(s.Counts)
 	return ansi.Truncate(line, w, "…")
+}
+
+// titleStyle is the entry title's style: bold when the row is selected, plain
+// otherwise.
+func titleStyle(selected bool) lipgloss.Style {
+	if selected {
+		return selStyle
+	}
+	return lipgloss.NewStyle()
 }
 
 // taskLine renders one task: id, title, colored status, gate progress, drift
@@ -172,13 +177,9 @@ func (d compactDelegate) taskLine(r Row, selected bool, w int, idM, titleM []int
 	if d.driftW > 0 {
 		fixed += 2 + d.driftW
 	}
-	title := lipgloss.NewStyle()
-	if selected {
-		title = selStyle
-	}
 	line := cursorMark(selected) +
 		pad(styleMatches(r.ID, idM, accentStyle), d.idW) + "  " +
-		pad(styleMatches(r.Title, titleM, title), max(w-fixed, minTitleWidth)) + "  " +
+		pad(styleMatches(r.Title, titleM, titleStyle(selected)), max(w-fixed, minTitleWidth)) + "  " +
 		statusStyle(r.Status).Render(pad(r.Status, statusColWidth)) + "  " +
 		dimStyle.Render(pad(gatesCell(r), gatesColWidth))
 	if r.Drift != "" {

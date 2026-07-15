@@ -65,6 +65,14 @@ func Title(content []byte) string {
 	return ""
 }
 
+// TitleOr returns the board's H1 text, or fallback when the board has no H1.
+func TitleOr(content []byte, fallback string) string {
+	if t := Title(content); t != "" {
+		return t
+	}
+	return fallback
+}
+
 // FindRow returns the table row whose task link targets filename — the
 // |-prefixed line containing "(filename)" — and whether such a row exists.
 func FindRow(content []byte, filename string) (string, bool) {

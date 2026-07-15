@@ -6,9 +6,11 @@ package app
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 
 	"github.com/raphaelCamblong/duty/internal/fsys"
+	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/task"
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
@@ -32,15 +34,46 @@ func unknownStatusErr(status string) error {
 	return fmt.Errorf("unknown status %q: want todo, in-progress, done or blocked", status)
 }
 
-// resolveOpen resolves id to its open task file anywhere in the tree
-// containing cwd. Archived ids fail with tree.ErrArchived in the chain:
+// resolveOpenWithRoot resolves id to its open task file and the root of the
+// tree containing cwd. Archived ids fail with tree.ErrArchived in the chain:
 // archived tasks are read-only.
-func (a App) resolveOpen(cwd, id string) (string, error) {
-	root, err := tree.FindRoot(a.fs, cwd)
+func (a App) resolveOpenWithRoot(cwd, id string) (root, path string, err error) {
+	root, err = tree.FindRoot(a.fs, cwd)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return tree.ResolveTask(a.fs, root, id)
+	path, err = tree.ResolveTask(a.fs, root, id)
+	if err != nil {
+		return "", "", err
+	}
+	return root, path, nil
+}
+
+// resolveOpen resolves id to its open task file anywhere in the tree
+// containing cwd, discarding the tree root.
+func (a App) resolveOpen(cwd, id string) (string, error) {
+	_, path, err := a.resolveOpenWithRoot(cwd, id)
+	return path, err
+}
+
+// walkBoards returns the board containing cwd and every board below it — the
+// CurrentBoard→Boards prelude the multi-board reads share.
+func (a App) walkBoards(cwd string) (boardDir string, boards []string, err error) {
+	boardDir, err = tree.CurrentBoard(a.fs, cwd)
+	if err != nil {
+		return "", nil, err
+	}
+	boards, err = tree.Boards(a.fs, boardDir)
+	if err != nil {
+		return "", nil, err
+	}
+	return boardDir, boards, nil
+}
+
+// boardBeside returns the path of the board index in the same directory as
+// the task file at taskPath.
+func boardBeside(taskPath string) string {
+	return filepath.Join(filepath.Dir(taskPath), names.BoardFile)
 }
 
 // readTask reads and parses the task file at path, returning the parsed task

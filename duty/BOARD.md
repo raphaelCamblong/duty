@@ -27,6 +27,6 @@ Order top-to-bottom is the intended build order.
 | [T-25](T-25-mit-license-and-root-readme.md) | MIT license and root README | done |
 | [T-26](T-26-goreleaser-release-pipeline.md) | GoReleaser release pipeline | done |
 | [T-27](T-27-code-quality-sweep-function-length-and-s.md) | Code quality sweep: function length and smells | done |
-| [T-28](T-28-apply-simplify-pass-findings.md) | Apply simplify-pass findings | todo |
+| [T-28](T-28-apply-simplify-pass-findings.md) | Apply simplify-pass findings | done |
 
 Completed tasks (0) archived: [archive/](archive/).

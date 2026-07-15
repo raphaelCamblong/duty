@@ -39,6 +39,13 @@ const (
 	focusPreview
 )
 
+// Preview subject kinds: the open preview shows either a task's rendered
+// markdown or a track's summary card.
+const (
+	previewTask  = "task"
+	previewTrack = "track"
+)
+
 // Model is the Bubble Tea model of the viewer: a full-width entry list under
 // a subtree-state header, opening a split preview on demand (a task rendered,
 // a track summarized). Update is a pure transition — filesystem reads happen
@@ -60,13 +67,15 @@ type Model struct {
 	width   int
 	height  int
 
-	list          list.Model
-	focus         focusArea
-	preview       viewport.Model
-	previewOpen   bool
-	previewKey    string
-	renderer      *glamour.TermRenderer
-	rendererWidth int
+	list             list.Model
+	focus            focusArea
+	preview          viewport.Model
+	previewOpen      bool
+	previewKind      string
+	previewArg       string
+	previewTitleText string
+	renderer         *glamour.TermRenderer
+	rendererWidth    int
 
 	spring       harmonica.Spring
 	scroll       float64
@@ -177,8 +186,8 @@ func (m Model) DetailID() string {
 	if !m.previewOpen {
 		return ""
 	}
-	if kind, arg, ok := splitKey(m.previewKey); ok && kind == "task" {
-		return arg
+	if m.previewKind == previewTask {
+		return m.previewArg
 	}
 	return ""
 }
@@ -384,19 +393,21 @@ func (m Model) open() Model {
 	}
 	if e.track != nil {
 		if m.previewOpen {
-			return m.showPreview("track:" + e.track.Path)
+			return m.showPreview(previewTrack, e.track.Path)
 		}
 		return m.enterBoard(e.track.Path)
 	}
-	return m.showPreview("task:" + e.task.ID)
+	return m.showPreview(previewTask, e.task.ID)
 }
 
-// showPreview opens the split on subject key ("task:<id>" or "track:<path>"):
-// it sizes the two panels, renders the subject, and focuses the preview.
-func (m Model) showPreview(key string) Model {
+// showPreview opens the split on the subject (kind previewTask or previewTrack,
+// arg the id or track path): it sizes the two panels, renders the subject, and
+// focuses the preview.
+func (m Model) showPreview(kind, arg string) Model {
 	m.previewOpen = true
 	m.focus = focusPreview
-	m.previewKey = key
+	m.previewKind = kind
+	m.previewArg = arg
 	m = m.layout()
 	return m.renderPreview(true)
 }
@@ -413,23 +424,10 @@ func (m Model) renderPreview(reset bool) Model {
 		off = 0
 	}
 	m, body := m.previewContent()
+	m.previewTitleText = m.previewTitle()
 	m.preview.SetContent(body)
 	m.preview.SetYOffset(off)
 	return m.settleAt(m.preview.YOffset)
-}
-
-// findRow resolves a task id to its row anywhere in the snapshot.
-func (m Model) findRow(id string) (Row, bool) {
-	for _, b := range m.snap.Boards {
-		for _, s := range b.Sections {
-			for _, r := range s.Rows {
-				if r.ID == id {
-					return r, true
-				}
-			}
-		}
-	}
-	return Row{}, false
 }
 
 // findRowBoard resolves a task id to its row and the board it sits in, used
@@ -457,15 +455,6 @@ func (m Model) findSub(path string) (Sub, bool) {
 		}
 	}
 	return Sub{}, false
-}
-
-// splitKey splits a preview key into its kind ("task"/"track") and argument.
-func splitKey(key string) (kind, arg string, ok bool) {
-	i := strings.IndexByte(key, ':')
-	if i < 0 {
-		return "", "", false
-	}
-	return key[:i], key[i+1:], true
 }
 
 // back closes the open preview (to full-width browsing), then clears an

@@ -2,7 +2,6 @@ package app
 
 import (
 	"errors"
-	"fmt"
 	"io/fs"
 	"path/filepath"
 
@@ -41,11 +40,7 @@ type TrackInfo struct {
 // GetTask returns the metadata of the open task id resolves to anywhere in
 // the tree containing cwd. It reads the frontmatter and gates, never the body.
 func (a App) GetTask(cwd, id string) (TaskInfo, error) {
-	root, err := tree.FindRoot(a.fs, cwd)
-	if err != nil {
-		return TaskInfo{}, err
-	}
-	path, err := tree.ResolveTask(a.fs, root, id)
+	root, path, err := a.resolveOpenWithRoot(cwd, id)
 	if err != nil {
 		return TaskInfo{}, err
 	}
@@ -56,11 +51,7 @@ func (a App) GetTask(cwd, id string) (TaskInfo, error) {
 // every board below it — the current board included as ".". Counts tally the
 // board's own (directly-filed) tasks by status; Archived counts its archive/.
 func (a App) GetTracks(cwd string) ([]TrackInfo, error) {
-	boardDir, err := tree.CurrentBoard(a.fs, cwd)
-	if err != nil {
-		return nil, err
-	}
-	boards, err := tree.Boards(a.fs, boardDir)
+	boardDir, boards, err := a.walkBoards(cwd)
 	if err != nil {
 		return nil, err
 	}
@@ -85,11 +76,7 @@ func (a App) GetNext(cwd string) (*TaskInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	boardDir, err := tree.CurrentBoard(a.fs, cwd)
-	if err != nil {
-		return nil, err
-	}
-	boards, err := tree.Boards(a.fs, boardDir)
+	_, boards, err := a.walkBoards(cwd)
 	if err != nil {
 		return nil, err
 	}
@@ -135,11 +122,7 @@ func (a App) trackInfo(root, b string) (TrackInfo, error) {
 	if err != nil {
 		return TrackInfo{}, err
 	}
-	title := board.Title(index)
-	if title == "" {
-		title = filepath.Base(b)
-	}
-	info := TrackInfo{Path: relBoard(root, b), Title: title}
+	info := TrackInfo{Path: relBoard(root, b), Title: board.TitleOr(index, filepath.Base(b))}
 	statuses, err := a.taskStatuses(b)
 	if err != nil {
 		return TrackInfo{}, err
@@ -244,16 +227,13 @@ func (a App) depDone(root, id string) (bool, error) {
 
 // taskStatuses returns the file status of every task filed directly in dir.
 func (a App) taskStatuses(dir string) ([]string, error) {
-	entries, err := a.fs.ReadDir(dir)
+	files, err := tree.TaskFileNames(a.fs, dir)
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", dir, err)
+		return nil, err
 	}
-	var out []string
-	for _, e := range entries {
-		if e.IsDir() || !tree.IsTaskFile(e.Name()) {
-			continue
-		}
-		t, _, err := a.readTask(filepath.Join(dir, e.Name()))
+	out := make([]string, 0, len(files))
+	for _, name := range files {
+		t, _, err := a.readTask(filepath.Join(dir, name))
 		if err != nil {
 			return nil, err
 		}
