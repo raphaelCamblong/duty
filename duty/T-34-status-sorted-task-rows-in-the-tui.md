@@ -46,6 +46,9 @@ custom orders; persisting the toggle.
   group; `s` flips to raw board order and back.
 - [ ] Filtered view still uses fuzzy rank; clearing the filter restores the
   sort. `TestStartupPerformance` green.
+- [ ] Priority logic untouched: NO file outside `internal/tui` (and the spec)
+  is modified; the existing `get next` board-order tests pass unedited —
+  `get next` still walks the BOARD.md order, never the display order.
 - [ ] Full suite green (`go test ./tests/... -coverpkg=./internal/... -count=1`);
   `golangci-lint run` 0 issues; `gofumpt -l .` empty; `go vet ./...` clean;
   `go build -o bin/duty ./cmd/duty` ok.
