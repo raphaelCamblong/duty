@@ -7,6 +7,10 @@ that gives you a CLI and a live TUI on top of them.
 Tasks are markdown files. Tracks are folders, and they nest. A `BOARD.md` in each
 track keeps the order. That's the whole model.
 
+It's built for working *with* your coding agent: the agent drives tasks from the
+CLI while you keep `duty tui` open and watch every status change land in real
+time — who's on what, what's blocked, what's done — without asking.
+
 ![the duty TUI](docs/duty-tui.png)
 
 ## Install
@@ -36,7 +40,8 @@ duty tui                          # watch it all live
 duty was built to be driven by AI agents: commands are quiet, exit codes mean
 things, and `--agent` turns any read into clean TSV. An agent's whole loop is
 `duty get next` → work → `duty status` + `duty report`. Hand it
-[duty/README.md](duty/README.md) and it knows the rules.
+[duty/README.md](duty/README.md) and it knows the rules — and since the TUI
+watches the files, you see its progress the moment it moves.
 
 Want more? The full behavior spec is in
 [task-system-spec.md](task-system-spec.md), and [CLAUDE.md](CLAUDE.md) covers
