@@ -51,4 +51,9 @@ Want more? The full behavior spec is in
 [task-system-spec.md](task-system-spec.md), and [CLAUDE.md](CLAUDE.md) covers
 hacking on the code.
 
+## Hacking on it
+
+`just` wraps the dev commands — `just check` runs the pre-commit gate (fmt, vet,
+lint, test) before you call anything done.
+
 MIT — see [LICENSE](LICENSE).

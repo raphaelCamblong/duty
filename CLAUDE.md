@@ -13,6 +13,8 @@ spec wins on behavior, this file wins on style and structure.
 - Test: `go test ./tests/... -coverpkg=./internal/...`
 - Before considering any change done: `gofmt -l .` empty, `go vet ./...` clean, all
   tests green. Run `golangci-lint run` if installed.
+- `just` wraps these — `just <tab>` lists every recipe, `just check` is the
+  pre-commit gate.
 
 ## Architecture
 
