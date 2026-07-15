@@ -30,9 +30,7 @@ func ReplaceSection(content []byte, heading string, body []byte) ([]byte, error)
 	if strings.TrimSpace(heading) == "" {
 		return nil, fmt.Errorf("empty section heading")
 	}
-	if at, ok := headingIndex(content, heading); ok {
-		_, start := lineAt(content, at)
-		end := nextHeadingFrom(content, start)
+	if start, end, ok := sectionBounds(content, heading); ok {
 		region := sectionRegion(body, end < len(content))
 		return splice(content, start, end, region), nil
 	}
@@ -53,10 +51,7 @@ func createSection(content []byte, heading string, body []byte) []byte {
 // blank-line separated from whatever precedes it.
 func appendSection(content []byte, heading string, body []byte) []byte {
 	var b bytes.Buffer
-	b.Write(content)
-	if n := len(content); n > 0 && content[n-1] != '\n' {
-		b.WriteByte('\n')
-	}
+	writeEndingNL(&b, content)
 	ensureBlankLine(&b)
 	b.WriteString("## ")
 	b.WriteString(heading)

@@ -2,7 +2,6 @@ package app
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 
@@ -37,12 +36,9 @@ func (a App) SetSection(cwd, id, name string, r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	text, err := io.ReadAll(r)
+	text, err := readNonBlank(r, "section")
 	if err != nil {
-		return fmt.Errorf("read stdin: %w", err)
-	}
-	if len(bytes.TrimSpace(text)) == 0 {
-		return errors.New("empty section: pipe the section text on stdin")
+		return err
 	}
 	unlock, err := a.lock(root)
 	if err != nil {

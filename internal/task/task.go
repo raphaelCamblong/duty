@@ -127,20 +127,23 @@ func SetStatus(content []byte, status string) ([]byte, error) {
 // never rewritten, each call appends one blank-line-separated block.
 func AppendReport(content, text []byte) []byte {
 	var b bytes.Buffer
-	b.Write(content)
-	if n := len(content); n > 0 && content[n-1] != '\n' {
-		b.WriteByte('\n')
-	}
+	writeEndingNL(&b, content)
 	if !reportHeadRE.Match(content) {
 		ensureBlankLine(&b)
 		b.WriteString("## Report\n")
 	}
 	ensureBlankLine(&b)
-	b.Write(text)
-	if n := len(text); n > 0 && text[n-1] != '\n' {
+	writeEndingNL(&b, text)
+	return b.Bytes()
+}
+
+// writeEndingNL writes p to b, adding a trailing newline when p is non-empty
+// and not already newline-terminated.
+func writeEndingNL(b *bytes.Buffer, p []byte) {
+	b.Write(p)
+	if n := len(p); n > 0 && p[n-1] != '\n' {
 		b.WriteByte('\n')
 	}
-	return b.Bytes()
 }
 
 // ensureBlankLine writes a newline to b when its content is non-empty and does

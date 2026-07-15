@@ -40,11 +40,7 @@ func Gates(content []byte) []Gate {
 // byte-for-byte; the new gate goes after the last one.
 func AddGate(content []byte, text string) []byte {
 	line := "- [ ] " + strings.TrimSpace(text)
-	start, end, found := sectionBounds(content, gatesHeading)
-	if !found {
-		out, _ := ReplaceSection(content, gatesHeading, []byte(line))
-		return out
-	}
+	start, end, _ := sectionBounds(content, gatesHeading)
 	at, ok := lastGateEnd(content, start, end)
 	if !ok {
 		out, _ := ReplaceSection(content, gatesHeading, []byte(line))

@@ -2,7 +2,6 @@ package app
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 
@@ -18,12 +17,9 @@ func (a App) Report(cwd, id string, r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	text, err := io.ReadAll(r)
+	text, err := readNonBlank(r, "report")
 	if err != nil {
-		return fmt.Errorf("read stdin: %w", err)
-	}
-	if len(bytes.TrimSpace(text)) == 0 {
-		return errors.New("empty report: pipe the report text on stdin")
+		return err
 	}
 	unlock, err := a.lock(root)
 	if err != nil {
@@ -35,4 +31,17 @@ func (a App) Report(cwd, id string, r io.Reader) error {
 		return err
 	}
 	return a.fs.WriteFile(taskPath, task.AppendReport(content, text))
+}
+
+// readNonBlank reads all of r and rejects blank input, naming the piped content
+// kind in both the read-error and empty-input messages.
+func readNonBlank(r io.Reader, kind string) ([]byte, error) {
+	text, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("read stdin: %w", err)
+	}
+	if len(bytes.TrimSpace(text)) == 0 {
+		return nil, fmt.Errorf("empty %s: pipe the %s text on stdin", kind, kind)
+	}
+	return text, nil
 }

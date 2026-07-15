@@ -103,7 +103,7 @@ func newGatesFlipCmd(a app.App, cwd, verb string, done bool) *cobra.Command {
 func printGates(w io.Writer, gates []task.Gate, agent bool) {
 	for i, g := range gates {
 		if agent {
-			fmt.Fprintf(w, "%d\t%s\t%s\n", i+1, boolField(g.Done), g.Text)
+			fmt.Fprintf(w, "%d\t%s\t%s\n", i+1, strconv.FormatBool(g.Done), g.Text)
 			continue
 		}
 		fmt.Fprintf(w, "%d %s %s\n", i+1, checkbox(g.Done), g.Text)
@@ -116,12 +116,4 @@ func checkbox(done bool) string {
 		return "[x]"
 	}
 	return "[ ]"
-}
-
-// boolField renders a boolean for --agent TSV output.
-func boolField(done bool) string {
-	if done {
-		return "true"
-	}
-	return "false"
 }

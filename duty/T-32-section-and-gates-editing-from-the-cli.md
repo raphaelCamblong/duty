@@ -89,3 +89,5 @@ Gate output tails:
 - Dogfood: all four gates ticked via `duty gates check`, multi-line gate text preserved byte-for-byte.
 
 Deviations: none. ReplaceSection returns ([]byte, error) per the task's mandated signature; the error path is a rejected empty heading (also gives SetSection a real guard). No follow-ups left.
+
+Simplify pass (T-32): applied reviewer findings — extracted app.readNonBlank to dedup the stdin prelude shared by Report and SetSection; dropped the redundant !found branch in task.AddGate; routed task.ReplaceSection through sectionBounds; added task.writeEndingNL used by AppendReport and appendSection; replaced cli.boolField with strconv.FormatBool. No behavior change; full suite green, lint 0.
