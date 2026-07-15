@@ -60,13 +60,13 @@ var (
 	// colDim tints chrome — separators, ages, hints, blurred borders — in the
 	// terminal's own grays, untouched by the palette.
 	colDim = lipgloss.AdaptiveColor{Light: "245", Dark: "243"}
-	// colPeach tints in-progress; darkened to a readable terracotta on light.
+	// colPeach tints in-progress.
 	colPeach = lipgloss.AdaptiveColor{Light: "#a5652f", Dark: "#e1af7d"}
-	// colBronze tints todo, the palette's quiet earthy tone; darkened on light.
+	// colBronze tints todo, the palette's quiet earthy tone.
 	colBronze = lipgloss.AdaptiveColor{Light: "#8a6a38", Dark: "#af874b"}
-	// colOlive tints done; darkened on light so it holds against a pale ground.
+	// colOlive tints done.
 	colOlive = lipgloss.AdaptiveColor{Light: "#6f7d27", Dark: "#9baf37"}
-	// colRed tints blocked, plus scan errors and drift — the deliberate alarm.
+	// colRed tints blocked, plus scan errors and drift.
 	colRed = lipgloss.AdaptiveColor{Light: "160", Dark: "203"}
 
 	headerBox    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colAccent).Padding(0, 1)

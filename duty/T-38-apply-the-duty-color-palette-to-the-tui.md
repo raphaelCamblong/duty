@@ -91,3 +91,5 @@ olive 38;2;155;175;55 · blocked 38;5;203 · dim 38;5;243.
 
 theme=light: same layout; emitted SGR: accent 38;2;30;15;55 (indigo) · peach 38;2;165;101;47 ·
 bronze 38;2;138;105;56 · olive 38;2;111;125;39 · blocked 38;5;160 · dim 38;5;245.
+
+Simplify pass (T-38-simplify): reviewed the color-palette swap on its stated angle — derivable values, duplicated color definitions, dead style vars. All clean: colYellow/colGreen fully removed, each new palette color referenced once via statusColor, every hex literal lives once in the view.go var block, light variants are hand-darkened (not derivable). One genuine behavior-preserving cleanup applied: the palette block comment already owns the "hand-darkened light variant" and "blocked must alarm" rationale, so trimmed the three per-var restatements ("darkened on light") and colRed's duplicate "deliberate alarm" to bare role tags. Comments only; gates green.
