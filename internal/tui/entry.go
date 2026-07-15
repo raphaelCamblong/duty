@@ -201,7 +201,7 @@ func styleMatches(s string, matches []int, base lipgloss.Style) string {
 // tasks). The bar column starts at the same x on every track row — mirroring
 // taskLine's right columns — and the title ellipsis-truncates first when narrow.
 func (d compactDelegate) trackLine(s Sub, selected bool, w int, nameM, titleM []int) string {
-	rightW := trackBarWidth + 2 + d.countW
+	rightW := trackRightWidth(d.countW)
 	fixed := 2 + d.nameW + 2 + 2 + rightW
 	line := cursorMark(selected) +
 		pad(styleMatches(s.Name, nameM, accentStyle), d.nameW) + "  " +

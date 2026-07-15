@@ -72,3 +72,5 @@ rows; counts (`2`, `11`) right-aligned to a common edge.
 (`entry.go`, `view.go`) plus the spec §8 track-row sentence and the new test.
 
 Dogfood: verified via the fresh binary at 120x35 and 70x20 — track bars flush right, same start column across tracks. Full report with frames above.
+
+Simplify-pass addendum: extracted trackRightWidth(countW) beside trackBarCell (internal/tui/view.go) as the single owner of the trailing state-column width (trackBarWidth+2+countW). trackLine's rightW (internal/tui/entry.go) now calls it instead of re-deriving the composition, so the title-pad and the cell can no longer desync — one source of truth naming the constraint the two sites previously only implied. Behavior-preserving: full suite green, golangci-lint 0 issues, gofumpt clean, go vet clean, build ok. The reviewers' other observations (countW/maxSubCountWidth mirroring the existing maxSub* pattern, the irreducible empty-vs-count branch, taskLine's parallel inline arithmetic) were left as-is — clean, not defects.

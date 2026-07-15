@@ -485,14 +485,19 @@ func trackBar(counts map[string]int, width int) string {
 	return b.String()
 }
 
+// trackRightWidth is the fixed cell width of a track row's trailing state
+// column: the bar, a two-cell gap, and the right-aligned total count. Both
+// trackBarCell and trackLine's title-pad reserve exactly this width.
+func trackRightWidth(countW int) int { return trackBarWidth + 2 + countW }
+
 // trackBarCell is a track row's right-aligned state column, a fixed
-// trackBarWidth+2+countW cells: the status-distribution bar and a right-aligned
+// trackRightWidth cells: the status-distribution bar and a right-aligned
 // dim total count, or a dim "empty" filling the column when the subtree holds
 // no tasks.
 func trackBarCell(counts map[string]int, countW int) string {
 	bar := trackBar(counts, trackBarWidth)
 	if bar == "" {
-		return pad(dimStyle.Render("empty"), trackBarWidth+2+countW)
+		return pad(dimStyle.Render("empty"), trackRightWidth(countW))
 	}
 	return bar + "  " + dimStyle.Render(fmt.Sprintf("%*d", countW, totalCount(counts)))
 }
