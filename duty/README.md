@@ -3,7 +3,7 @@
 One file = one task, small enough for one worker (human or agent) in one sitting.
 [BOARD.md](BOARD.md) is the index: order top-to-bottom = build order. The task file is
 the truth; the board is a projection. A track is a folder; its board defines its state
-(`duty create track <name>` creates one). Full spec: [../task-system-spec.md](../task-system-spec.md).
+(`duty create track <name>` creates one). Full spec: [../docs/spec.md](../docs/spec.md).
 
 ## Task file
 
@@ -37,4 +37,4 @@ NAME` prints one section's body), `duty get tasks`, `duty get tracks`, `duty gat
 ## What stays your judgment
 
 Filling in report prose, ticking gates honestly, and flagging spec bugs — if the code
-must deviate from `task-system-spec.md`, fix the spec in the same change.
+must deviate from `docs/spec.md`, fix the spec in the same change.

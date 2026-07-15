@@ -48,7 +48,7 @@ so their writes never collide. Hand it
 watches the files, you see its progress the moment it moves.
 
 Want more? The full behavior spec is in
-[task-system-spec.md](task-system-spec.md), and [CLAUDE.md](CLAUDE.md) covers
+[docs/spec.md](docs/spec.md), and [CLAUDE.md](CLAUDE.md) covers
 hacking on the code.
 
 ## Hacking on it

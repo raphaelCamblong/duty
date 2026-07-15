@@ -47,6 +47,9 @@ Alternatives considered and set aside: plain Astro (only for fully bespoke
 landing), VitePress (adds a Vue surface to a Go project), mdBook (no splash
 landing). Starlight fits the ask exactly.
 
+Location note (T-41): the spec now lives at docs/spec.md — the glob loader targets
+that path instead of the root spec file.
+
 ## Out of scope
 Anything beyond docs hosting; CI beyond the Pages build.
 
