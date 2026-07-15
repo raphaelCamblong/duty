@@ -63,3 +63,11 @@ Gate output tails:
 - just check: gofumpt -l . empty; go vet ./... clean; golangci-lint 0 issues; go test ./tests/... -coverpkg=./internal/... green, coverage 87.0%.
 
 Deviations: none. Note: single-arg `set <id>` was previously a usage error and is now the bulk-set form; the existing arg-validation case stays green because its non-heading stdin is refused. No follow-ups left.
+
+Simplify pass (T-36): applied 1 of 1 genuine finding, deduplicated across 3 reviewer reports.
+
+- Cross-layer duplication removed: the "one-shot body must open at a ## heading" guard and its message lived in two packages (app.readTaskBody and task.ReplaceSections), and had already drifted ("task body must start…" vs "body must start…"). Introduced task.RequireOpensAtSection([]byte) error as the single domain owner of the rule; both the create --body path (readTaskBody) and the set path (ReplaceSections) now call it, so the invariant and its wording have one home. Folded in the second reviewer's Finding 2 by building the message with errors.New(`body must start at a "## " heading`) instead of fmt.Errorf("…%q heading", "## ") — no format verb applied to a compile-time constant, and nothing to interpolate. Behavior-preserving: existing refusal tests (TestReplaceSections, TestSetSections, TestCreateTaskBody) stay green and unedited.
+
+Skipped: the alternative fix (move validation into task.RenderWithBody and return an error) — it changes RenderWithBody's signature and would force edits to the existing unedited TestRenderWithBody; RequireOpensAtSection keeps the same public surface. The reviewers' "checked and clean" items (editSection read/lock/write dedup, headingName heading-parse dedup, RenderWithBody reusing Render, CLI argv-shape routing) were already correct and needed no change.
+
+Gates: build ok, go vet clean, golangci-lint 0 issues, gofmt -l . empty, full suite green (87.0%).

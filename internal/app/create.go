@@ -55,8 +55,8 @@ func readTaskBody(r io.Reader) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !task.OpensAtSection(text) {
-		return nil, fmt.Errorf("task body must start at a %q heading", "## ")
+	if err := task.RequireOpensAtSection(text); err != nil {
+		return nil, err
 	}
 	return text, nil
 }

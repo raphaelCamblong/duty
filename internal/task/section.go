@@ -2,6 +2,7 @@ package task
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -43,8 +44,8 @@ func ReplaceSection(content []byte, heading string, body []byte) ([]byte, error)
 // touched sections surviving. It errors when payload does not open at a "## "
 // heading or names an empty section.
 func ReplaceSections(content, payload []byte) ([]byte, error) {
-	if !OpensAtSection(payload) {
-		return nil, fmt.Errorf("body must start at a %q heading", "## ")
+	if err := RequireOpensAtSection(payload); err != nil {
+		return nil, err
 	}
 	var err error
 	for pos := nextHeadingFrom(payload, 0); pos < len(payload); {
@@ -64,6 +65,16 @@ func ReplaceSections(content, payload []byte) ([]byte, error) {
 func OpensAtSection(content []byte) bool {
 	at := nextHeadingFrom(content, 0)
 	return at < len(content) && len(bytes.TrimSpace(content[:at])) == 0
+}
+
+// RequireOpensAtSection returns an error unless content opens at a "## " section
+// heading (OpensAtSection): the one guard both a one-shot task body and a
+// bulk-set payload are checked against.
+func RequireOpensAtSection(content []byte) error {
+	if !OpensAtSection(content) {
+		return errors.New(`body must start at a "## " heading`)
+	}
+	return nil
 }
 
 // createSection inserts a fresh "## <heading>" section: before the report
