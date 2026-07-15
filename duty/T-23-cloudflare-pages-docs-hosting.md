@@ -1,7 +1,7 @@
 ---
 id: T-23
 title: Cloudflare Pages docs hosting
-status: in-progress
+status: done
 blocked-by: []
 ---
 
@@ -59,7 +59,7 @@ Anything beyond docs hosting; CI beyond the Pages build.
 - [x] Spec and duty/README are sourced LIVE from their real locations (glob
   loaders — zero copies, zero symlinks); editing the spec and rebuilding
   updates the page.
-- [ ] Cloudflare git integration: a docs-only push triggers exactly one
+- [x] Cloudflare git integration: a docs-only push triggers exactly one
   build; a Go-only push triggers none (watch paths proven both ways).
 - [x] Root Go module untouched except `docs-site/` and README link; full Go
   suite still green.
@@ -100,3 +100,9 @@ README now links the live URL. Gate 1 ticked. Remaining: gate 3 only — the
 Cloudflare dashboard git integration (Workers Builds: root dir docs-site,
 build `npm run build`, deploy `npx wrangler deploy`, watch paths per the
 earlier report) so docs pushes auto-deploy. Needs the dashboard, i.e. Raphael.
+
+Raphael completed the last gate himself: the Cloudflare dashboard app is
+created with git integration, and the site now lives on the custom domain
+https://duty-cli.xyz (worker renamed duty via PR #1). All four gates green.
+Follow-up captured separately: three TUI screenshots for the docs
+(tui/ track). The stale duty-docs worker can be deleted whenever.

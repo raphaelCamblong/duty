@@ -13,5 +13,6 @@ Order top-to-bottom is the intended build order.
 | [T-17](T-17-tui-master-detail-layout-and-track-namin.md) | TUI master-detail layout and track naming | done |
 | [T-18](T-18-tui-startup-performance-and-preview-on-o.md) | TUI startup performance and preview on open | done |
 | [T-22](T-22-tui-polish-night-pass.md) | TUI polish night pass | done |
+| [T-45](T-45-add-the-three-tui-screenshots-to-the-doc.md) | Add the three TUI screenshots to the docs | todo |
 
 Completed tasks (0) archived: [archive/](archive/).
