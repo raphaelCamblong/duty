@@ -24,7 +24,53 @@ type Config struct {
 	TUI struct {
 		// Theme selects the TUI color scheme: auto, dark, or light.
 		Theme string `toml:"theme"`
+		// Palette overrides individual color slots of the TUI theme.
+		Palette Palette `toml:"palette"`
 	} `toml:"tui"`
+}
+
+// Palette holds optional TUI color overrides, one per semantic slot; a nil
+// slot keeps the built-in default. The color model itself lives in the TUI —
+// config keeps the values as plain strings so this layer stays presentation-free.
+type Palette struct {
+	// Accent overrides the accent slot (focused chrome, ids, breadcrumb).
+	Accent *Color `toml:"accent"`
+	// Dim overrides the dim slot (separators, ages, hints).
+	Dim *Color `toml:"dim"`
+	// Todo overrides the todo status slot.
+	Todo *Color `toml:"todo"`
+	// InProgress overrides the in-progress status slot.
+	InProgress *Color `toml:"in-progress"`
+	// Done overrides the done status slot.
+	Done *Color `toml:"done"`
+	// Blocked overrides the blocked status slot (also scan errors and drift).
+	Blocked *Color `toml:"blocked"`
+}
+
+// Color is one themeable color read from config: a bare string sets both the
+// light and dark channels, or an inline table { light = "…", dark = "…" } sets
+// them independently. The values stay unvalidated here; the TUI checks them.
+type Color struct {
+	// Light is the value used on a light background.
+	Light string
+	// Dark is the value used on a dark background.
+	Dark string
+}
+
+// UnmarshalTOML reads a Color from a bare string (both channels) or an inline
+// table with light and dark keys.
+func (c *Color) UnmarshalTOML(v interface{}) error {
+	switch val := v.(type) {
+	case string:
+		c.Light, c.Dark = val, val
+		return nil
+	case map[string]interface{}:
+		c.Light, _ = val["light"].(string)
+		c.Dark, _ = val["dark"].(string)
+		return nil
+	default:
+		return fmt.Errorf("theme color must be a string or { light, dark } table, got %T", v)
+	}
 }
 
 // Load reads the TOML files at userPath and projectPath and merges them over

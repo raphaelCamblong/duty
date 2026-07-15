@@ -218,8 +218,22 @@ read; one inside a track is an error (a second root).
 editor = "nvim"        # falls back to $EDITOR, then vi
 
 [tui]
-theme = "auto"         # auto | dark | light
+theme = "auto"         # auto | dark | light — background mode, not colors
+
+[tui.palette]          # optional per-slot color overrides; unset = the §8 default
+accent = "#e1ebaf"     # a bare string sets both the light and dark channel
+todo = { light = "#8a6d00", dark = "#af874b" }   # or set each channel apart
 ```
+
+`[tui.palette]` recolors the TUI's semantic slots — `accent`, `dim`, `todo`,
+`in-progress`, `done`, `blocked` — over the frozen §8 default; an omitted slot (or,
+in the table form, an omitted channel) keeps its default, so the zero config renders
+the default palette byte-for-byte. Each value is a `#rrggbb` hex triplet or an ansi
+index `0-255`; a malformed value is an error naming the key
+(`tui.palette.todo.dark`). The palette is a distinct table from the `theme` mode
+selector above (TOML forbids one key being both a string and a table). Status colors
+ink the word directly and their dark hue fills that status's distribution bar, so one
+slot drives both.
 
 Keys get added when a hardcoded value hurts, not before. Config tunes presentation
 only — statuses, naming, and board structure are the convention, never settings.
@@ -258,7 +272,8 @@ instant: no markdown renderer is built and no terminal query fires until a task 
   (11.5:1), in-progress blue `#3a6ea5` (5.3:1), todo amber `#8a6d00` (4.9:1), done
   olive `#6f7d27` (4.5:1), blocked red (5.4:1), dim grey (5.25:1), body black. Bars
   fill with the raw hues on both themes. The **selected row is bold across the whole
-  line**, both themes.
+  line**, both themes. This palette is the default; every slot is overridable from
+  `[tui.palette]` (§7).
 - **Right panel — on open only:** `enter`/double-click on a task opens the split — the
   file rendered by glamour in a viewport, focus on the preview; `esc` closes. `enter`
   on a track descends; with a preview open it shows the track's summary card (title,

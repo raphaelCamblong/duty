@@ -49,92 +49,6 @@ const (
 // crumbZone is the stable zone name of the breadcrumb segment for board path.
 func crumbZone(path string) string { return crumbZonePrefix + path }
 
-// The duty palette (§8): peach #e1af7d, bronze #af874b, olive #9baf37 fill the
-// distribution bars on both themes and, on dark terminals, ink the status words
-// directly. On light terminals those hues are too pale for ink (peach 1.9, olive
-// 2.3 to 1 on white), so each word shifts to a flat AA-readable tone measured on
-// white: in-progress blue #3a6ea5 (5.3:1), todo amber #8a6d00 (4.9:1), done olive
-// #6f7d27 (4.5:1), accent navy #1f3a5f (11.5:1). blocked stays red on both — the
-// palette carries no alarm color.
-var (
-	// colAccent inks focused borders, the breadcrumb, the selection, ids, and
-	// the header title: cream on dark, navy on light (11.5:1 on white).
-	colAccent = lipgloss.AdaptiveColor{Light: "#1f3a5f", Dark: "#e1ebaf"}
-	// colDim inks chrome — separators, ages, hints, blurred borders — a medium
-	// grey the palette leaves alone (242 = 5.3:1 on white, terminal grey on dark).
-	colDim = lipgloss.AdaptiveColor{Light: "242", Dark: "243"}
-	// colPeach fills in-progress distribution bars on both themes.
-	colPeach = lipgloss.Color("#e1af7d")
-	// colBronze fills todo distribution bars on both themes.
-	colBronze = lipgloss.Color("#af874b")
-	// colOlive fills done distribution bars on both themes.
-	colOlive = lipgloss.Color("#9baf37")
-	// colRed inks blocked on both themes, plus scan errors and drift.
-	colRed = lipgloss.AdaptiveColor{Light: "160", Dark: "203"}
-	// colInProgressInk inks the in-progress word: raw peach on dark, medium blue
-	// on light (5.3:1 on white).
-	colInProgressInk = lipgloss.AdaptiveColor{Light: "#3a6ea5", Dark: "#e1af7d"}
-	// colTodoInk inks the todo word: raw bronze on dark, dark amber on light
-	// (4.9:1 on white).
-	colTodoInk = lipgloss.AdaptiveColor{Light: "#8a6d00", Dark: "#af874b"}
-	// colDoneInk inks the done word: raw olive on dark, dark olive on light
-	// (4.5:1 on white).
-	colDoneInk = lipgloss.AdaptiveColor{Light: "#6f7d27", Dark: "#9baf37"}
-
-	headerBox    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colAccent).Padding(0, 1)
-	focusedBox   = headerBox
-	blurredBox   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colDim).Padding(0, 1)
-	crumbStyle   = lipgloss.NewStyle().Bold(true).Foreground(colAccent)
-	accentStyle  = lipgloss.NewStyle().Foreground(colAccent)
-	sectionStyle = lipgloss.NewStyle().Bold(true).Foreground(colDim)
-	dimStyle     = lipgloss.NewStyle().Foreground(colDim)
-	errStyle     = lipgloss.NewStyle().Foreground(colRed)
-	selStyle     = lipgloss.NewStyle().Bold(true)
-	driftStyle   = lipgloss.NewStyle().Foreground(colRed)
-)
-
-// statusStyle inks a status word as flat colored text: on dark each word keeps
-// its raw palette hue, on light it shifts to an AA-readable tone measured on
-// white — in-progress blue, todo amber, done olive; blocked is red, unknown dim.
-func statusStyle(status string) lipgloss.Style {
-	switch status {
-	case task.StatusInProgress:
-		return lipgloss.NewStyle().Foreground(colInProgressInk)
-	case task.StatusTodo:
-		return lipgloss.NewStyle().Foreground(colTodoInk)
-	case task.StatusBlocked:
-		return lipgloss.NewStyle().Foreground(colRed)
-	case task.StatusDone:
-		return lipgloss.NewStyle().Foreground(colDoneInk)
-	}
-	return lipgloss.NewStyle().Foreground(colDim)
-}
-
-// statusColor is a status's raw palette hue — the fill for its distribution-bar
-// segments on both themes: in-progress peach, todo bronze, blocked red, done
-// olive; an unknown status stays dim.
-func statusColor(status string) lipgloss.TerminalColor {
-	switch status {
-	case task.StatusInProgress:
-		return colPeach
-	case task.StatusTodo:
-		return colBronze
-	case task.StatusBlocked:
-		return colRed
-	case task.StatusDone:
-		return colOlive
-	}
-	return colDim
-}
-
-// panelBox is a panel's border style: accent when focused, dim otherwise.
-func panelBox(focused bool) lipgloss.Style {
-	if focused {
-		return focusedBox
-	}
-	return blurredBox
-}
-
 // View renders the current frame: header, the body (a full-width browsing
 // list, the open split, or the narrow full-screen preview), and the help
 // footer. The zone manager's Scan registers the hit-zones and strips markers.
@@ -187,7 +101,7 @@ func leftWidth(w int) int {
 // list's own styled no-items state.
 func (m Model) leftPanel() string {
 	cw, ch := m.list.Width()+2, m.list.Height()
-	box := panelBox(m.focus == focusList).Width(cw).Height(ch)
+	box := m.theme.panelBox(m.focus == focusList).Width(cw).Height(ch)
 	inner := m.list.View()
 	switch {
 	case !anySelectable(m.list.Items()):
@@ -202,16 +116,16 @@ func (m Model) leftPanel() string {
 // a fresh tree names itself, any other empty track nudges toward create.
 func (m Model) emptyHint() string {
 	if m.path == "." {
-		return dimStyle.Render(`empty tree — duty create task "…" to begin`)
+		return m.theme.dim().Render(`empty tree — duty create task "…" to begin`)
 	}
-	return dimStyle.Render(`no tasks yet — duty create task "…"`)
+	return m.theme.dim().Render(`no tasks yet — duty create task "…"`)
 }
 
 // rightPanel is the preview — pinned title line over the viewport — in its
 // focus-colored border, a full-panel mouse zone.
 func (m Model) rightPanel() string {
 	title := ansi.Truncate(m.previewTitleText, m.preview.Width, "…")
-	box := panelBox(m.focus == focusPreview).Width(m.preview.Width + 2).Height(m.preview.Height + 1)
+	box := m.theme.panelBox(m.focus == focusPreview).Width(m.preview.Width + 2).Height(m.preview.Height + 1)
 	content := lipgloss.JoinVertical(lipgloss.Left, title, m.preview.View())
 	return m.zones.Mark(zonePreview, box.Render(content))
 }
@@ -224,34 +138,34 @@ func (m Model) headerView(w int) string {
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		ansi.Truncate(m.breadcrumb(), inner, "…"),
-		stateLine(b, inner),
+		m.theme.stateLine(b, inner),
 	)
-	return headerBox.Width(max(w-2, 1)).Render(content)
+	return m.theme.focusBox().Width(max(w-2, 1)).Render(content)
 }
 
 // stateLine renders a board's subtree per-status counts in status colors,
 // with the ntcharts distribution bar filling the rest of the line.
-func stateLine(b Board, w int) string {
-	rollup := rollupOrEmpty(b.Counts)
+func (t Theme) stateLine(b Board, w int) string {
+	rollup := t.rollupOrEmpty(b.Counts)
 	barW := w - lipgloss.Width(rollup) - 2
 	if barW < minBarWidth {
 		return ansi.Truncate(rollup, w, "…")
 	}
-	return rollup + "  " + statusBar(b.Counts, barW)
+	return rollup + "  " + t.statusBar(b.Counts, barW)
 }
 
 // statusBar renders per-status counts as one horizontal ntcharts bar w cells
 // wide; no tasks shows a faint rule.
-func statusBar(counts map[string]int, w int) string {
+func (t Theme) statusBar(counts map[string]int, w int) string {
 	if totalCount(counts) == 0 {
-		return dimStyle.Render(strings.Repeat("╌", w))
+		return t.dim().Render(strings.Repeat("╌", w))
 	}
 	bar := barchart.New(
 		w, 1,
 		barchart.WithHorizontalBars(),
 		barchart.WithNoAxis(),
 		barchart.WithBarWidth(1),
-		barchart.WithDataSet([]barchart.BarData{barData(counts)}),
+		barchart.WithDataSet([]barchart.BarData{t.barData(counts)}),
 	)
 	bar.Draw()
 	return bar.View()
@@ -259,10 +173,10 @@ func statusBar(counts map[string]int, w int) string {
 
 // barData turns status counts into one stacked horizontal bar, its segments in
 // rollupOrder so the header bar and the inline track bars agree on screen.
-func barData(counts map[string]int) barchart.BarData {
+func (t Theme) barData(counts map[string]int) barchart.BarData {
 	values := make([]barchart.BarValue, 0, len(rollupOrder))
 	for _, status := range rollupOrder {
-		c := statusColor(status)
+		c := t.statusColor(status)
 		values = append(values, barchart.BarValue{
 			Name:  status,
 			Value: float64(counts[status]),
@@ -278,7 +192,7 @@ func (m Model) footerView(w int) string {
 	if m.scanErr == "" {
 		return m.helpView(w)
 	}
-	err := " " + errStyle.Render(ansi.Truncate(m.scanErr, max(w-2, 1), "…"))
+	err := " " + m.theme.alert().Render(ansi.Truncate(m.scanErr, max(w-2, 1), "…"))
 	return lipgloss.JoinVertical(lipgloss.Left, err, m.helpView(w))
 }
 
@@ -304,14 +218,14 @@ func (m Model) previewTitle() string {
 	switch m.previewKind {
 	case previewTrack:
 		if s, ok := m.findSub(m.previewArg); ok {
-			return accentStyle.Render(s.Name) + "  " + selStyle.Render(s.Title)
+			return m.theme.accent().Render(s.Name) + "  " + lipgloss.NewStyle().Bold(true).Render(s.Title)
 		}
 	case previewTask:
 		if r, b, ok := m.findRowBoard(m.previewArg); ok {
-			return taskHeader(r, b.Title, m.headerAge(r))
+			return m.theme.taskHeader(r, b.Title, m.headerAge(r))
 		}
 	}
-	return dimStyle.Render("gone")
+	return m.theme.dim().Render("gone")
 }
 
 // headerAge is the preview header's relative age, "" when the age column is
@@ -327,23 +241,23 @@ func (m Model) headerAge(r Row) string {
 // status · gates n/m · track title, then blocked-by ids, any drift badge, and
 // the relative age trailing dim. age trails last so a narrow header truncates
 // it before the blocked-by link; age is "" when the age column is hidden.
-func taskHeader(r Row, track, age string) string {
-	parts := []string{accentStyle.Render(r.ID), statusStyle(r.Status).Render(r.Status)}
+func (t Theme) taskHeader(r Row, track, age string) string {
+	parts := []string{t.accent().Render(r.ID), t.statusStyle(r.Status).Render(r.Status)}
 	if g := gatesCell(r); g != "" {
-		parts = append(parts, dimStyle.Render(g))
+		parts = append(parts, t.dim().Render(g))
 	}
 	if track != "" {
-		parts = append(parts, dimStyle.Render(track))
+		parts = append(parts, t.dim().Render(track))
 	}
-	line := strings.Join(parts, dimStyle.Render(" · "))
+	line := strings.Join(parts, t.dim().Render(" · "))
 	if len(r.BlockedBy) > 0 {
-		line += "  " + dimStyle.Render("blocked-by "+strings.Join(r.BlockedBy, ", "))
+		line += "  " + t.dim().Render("blocked-by "+strings.Join(r.BlockedBy, ", "))
 	}
 	if r.Drift != "" {
-		line += "  " + driftStyle.Render("⚠ "+r.Drift)
+		line += "  " + t.alert().Render("⚠ "+r.Drift)
 	}
 	if age != "" {
-		line += "  " + dimStyle.Render(age)
+		line += "  " + t.dim().Render(age)
 	}
 	return line
 }
@@ -358,14 +272,14 @@ func (m Model) previewContent() (Model, string) {
 		if s, ok := m.findSub(m.previewArg); ok {
 			return m, m.trackCard(s, w)
 		}
-		return m, dimStyle.Render("track gone")
+		return m, m.theme.dim().Render("track gone")
 	case previewTask:
 		r, _, ok := m.findRowBoard(m.previewArg)
 		switch {
 		case !ok:
-			return m, dimStyle.Render("task gone")
+			return m, m.theme.dim().Render("task gone")
 		case r.Path == "":
-			return m, dimStyle.Render("no file — the board row points nowhere")
+			return m, m.theme.dim().Render("no file — the board row points nowhere")
 		default:
 			return m.taskMarkdown(r.Content)
 		}
@@ -379,7 +293,7 @@ func (m Model) previewContent() (Model, string) {
 func (m Model) taskMarkdown(content []byte) (Model, string) {
 	wrap := max(m.preview.Width-2, 20)
 	if m.renderer == nil || m.rendererWidth != wrap {
-		r, err := newRenderer(wrap, m.theme)
+		r, err := newRenderer(wrap, m.mode)
 		if err != nil {
 			return m, string(task.Body(content))
 		}
@@ -396,23 +310,23 @@ func (m Model) taskMarkdown(content []byte) (Model, string) {
 // distribution bar, sections with row counts, and the subtree drift count.
 func (m Model) trackCard(s Sub, w int) string {
 	lines := []string{
-		dimStyle.Render(fmt.Sprintf("%d tasks · %d done", s.Total, s.Done)),
-		rollupOrEmpty(s.Counts),
+		m.theme.dim().Render(fmt.Sprintf("%d tasks · %d done", s.Total, s.Done)),
+		m.theme.rollupOrEmpty(s.Counts),
 		"",
-		statusBar(s.Counts, min(w, 40)),
+		m.theme.statusBar(s.Counts, min(w, 40)),
 		"",
 	}
 	if b, ok := m.snap.Boards[s.Path]; ok && len(b.Sections) > 0 {
-		lines = append(lines, sectionStyle.Render("Sections"))
+		lines = append(lines, m.theme.section().Render("Sections"))
 		for _, sec := range b.Sections {
-			lines = append(lines, " "+sec.Name+"  "+dimStyle.Render(strconv.Itoa(len(sec.Rows))))
+			lines = append(lines, " "+sec.Name+"  "+m.theme.dim().Render(strconv.Itoa(len(sec.Rows))))
 		}
 		lines = append(lines, "")
 	}
 	if n := m.subtreeDrift(s.Path); n > 0 {
-		lines = append(lines, driftStyle.Render(fmt.Sprintf("⚠ %d drift", n)))
+		lines = append(lines, m.theme.alert().Render(fmt.Sprintf("⚠ %d drift", n)))
 	} else {
-		lines = append(lines, dimStyle.Render("no drift"))
+		lines = append(lines, m.theme.dim().Render("no drift"))
 	}
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], w, "…")
@@ -434,23 +348,23 @@ func (m Model) subtreeDrift(path string) int {
 
 // rollupOrEmpty renders the per-status rollup, or a dim "empty" when the
 // subtree holds no tasks.
-func rollupOrEmpty(counts map[string]int) string {
-	if r := statusRollup(counts); r != "" {
+func (t Theme) rollupOrEmpty(counts map[string]int) string {
+	if r := t.statusRollup(counts); r != "" {
 		return r
 	}
-	return dimStyle.Render("empty")
+	return t.dim().Render("empty")
 }
 
 // statusRollup renders per-status counts in rollupOrder, each colored with its
 // status color, zero counts omitted, joined by a dim middot; "" when empty.
-func statusRollup(counts map[string]int) string {
+func (t Theme) statusRollup(counts map[string]int) string {
 	var parts []string
 	for _, st := range rollupOrder {
 		if n := counts[st]; n > 0 {
-			parts = append(parts, statusStyle(st).Render(fmt.Sprintf("%d %s", n, st)))
+			parts = append(parts, t.statusStyle(st).Render(fmt.Sprintf("%d %s", n, st)))
 		}
 	}
-	return strings.Join(parts, dimStyle.Render(" · "))
+	return strings.Join(parts, t.dim().Render(" · "))
 }
 
 // totalCount sums a status→count map over the lifecycle statuses.
@@ -512,7 +426,7 @@ func maxRemainder(active []string, rem map[string]float64) string {
 // trackBar renders a fixed-width inline status-distribution bar: colored
 // block runs proportional to the subtree per-status counts in lifecycle
 // order, the header bar's palette, "" when the subtree holds no tasks.
-func trackBar(counts map[string]int, width int) string {
+func (t Theme) trackBar(counts map[string]int, width int) string {
 	cells := BarCells(counts, width)
 	if cells == nil {
 		return ""
@@ -520,7 +434,7 @@ func trackBar(counts map[string]int, width int) string {
 	var b strings.Builder
 	for _, st := range rollupOrder {
 		if c := cells[st]; c > 0 {
-			b.WriteString(lipgloss.NewStyle().Foreground(statusColor(st)).Render(strings.Repeat("█", c)))
+			b.WriteString(lipgloss.NewStyle().Foreground(t.statusColor(st)).Render(strings.Repeat("█", c)))
 		}
 	}
 	return b.String()
@@ -535,12 +449,12 @@ func trackRightWidth(countW int) int { return trackBarWidth + 2 + countW }
 // trackRightWidth cells: the status-distribution bar and a right-aligned
 // dim total count, or a dim "empty" filling the column when the subtree holds
 // no tasks.
-func trackBarCell(counts map[string]int, countW int) string {
-	bar := trackBar(counts, trackBarWidth)
+func (t Theme) trackBarCell(counts map[string]int, countW int) string {
+	bar := t.trackBar(counts, trackBarWidth)
 	if bar == "" {
-		return pad(dimStyle.Render("empty"), trackRightWidth(countW))
+		return pad(t.dim().Render("empty"), trackRightWidth(countW))
 	}
-	return bar + "  " + dimStyle.Render(fmt.Sprintf("%*d", countW, totalCount(counts)))
+	return bar + "  " + t.dim().Render(fmt.Sprintf("%*d", countW, totalCount(counts)))
 }
 
 // breadcrumb joins the H1 titles from the root down to the track on screen,
@@ -552,10 +466,10 @@ func (m Model) breadcrumb() string {
 	}
 	parts := make([]string, len(chain))
 	for i, p := range chain {
-		seg := crumbStyle.Render(m.snap.Boards[p].Title)
+		seg := m.theme.crumb().Render(m.snap.Boards[p].Title)
 		parts[i] = m.zones.Mark(crumbZone(p), seg)
 	}
-	return strings.Join(parts, dimStyle.Render(" › "))
+	return strings.Join(parts, m.theme.dim().Render(" › "))
 }
 
 // crumbChain lists the board paths from the root down to the track on screen,
@@ -589,14 +503,6 @@ func newRenderer(wrap int, theme string) (*glamour.TermRenderer, error) {
 		glamour.WithWordWrap(wrap),
 		glamour.WithStandardStyle(style),
 	)
-}
-
-// cursorMark is the two-column selection gutter.
-func cursorMark(selected bool) string {
-	if selected {
-		return accentStyle.Bold(true).Render("❯") + " "
-	}
-	return "  "
 }
 
 // gatesCell renders gate progress, blank when a task declares no gates.

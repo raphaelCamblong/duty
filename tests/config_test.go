@@ -134,6 +134,39 @@ func TestLoad(t *testing.T) {
 	}
 }
 
+func TestLoadPalette(t *testing.T) {
+	t.Setenv("EDITOR", "nano")
+	dir := t.TempDir()
+	projectPath := filepath.Join(dir, "duty.toml")
+	content := "[tui]\n" +
+		"theme = \"dark\"\n\n" +
+		"[tui.palette]\n" +
+		"accent = \"#ff8800\"\n" +
+		"done = { light = \"#111111\", dark = \"#eeeeee\" }\n"
+	if err := os.WriteFile(projectPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("seed project config: %v", err)
+	}
+
+	got, err := config.Load(fsys.OS{}, "", projectPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got.TUI.Theme != "dark" {
+		t.Errorf("theme selector clobbered by the palette table: %q", got.TUI.Theme)
+	}
+	p := got.TUI.Palette
+	if p.Accent == nil || p.Accent.Light != "#ff8800" || p.Accent.Dark != "#ff8800" {
+		t.Errorf("bare-string accent = %+v, want both channels #ff8800", p.Accent)
+	}
+	if p.Done == nil || p.Done.Light != "#111111" || p.Done.Dark != "#eeeeee" {
+		t.Errorf("table done = %+v, want light #111111 dark #eeeeee", p.Done)
+	}
+	if p.Dim != nil || p.Todo != nil || p.InProgress != nil || p.Blocked != nil {
+		t.Errorf("unset slots should stay nil, got dim=%v todo=%v inprog=%v blocked=%v",
+			p.Dim, p.Todo, p.InProgress, p.Blocked)
+	}
+}
+
 func TestLoadEmptyPaths(t *testing.T) {
 	t.Setenv("EDITOR", "nano")
 

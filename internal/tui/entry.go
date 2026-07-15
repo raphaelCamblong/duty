@@ -108,6 +108,7 @@ func statusRank(status string) int {
 // per-status rollup, tasks with status/gates/drift columns, section names
 // dim; selectable lines are wrapped in BubbleZone hit-zones.
 type compactDelegate struct {
+	theme     Theme
 	zones     *zone.Manager
 	nameW     int
 	countW    int
@@ -122,8 +123,9 @@ type compactDelegate struct {
 // newDelegate sizes a compact delegate's columns for one board; showAge governs
 // the always-on relative-age column (whose width is measured here) and showGates
 // the gate column that a narrow terminal drops.
-func newDelegate(z *zone.Manager, b Board, showAge, showGates bool, now time.Time) compactDelegate {
+func newDelegate(theme Theme, z *zone.Manager, b Board, showAge, showGates bool, now time.Time) compactDelegate {
 	d := compactDelegate{
+		theme:     theme,
 		zones:     z,
 		nameW:     maxSubNameWidth(b.Subs),
 		countW:    maxSubCountWidth(b.Subs),
@@ -155,7 +157,7 @@ func (d compactDelegate) Render(w io.Writer, m list.Model, index int, item list.
 		return
 	}
 	if e.section != "" {
-		fmt.Fprint(w, " "+sectionStyle.Render(e.section))
+		fmt.Fprint(w, " "+d.theme.section().Render(e.section))
 		return
 	}
 	sel := index == m.Index()
@@ -206,10 +208,10 @@ func styleMatches(s string, matches []int, base lipgloss.Style) string {
 func (d compactDelegate) trackLine(s Sub, selected bool, w int, nameM, titleM []int) string {
 	rightW := trackRightWidth(d.countW)
 	fixed := 2 + d.nameW + 2 + 2 + rightW
-	line := cursorMark(selected) +
-		pad(styleMatches(s.Name, nameM, boldWhen(accentStyle, selected)), d.nameW) + "  " +
+	line := d.theme.cursorMark(selected) +
+		pad(styleMatches(s.Name, nameM, boldWhen(d.theme.accent(), selected)), d.nameW) + "  " +
 		pad(styleMatches(s.Title, titleM, boldWhen(lipgloss.NewStyle(), selected)), max(w-fixed, minTitleWidth)) + "  " +
-		trackBarCell(s.Counts, d.countW)
+		d.theme.trackBarCell(s.Counts, d.countW)
 	return ansi.Truncate(line, w, "…")
 }
 
@@ -236,11 +238,11 @@ func (d compactDelegate) taskLine(r Row, selected bool, w int, idM, titleM []int
 	if d.driftW > 0 {
 		fixed += 2 + d.driftW
 	}
-	dim := boldWhen(dimStyle, selected)
-	line := cursorMark(selected) +
-		pad(styleMatches(r.ID, idM, boldWhen(accentStyle, selected)), d.idW) + "  " +
+	dim := boldWhen(d.theme.dim(), selected)
+	line := d.theme.cursorMark(selected) +
+		pad(styleMatches(r.ID, idM, boldWhen(d.theme.accent(), selected)), d.idW) + "  " +
 		pad(styleMatches(r.Title, titleM, boldWhen(lipgloss.NewStyle(), selected)), max(w-fixed, minTitleWidth)) + "  " +
-		boldWhen(statusStyle(r.Status), selected).Render(pad(r.Status, statusColWidth))
+		boldWhen(d.theme.statusStyle(r.Status), selected).Render(pad(r.Status, statusColWidth))
 	if d.showGates {
 		line += "  " + dim.Render(pad(gatesCell(r), gatesColWidth))
 	}
@@ -248,7 +250,7 @@ func (d compactDelegate) taskLine(r Row, selected bool, w int, idM, titleM []int
 		line += "  " + dim.Render(pad(ageCell(r, d.now), d.ageW))
 	}
 	if r.Drift != "" {
-		line += "  " + boldWhen(driftStyle, selected).Render(pad("⚠ "+r.Drift, d.driftW))
+		line += "  " + boldWhen(d.theme.alert(), selected).Render(pad("⚠ "+r.Drift, d.driftW))
 	}
 	return ansi.Truncate(line, w, "…")
 }

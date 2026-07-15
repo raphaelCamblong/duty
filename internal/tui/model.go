@@ -54,7 +54,8 @@ type Model struct {
 	fsys    fsys.FS
 	root    string
 	editor  string
-	theme   string
+	theme   Theme
+	mode    string
 	keys    keyMap
 	help    help.Model
 	zones   *zone.Manager
@@ -89,9 +90,14 @@ type Model struct {
 	lastClickAt  time.Time
 }
 
-// New scans the tree under root and returns a model opened on the root
-// track, styled per cfg.
+// New scans the tree under root and returns a model opened on the root track,
+// styled per cfg: the color palette overlaid from [tui.palette] (a malformed
+// color errors) and the dark/light mode from [tui].theme.
 func New(f fsys.FS, root string, cfg config.Config) (Model, error) {
+	theme, err := themeFromConfig(cfg.TUI.Palette)
+	if err != nil {
+		return Model{}, err
+	}
 	snap, err := Scan(f, root)
 	if err != nil {
 		return Model{}, err
@@ -100,14 +106,15 @@ func New(f fsys.FS, root string, cfg config.Config) (Model, error) {
 		fsys:       f,
 		root:       root,
 		editor:     cfg.Editor,
-		theme:      cfg.TUI.Theme,
+		theme:      theme,
+		mode:       cfg.TUI.Theme,
 		keys:       defaultKeys(),
 		help:       help.New(),
 		zones:      zone.New(),
 		snap:       snap,
 		path:       ".",
 		memory:     map[string]int{},
-		list:       newList(),
+		list:       newList(theme),
 		showAge:    true,
 		showGates:  true,
 		statusSort: true,
@@ -120,8 +127,8 @@ func New(f fsys.FS, root string, cfg config.Config) (Model, error) {
 
 // newList returns the bare bubbles list the left panel wraps: no chrome of
 // its own (the model owns header, footer, and quitting), fuzzy filter on.
-func newList() list.Model {
-	l := list.New(nil, compactDelegate{}, 0, 0)
+func newList(theme Theme) list.Model {
+	l := list.New(nil, compactDelegate{theme: theme}, 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
 	l.SetShowHelp(false)
@@ -129,9 +136,9 @@ func newList() list.Model {
 	l.SetStatusBarItemName("match", "matches")
 	l.DisableQuitKeybindings()
 	l.FilterInput.Prompt = "/ "
-	l.FilterInput.PromptStyle = accentStyle
+	l.FilterInput.PromptStyle = theme.accent()
 	l.Styles.TitleBar = lipgloss.NewStyle()
-	l.Styles.NoItems = dimStyle.Padding(1, 2)
+	l.Styles.NoItems = theme.dim().Padding(1, 2)
 	return l
 }
 
@@ -307,7 +314,7 @@ func (m Model) resizeGates(w int) Model {
 // visibility, leaving items, selection, and any filter untouched.
 func (m Model) reskinList() Model {
 	b, _ := m.board()
-	m.list.SetDelegate(newDelegate(m.zones, b, m.showAge, m.showGates, time.Now()))
+	m.list.SetDelegate(newDelegate(m.theme, m.zones, b, m.showAge, m.showGates, time.Now()))
 	return m
 }
 
@@ -546,7 +553,7 @@ func (m Model) selectNth(n int) Model {
 // snapshot; the returned command re-runs an active filter.
 func (m Model) rebuildList() (Model, tea.Cmd) {
 	b, ok := m.board()
-	m.list.SetDelegate(newDelegate(m.zones, b, m.showAge, m.showGates, time.Now()))
+	m.list.SetDelegate(newDelegate(m.theme, m.zones, b, m.showAge, m.showGates, time.Now()))
 	if !ok {
 		return m, m.list.SetItems(nil)
 	}
