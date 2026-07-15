@@ -1,7 +1,7 @@
 ---
 id: T-23
 title: Cloudflare Pages docs hosting
-status: blocked
+status: in-progress
 blocked-by: []
 ---
 
@@ -54,7 +54,7 @@ that path instead of the root spec file.
 Anything beyond docs hosting; CI beyond the Pages build.
 
 ## Gates
-- [ ] `docs-site/` builds locally and `wrangler deploy` serves the site on a
+- [x] `docs-site/` builds locally and `wrangler deploy` serves the site on a
   *.workers.dev URL: splash landing + spec + convention README all rendered.
 - [x] Spec and duty/README are sourced LIVE from their real locations (glob
   loaders — zero copies, zero symlinks); editing the spec and rebuilding
@@ -93,3 +93,10 @@ Blocked — wrangler is not authenticated here, so no deploy. To finish:
    since T-41; `docs/*` covers docs/spec.md); exclude `*.go`, `internal/*`,
    `cmd/*`, `tests/*`, `go.mod`, `go.sum`. Prove both ways (docs-only push
    → one build; Go-only push → none), then tick gate 3.
+
+Deployed: https://duty-docs.raph-camblong.workers.dev — all four pages 200
+(landing, getting-started, spec, convention), sitemap fixed via astro `site`,
+README now links the live URL. Gate 1 ticked. Remaining: gate 3 only — the
+Cloudflare dashboard git integration (Workers Builds: root dir docs-site,
+build `npm run build`, deploy `npx wrangler deploy`, watch paths per the
+earlier report) so docs pushes auto-deploy. Needs the dashboard, i.e. Raphael.
