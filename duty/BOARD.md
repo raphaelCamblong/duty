@@ -33,5 +33,6 @@ Order top-to-bottom is the intended build order.
 | [T-31](T-31-relative-task-age-in-tui-and-reads.md) | Relative task age in TUI and reads | done |
 | [T-32](T-32-section-and-gates-editing-from-the-cli.md) | Section and gates editing from the CLI | todo |
 | [T-33](T-33-justfile-for-developer-experience.md) | Justfile for developer experience | todo |
+| [T-34](T-34-status-sorted-task-rows-in-the-tui.md) | Status-sorted task rows in the TUI | todo |
 
 Completed tasks (0) archived: [archive/](archive/).
