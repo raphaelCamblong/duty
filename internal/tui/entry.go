@@ -69,7 +69,10 @@ func boardEntries(b Board, statusSort bool) []list.Item {
 	}
 	for si := range b.Sections {
 		items = append(items, entry{section: b.Sections[si].Name})
-		rows := sortedRows(b.Sections[si].Rows, statusSort)
+		rows := b.Sections[si].Rows
+		if statusSort {
+			rows = sortedRows(rows)
+		}
 		for ri := range rows {
 			items = append(items, entry{task: &rows[ri]})
 		}
@@ -80,11 +83,8 @@ func boardEntries(b Board, statusSort bool) []list.Item {
 // sortedRows groups a section's rows by status for display: stable by
 // rollupOrder rank (unknown statuses last) so the board's build order survives
 // as the tiebreak. It copies first, leaving the snapshot's board order intact
-// for the toggle back; statusSort off returns the rows unchanged.
-func sortedRows(rows []Row, statusSort bool) []Row {
-	if !statusSort {
-		return rows
-	}
+// for the toggle back.
+func sortedRows(rows []Row) []Row {
 	out := make([]Row, len(rows))
 	copy(out, rows)
 	sort.SliceStable(out, func(i, j int) bool {
