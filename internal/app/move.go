@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/raphaelCamblong/duty/internal/board"
 	"github.com/raphaelCamblong/duty/internal/names"
@@ -40,7 +39,7 @@ func (a App) moveTrack(cwd, id, track, section string) error {
 	if err != nil {
 		return err
 	}
-	target, err := a.targetBoard(root, track)
+	target, err := a.resolveTrack(root, track)
 	if err != nil {
 		return err
 	}
@@ -123,23 +122,4 @@ func (a App) moveRowInBoard(taskPath, section string) error {
 		return err
 	}
 	return a.fs.WriteFile(boardPath, board.PruneEmptySections(moved))
-}
-
-// targetBoard resolves track — relative to root, "." meaning the root
-// board — to an existing board directory: one holding a board index inside
-// the tree.
-func (a App) targetBoard(root, track string) (string, error) {
-	if filepath.IsAbs(track) {
-		return "", fmt.Errorf("track path %q must be relative to the tree root", track)
-	}
-	dir := filepath.Join(root, filepath.FromSlash(track))
-	rel, err := filepath.Rel(root, dir)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("track path %q escapes the tree", track)
-	}
-	info, err := a.fs.Stat(filepath.Join(dir, names.BoardFile))
-	if err != nil || info.IsDir() {
-		return "", fmt.Errorf("no track at %q: no %s there", track, names.BoardFile)
-	}
-	return dir, nil
 }

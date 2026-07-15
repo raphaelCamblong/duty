@@ -47,11 +47,12 @@ func (a App) GetTask(cwd, id string) (TaskInfo, error) {
 	return a.taskInfo(root, path)
 }
 
-// GetTracks returns one TrackInfo per board in the board containing cwd and
-// every board below it — the current board included as ".". Counts tally the
-// board's own (directly-filed) tasks by status; Archived counts its archive/.
-func (a App) GetTracks(cwd string) ([]TrackInfo, error) {
-	boardDir, boards, err := a.walkBoards(cwd)
+// GetTracks returns one TrackInfo per board in the board in — a root-relative
+// track path, or the board containing cwd when empty — and every board below
+// it, that board included as ".". Counts tally the board's own
+// (directly-filed) tasks by status; Archived counts its archive/.
+func (a App) GetTracks(cwd, in string) ([]TrackInfo, error) {
+	boardDir, boards, err := a.walkBoards(cwd, in)
 	if err != nil {
 		return nil, err
 	}
@@ -66,17 +67,17 @@ func (a App) GetTracks(cwd string) ([]TrackInfo, error) {
 	return out, nil
 }
 
-// GetNext returns the first actionable task: scanning the board containing
-// cwd and every board below it in scan order, and within each its rows in
-// board order, it returns the first todo whose blocked-by are all done —
-// archived dependencies count as done. It returns nil when nothing is
-// actionable.
-func (a App) GetNext(cwd string) (*TaskInfo, error) {
+// GetNext returns the first actionable task: scanning the board in — a
+// root-relative track path, or the board containing cwd when empty — and
+// every board below it in scan order, and within each its rows in board
+// order, it returns the first todo whose blocked-by are all done — archived
+// dependencies count as done. It returns nil when nothing is actionable.
+func (a App) GetNext(cwd, in string) (*TaskInfo, error) {
 	root, err := tree.FindRoot(a.fs, cwd)
 	if err != nil {
 		return nil, err
 	}
-	_, boards, err := a.walkBoards(cwd)
+	_, boards, err := a.walkBoards(cwd, in)
 	if err != nil {
 		return nil, err
 	}

@@ -30,6 +30,7 @@ Prebuilt binaries live on the [releases page](https://github.com/raphaelCamblong
 duty init "My project"            # scaffolds ./duty
 duty create track api             # a track is just a folder
 duty create task "Ship the thing"
+duty create task "Add auth" --in api   # target any board by path, from anywhere
 duty get next                     # what should I work on?
 duty status T-01 in-progress
 duty status T-01 done

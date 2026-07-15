@@ -10,13 +10,14 @@ import (
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
-// Archive moves every status: done task in the board containing cwd and
-// every board below it into its own board's archive/: the file is renamed,
-// its row dropped, empty sections pruned, and that board's footer count
-// rewritten. A board with nothing to archive is left untouched, which makes
-// a second run a clean no-op.
-func (a App) Archive(cwd string) error {
-	_, boards, err := a.walkBoards(cwd)
+// Archive moves every status: done task in the board in — a root-relative
+// track path, or the board containing cwd when empty — and every board below
+// it into its own board's archive/: the file is renamed, its row dropped,
+// empty sections pruned, and that board's footer count rewritten. A board
+// with nothing to archive is left untouched, which makes a second run a clean
+// no-op.
+func (a App) Archive(cwd, in string) error {
+	_, boards, err := a.walkBoards(cwd, in)
 	if err != nil {
 		return err
 	}

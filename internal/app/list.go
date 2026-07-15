@@ -20,15 +20,16 @@ type Row struct {
 	RowStatus  string // the board row's status when it disagrees with the file, "" when in sync
 }
 
-// List returns one Row per open task in the board containing cwd and every
-// board below it, read from the files (never the board index). A non-empty
-// status keeps only tasks with that status.
-func (a App) List(cwd, status string) ([]Row, error) {
+// List returns one Row per open task in the board in — a root-relative track
+// path, or the board containing cwd when empty — and every board below it,
+// read from the files (never the board index). A non-empty status keeps only
+// tasks with that status.
+func (a App) List(cwd, status, in string) ([]Row, error) {
 	if status != "" && !task.ValidStatus(status) {
 		return nil, unknownStatusErr(status)
 	}
 
-	boardDir, boards, err := a.walkBoards(cwd)
+	boardDir, boards, err := a.walkBoards(cwd, in)
 	if err != nil {
 		return nil, err
 	}

@@ -16,7 +16,8 @@ const (
 // newArchiveCmd builds the archive command: move every done task in the
 // current board and below into its own board's archive/.
 func newArchiveCmd(a app.App, cwd string) *cobra.Command {
-	return &cobra.Command{
+	var in string
+	cmd := &cobra.Command{
 		Use:     "archive",
 		Short:   "archive every done task in the current board and below",
 		Example: archiveExample,
@@ -24,7 +25,9 @@ func newArchiveCmd(a app.App, cwd string) *cobra.Command {
 			if len(args) != 0 {
 				return errors.New(archiveUsage)
 			}
-			return a.Archive(cwd)
+			return a.Archive(cwd, in)
 		},
 	}
+	addInFlag(cmd, &in)
+	return cmd
 }

@@ -6,19 +6,19 @@ import (
 
 	"github.com/raphaelCamblong/duty/internal/board"
 	"github.com/raphaelCamblong/duty/internal/names"
-	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
-// CreateTrack creates the track name/ under the board containing cwd: a
-// skeleton board index (H1 = title, default the name) plus archive/, and the
-// courtesy bullet appended to the parent's "## Boards" section. It refuses
-// when the folder already exists.
-func (a App) CreateTrack(cwd, name, title string) error {
+// CreateTrack creates the track name/ under the board in — a root-relative
+// track path, or the board containing cwd when empty: a skeleton board index
+// (H1 = title, default the name) plus archive/, and the courtesy bullet
+// appended to the parent's "## Boards" section. It refuses when the folder
+// already exists.
+func (a App) CreateTrack(cwd, name, title, in string) error {
 	if !nameRE.MatchString(name) {
 		return fmt.Errorf("invalid track name %q: must match [a-z0-9-]+", name)
 	}
 
-	parentDir, err := tree.CurrentBoard(a.fs, cwd)
+	parentDir, err := a.contextBoard(cwd, in)
 	if err != nil {
 		return err
 	}

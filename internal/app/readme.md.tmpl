@@ -30,6 +30,10 @@ Statuses: `todo | in-progress | done | blocked`.
 | `duty get next` | The first actionable task in board order; empty when nothing is ready (`--agent` for TSV). |
 | `duty tui` | Live board viewer. |
 
+`--in PATH` targets a board by its track path from the tree root (`.` = root), from
+anywhere in the tree — on `create task`, `create track`, `get tasks`, `get tracks`,
+`get next`, and `archive`. Unknown path → `unknown track "PATH"`.
+
 ## Lifecycle → command
 
 1. Start → `duty get next` (the first actionable task), then `duty status <id> in-progress`.

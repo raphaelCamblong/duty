@@ -78,7 +78,10 @@ func newGetTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 // newGetTracksCmd builds get tracks: one line per board — the root included —
 // with its title and per-status own-task counts.
 func newGetTracksCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
-	var agent bool
+	var (
+		agent bool
+		in    string
+	)
 	cmd := &cobra.Command{
 		Use:     "tracks",
 		Short:   "show every board's per-status task counts",
@@ -87,7 +90,7 @@ func newGetTracksCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 			if len(args) != 0 {
 				return errors.New(getTracksUsage)
 			}
-			tracks, err := a.GetTracks(cwd)
+			tracks, err := a.GetTracks(cwd, in)
 			if err != nil {
 				return err
 			}
@@ -104,13 +107,17 @@ func newGetTracksCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: path, title, todo, in-progress, done, blocked, archived")
+	addInFlag(cmd, &in)
 	return cmd
 }
 
 // newGetNextCmd builds get next: the first actionable task, or no output when
 // nothing is ready.
 func newGetNextCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
-	var agent bool
+	var (
+		agent bool
+		in    string
+	)
 	cmd := &cobra.Command{
 		Use:     "next",
 		Short:   "show the first actionable task (empty when nothing is ready)",
@@ -119,7 +126,7 @@ func newGetNextCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 			if len(args) != 0 {
 				return errors.New(getNextUsage)
 			}
-			info, err := a.GetNext(cwd)
+			info, err := a.GetNext(cwd, in)
 			if err != nil {
 				return err
 			}
@@ -135,6 +142,7 @@ func newGetNextCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output, same fields as get task")
+	addInFlag(cmd, &in)
 	return cmd
 }
 
@@ -145,6 +153,7 @@ func newGetTasksCmd(a app.App, cwd string, stdout io.Writer, use string, hidden 
 	var (
 		status string
 		agent  bool
+		in     string
 	)
 	cmd := &cobra.Command{
 		Use:     use,
@@ -155,7 +164,7 @@ func newGetTasksCmd(a app.App, cwd string, stdout io.Writer, use string, hidden 
 			if len(args) != 0 {
 				return errors.New(getTasksUsage)
 			}
-			rows, err := a.List(cwd, status)
+			rows, err := a.List(cwd, status, in)
 			if err != nil {
 				return err
 			}
@@ -171,6 +180,7 @@ func newGetTasksCmd(a app.App, cwd string, stdout io.Writer, use string, hidden 
 	}
 	cmd.Flags().StringVar(&status, "status", "", "list only this status")
 	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: id, board-path, status, title, drift")
+	addInFlag(cmd, &in)
 	return cmd
 }
 

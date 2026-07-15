@@ -197,6 +197,14 @@ func newGroupCmd(use, short, usage, example string) *cobra.Command {
 	return cmd
 }
 
+// addInFlag registers the local --in flag on cmd, binding it to in: a
+// root-relative track path ("." = root board) selecting the board the command
+// acts on instead of the one derived from cwd. Shared by every board-scoped
+// command so the flag reads and behaves the same everywhere.
+func addInFlag(cmd *cobra.Command, in *string) {
+	cmd.Flags().StringVar(in, "in", "", `board to act on by track path from the tree root ("." = root)`)
+}
+
 // stringList is a repeatable string flag; each occurrence may also carry
 // several comma-separated values.
 type stringList []string

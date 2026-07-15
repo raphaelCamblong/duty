@@ -11,16 +11,17 @@ import (
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
-// CreateTask creates a task in the board containing cwd and returns the new
-// file's path: every blocked-by id is validated against the whole tree, the
-// task is numbered tree-wide, and the template file and its board row
-// (status todo) are written in one use-case. An empty slug is derived from
-// the title; an empty section means the default one.
-func (a App) CreateTask(cwd, title, slug, section string, blockedBy []string) (string, error) {
+// CreateTask creates a task in the board in — a root-relative track path, or
+// the board containing cwd when empty — and returns the new file's path:
+// every blocked-by id is validated against the whole tree, the task is
+// numbered tree-wide, and the template file and its board row (status todo)
+// are written in one use-case. An empty slug is derived from the title; an
+// empty section means the default one.
+func (a App) CreateTask(cwd, title, slug, section, in string, blockedBy []string) (string, error) {
 	if slug != "" && !task.ValidSlug(slug) {
 		return "", fmt.Errorf("invalid slug %q: want 1-40 chars of [a-z0-9-], no leading or trailing hyphen", slug)
 	}
-	boardDir, err := tree.CurrentBoard(a.fs, cwd)
+	boardDir, err := a.contextBoard(cwd, in)
 	if err != nil {
 		return "", err
 	}

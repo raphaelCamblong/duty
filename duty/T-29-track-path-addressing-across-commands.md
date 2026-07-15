@@ -1,7 +1,7 @@
 ---
 id: T-29
 title: Track path addressing across commands
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -43,12 +43,35 @@ Claiming/locking (T-30); path support on id-addressed commands; `-C`-style
 global chdir; TUI.
 
 ## Gates
-- [ ] Scratch-tree: every listed command works with `--in` from the tree root
+- [x] Scratch-tree: every listed command works with `--in` from the tree root
   AND from outside the tree (cwd-independent), 3-level path included.
-- [ ] Unknown-path error is one lowercase line naming the path, exit 1.
-- [ ] Full suite green (`go test ./tests/... -coverpkg=./internal/... -count=1`);
+- [x] Unknown-path error is one lowercase line naming the path, exit 1.
+- [x] Full suite green (`go test ./tests/... -coverpkg=./internal/... -count=1`);
   `golangci-lint run` clean; `gofumpt -l .` empty; `go vet ./...` clean;
   `go build -o bin/duty ./cmd/duty` ok.
-- [ ] Spec §6, README, template + golden updated together.
+- [x] Spec §6, README, template + golden updated together.
 
 ## Report
+
+Shipped `--in <track-path>` on create task, create track, get tasks, get
+tracks, get next, and archive via a shared `addInFlag` cli helper and one
+app-layer `contextBoard(cwd, in)` helper. The track-path validation is now a
+single `App.resolveTrack` used by both `move --track` and `--in`, with one
+error shape: `unknown track "PATH"` (absolute/escaping/missing all collapse to
+it). Threaded `in` through `walkBoards` so the four reads and archive share the
+resolution. Id-addressed commands and `move`'s own `--track` are untouched.
+
+Files: internal/app/{app,create,track,list,get,archive,move}.go,
+internal/cli/{cli,create,get,archive}.go, tests/cli_in_test.go,
+task-system-spec.md (§6 rows + a "Board context" paragraph), README.md,
+internal/app/readme.md.tmpl + tests/testdata/readme.md.
+
+Gates: full suite green (85.9% coverage), golangci-lint 0 issues, gofumpt -l
+empty, go vet clean, build ok, and a scratch-tree run drove every command with
+--in from the root and from outside the tree (3-level api/auth included).
+
+Deviation: `task-system-spec.md` had been deleted from the working tree by an
+unrelated concurrent commit (e297c36 "docs: add a logo", a 385-line deletion
+bundled into a logo commit while README/CLAUDE.md still link to it). Restored
+it from its pre-deletion blob and applied the §6 edits, so this change re-adds
+the source-of-truth spec. Flag for the human: verify that restore is intended.
