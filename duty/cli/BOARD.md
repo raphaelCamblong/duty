@@ -16,6 +16,6 @@ Order top-to-bottom is the intended build order.
 | [T-46](T-46-duty-skill-install-the-agent-skill.md) | duty skill: install the agent skill | done |
 | [T-47](T-47-create-prints-the-id-slugs-break-at-word.md) | Create prints the id, slugs break at words | done |
 | [T-48](T-48-reorder-board-rows-from-the-cli.md) | Reorder board rows from the CLI | done |
-| [T-49](T-49-reports-date-themselves.md) | Reports date themselves | todo |
+| [T-49](T-49-reports-date-themselves.md) | Reports date themselves | done |
 
 Completed tasks (0) archived: [archive/](archive/).

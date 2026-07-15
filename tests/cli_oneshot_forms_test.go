@@ -18,7 +18,7 @@ func bodyAfterFrontmatter(t *testing.T, content string) string {
 }
 
 func TestReportStatus(t *testing.T) {
-	t.Run("appends the report and flips status (file + board) in one call, byte-identical to report then status", func(t *testing.T) {
+	t.Run("appends the report and flips status (file + board) in one call, matching report then status except the heading's status suffix", func(t *testing.T) {
 		oneShot := initDuty(t)
 		nameA := createTask(t, oneShot, "End me")
 		mustRunStdin(t, oneShot, "All gates green.\n", "report", "T-01", "--status", "done")
@@ -28,8 +28,16 @@ func TestReportStatus(t *testing.T) {
 		mustRunStdin(t, twoCall, "All gates green.\n", "report", "T-01")
 		mustRun(t, twoCall, "status", "T-01", "done")
 
-		if a, b := readText(t, filepath.Join(oneShot, nameA)), readText(t, filepath.Join(twoCall, nameB)); a != b {
-			t.Errorf("one-shot task file =\n%q\nwant (report then status):\n%q", a, b)
+		a, b := readText(t, filepath.Join(oneShot, nameA)), readText(t, filepath.Join(twoCall, nameB))
+		headingA, headingB := reportHeadingIn(t, a), reportHeadingIn(t, b)
+		if !strings.HasSuffix(headingA, " — done") {
+			t.Fatalf("one-shot heading %q, want it to carry the done status", headingA)
+		}
+		if strings.Contains(headingB, " — ") {
+			t.Fatalf("two-call heading %q, want no status suffix (report was called without --status)", headingB)
+		}
+		if got, want := strings.Replace(a, headingA, "### STAMP", 1), strings.Replace(b, headingB, "### STAMP", 1); got != want {
+			t.Errorf("one-shot task file (heading normalized) =\n%q\nwant (report then status):\n%q", got, want)
 		}
 		if a, b := readText(t, filepath.Join(oneShot, "BOARD.md")), readText(t, filepath.Join(twoCall, "BOARD.md")); a != b {
 			t.Errorf("one-shot board =\n%q\nwant (report then status):\n%q", a, b)

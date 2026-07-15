@@ -9,12 +9,14 @@ import (
 )
 
 // Report appends the text read from r under the task's "## Report" heading,
-// creating the heading once at the end of the file. Reports accumulate —
-// nothing already in the file is rewritten. When status is non-empty it also
-// flips the task's status (file + board row) in the same locked write, the
-// done/blocked lifecycle endings: both edits are computed before either file
-// is written, so any error leaves neither the report nor the status applied.
-// Empty (or blank) input is refused; r is read only after the id resolves.
+// opened by a dated "### 2006-01-02 15:04" line (plus " — status" when status
+// is given) stamped from a.now, creating the heading once at the end of the
+// file. Reports accumulate — nothing already in the file is rewritten. When
+// status is non-empty it also flips the task's status (file + board row) in
+// the same locked write, the done/blocked lifecycle endings: both edits are
+// computed before either file is written, so any error leaves neither the
+// report nor the status applied. Empty (or blank) input is refused; r is
+// read only after the id resolves.
 func (a App) Report(cwd, id string, r io.Reader, status string, force bool) error {
 	if status != "" && !task.ValidStatus(status) {
 		return unknownStatusErr(status)
@@ -36,7 +38,8 @@ func (a App) Report(cwd, id string, r io.Reader, status string, force bool) erro
 	if err != nil {
 		return err
 	}
-	withReport := task.AppendReport(content, text)
+	dated := append([]byte(task.ReportHeading(a.now(), status)+"\n\n"), text...)
+	withReport := task.AppendReport(content, dated)
 	if status == "" {
 		return a.fs.WriteFile(taskPath, withReport)
 	}

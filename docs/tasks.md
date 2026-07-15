@@ -13,7 +13,9 @@ A handful of rules run through everything:
 - **The TUI only watches.** It never writes; edits go through the CLI or your
   editor, and the viewer shows them instantly.
 - **Directions in, report out.** A task file carries what to do and, later, a
-  record of what happened — never code.
+  record of what happened — never code. Every append dates itself: a
+  `### 2006-01-02 15:04` heading, plus ` — status` when `--status` is given,
+  so nobody has to hand-write a date.
 - **Agent-first CLI.** Quiet on success; a clear non-zero exit and one stderr
   line when something's wrong.
 

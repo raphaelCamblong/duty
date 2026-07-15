@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"time"
 
 	"github.com/raphaelCamblong/duty/internal/fsys"
 	"github.com/raphaelCamblong/duty/internal/names"
@@ -17,12 +18,19 @@ import (
 
 // App bundles duty's use-cases over one filesystem.
 type App struct {
-	fs fsys.FS
+	fs  fsys.FS
+	now func() time.Time
 }
 
-// New returns an App operating on f.
+// New returns an App operating on f, dating reports with the real clock.
 func New(f fsys.FS) App {
-	return App{fs: f}
+	return App{fs: f, now: time.Now}
+}
+
+// NewWithClock returns an App like New, but reading the current time from now
+// instead of the real clock — the seam tests use to fix report timestamps.
+func NewWithClock(f fsys.FS, now func() time.Time) App {
+	return App{fs: f, now: now}
 }
 
 // nameRE validates track folder names and task filename slugs.

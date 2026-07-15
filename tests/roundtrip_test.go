@@ -296,18 +296,6 @@ func TestSaltedBoardSurvivesEveryMutation(t *testing.T) {
 			},
 		},
 		{
-			name: "report appends to the task file and touches nothing else",
-			run: func(t *testing.T, root string) {
-				code, stdout, stderr := runDutyStdin(t, root, "Second report.\n", "report", "T-02")
-				if code != 0 || stdout != "" || stderr != "" {
-					t.Fatalf("report: code=%d stdout=%q stderr=%q", code, stdout, stderr)
-				}
-			},
-			want: func(t *testing.T, w map[string]string) {
-				w["T-02-odd-spacing.md"] = saltT02File + "\nSecond report.\n"
-			},
-		},
-		{
 			name: "move --section into an existing section moves only the row line",
 			run: func(t *testing.T, root string) {
 				mustRun(t, root, "move", "T-01", "--section", "Parked")
@@ -424,6 +412,25 @@ func TestSaltedBoardSurvivesEveryMutation(t *testing.T) {
 			diffTrees(t, want, snapshotTree(t, root))
 		})
 	}
+}
+
+// TestReportSurvivesSaltedBoard runs report against the salted fixture and
+// asserts every file byte-for-byte, splicing the real clock's dated heading
+// into the expectation (report cannot be table-driven above: its stamp is
+// not known ahead of the run, unlike every other command's fixed output).
+func TestReportSurvivesSaltedBoard(t *testing.T) {
+	root := writeSalted(t)
+	want := snapshotTree(t, root)
+
+	code, stdout, stderr := runDutyStdin(t, root, "Second report.\n", "report", "T-02")
+	if code != 0 || stdout != "" || stderr != "" {
+		t.Fatalf("report: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+
+	got := readText(t, filepath.Join(root, "T-02-odd-spacing.md"))
+	heading := reportHeadingIn(t, got)
+	want["T-02-odd-spacing.md"] = saltT02File + "\n" + heading + "\n\nSecond report.\n"
+	diffTrees(t, want, snapshotTree(t, root))
 }
 
 const pruneRow = "| [T-01](T-01-only-task.md) | Only task | todo |"

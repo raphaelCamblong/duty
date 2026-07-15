@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/raphaelCamblong/duty/internal/task"
 )
@@ -298,6 +299,25 @@ func TestSetStatus(t *testing.T) {
 			}
 			if string(got) != tt.want {
 				t.Errorf("SetStatus() =\n%q\nwant:\n%q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestReportHeading(t *testing.T) {
+	at := time.Date(2026, 3, 4, 9, 5, 0, 0, time.UTC)
+	tests := []struct {
+		name   string
+		status string
+		want   string
+	}{
+		{name: "no status", status: "", want: "### 2026-03-04 09:05"},
+		{name: "with status", status: "done", want: "### 2026-03-04 09:05 — done"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := task.ReportHeading(at, tt.status); got != tt.want {
+				t.Errorf("ReportHeading() = %q, want %q", got, tt.want)
 			}
 		})
 	}

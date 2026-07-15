@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -65,6 +66,23 @@ func oneLine(t *testing.T, name, s string) {
 	if s == "" || !strings.HasSuffix(s, "\n") || strings.Count(s, "\n") != 1 {
 		t.Errorf("%s: want exactly one line, got %q", name, s)
 	}
+}
+
+// reportHeadingRE matches a report append's dated heading line: "### 2006-01-02
+// 15:04", plus " — status" when a status was given.
+var reportHeadingRE = regexp.MustCompile(`(?m)^### \d{4}-\d{2}-\d{2} \d{2}:\d{2}(?: — \S+)?$`)
+
+// reportHeadingIn returns the single dated report heading found in content,
+// failing the test when none or more than one is present — the seam
+// real-clock CLI tests use to splice the actual stamp into a byte-exact
+// fixture instead of racing it.
+func reportHeadingIn(t *testing.T, content string) string {
+	t.Helper()
+	matches := reportHeadingRE.FindAllString(content, -1)
+	if len(matches) != 1 {
+		t.Fatalf("content has %d dated report headings, want exactly 1:\n%q", len(matches), content)
+	}
+	return matches[0]
 }
 
 func TestRunDispatch(t *testing.T) {

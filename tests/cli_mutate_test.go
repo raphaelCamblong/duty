@@ -6,8 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/raphaelCamblong/duty/internal/app"
 	"github.com/raphaelCamblong/duty/internal/cli"
+	"github.com/raphaelCamblong/duty/internal/fsys"
 )
 
 // runDutyStdin invokes cli.Run from dir feeding input on stdin and returns
@@ -281,8 +284,9 @@ func TestReport(t *testing.T) {
 			t.Fatalf("report: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 		}
 		got := readText(t, filepath.Join(root, name))
-		if !strings.HasSuffix(got, "## Report\n\nDid the thing.\n") {
-			t.Errorf("task file ends %q, want the report under ## Report", got)
+		heading := reportHeadingIn(t, got)
+		if want := "## Report\n\n" + heading + "\n\nDid the thing.\n"; !strings.HasSuffix(got, want) {
+			t.Errorf("task file ends %q, want a dated report under ## Report:\n%q", got, want)
 		}
 	})
 
@@ -341,6 +345,37 @@ func TestReport(t *testing.T) {
 		}
 		oneLine(t, "stderr", stderr)
 	})
+}
+
+// TestReportDatesEachAppend drives app.Report directly over a fixed clock
+// (the seam a real-clock CLI run cannot give a byte test): two appends land
+// two dated headings, the older block untouched, and a --status append's
+// heading carries the status.
+func TestReportDatesEachAppend(t *testing.T) {
+	root := initDuty(t)
+	name := createTask(t, root, "Dated task")
+	path := filepath.Join(root, name)
+
+	clock := time.Date(2026, 3, 4, 9, 5, 0, 0, time.UTC)
+	a := app.NewWithClock(fsys.OS{}, func() time.Time { return clock })
+
+	if err := a.Report(root, "T-01", strings.NewReader("First pass.\n"), "", false); err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	clock = time.Date(2026, 3, 4, 9, 12, 0, 0, time.UTC)
+	if err := a.Report(root, "T-01", strings.NewReader("Second pass.\n"), "done", false); err != nil {
+		t.Fatalf("report --status done: %v", err)
+	}
+
+	got := readText(t, path)
+	want := "## Report\n\n" +
+		"### 2026-03-04 09:05\n\n" +
+		"First pass.\n\n" +
+		"### 2026-03-04 09:12 — done\n\n" +
+		"Second pass.\n"
+	if !strings.HasSuffix(got, want) {
+		t.Errorf("dated reports =\n%q\nwant suffix:\n%q", got, want)
+	}
 }
 
 func TestMoveTrack(t *testing.T) {

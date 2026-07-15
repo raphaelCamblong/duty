@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -135,6 +136,16 @@ func SetStatus(content []byte, status string) ([]byte, error) {
 	out = append(out, status...)
 	out = append(out, content[loc[1]:]...)
 	return out, nil
+}
+
+// ReportHeading formats the dated heading a report append opens with: at in
+// "2006-01-02 15:04", plus " — status" when status is non-empty.
+func ReportHeading(at time.Time, status string) string {
+	heading := "### " + at.Format("2006-01-02 15:04")
+	if status != "" {
+		heading += " — " + status
+	}
+	return heading
 }
 
 // AppendReport appends text under the ## Report heading, creating the heading
