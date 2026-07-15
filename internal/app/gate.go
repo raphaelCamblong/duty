@@ -18,11 +18,11 @@ func (a App) Gates(cwd, id string) ([]task.Gate, error) {
 	return task.Gates(content), nil
 }
 
-// AddGate appends a gate with the given text to the task id resolves to, under
-// the tree write lock, creating the Gates section when absent.
-func (a App) AddGate(cwd, id, text string) error {
+// AddGates appends a gate per text, in order, to the task id resolves to, under
+// the tree write lock in one write, creating the Gates section when absent.
+func (a App) AddGates(cwd, id string, texts []string) error {
 	return a.editGates(cwd, id, func(content []byte) ([]byte, error) {
-		return task.AddGate(content, text), nil
+		return task.AddGates(content, texts), nil
 	})
 }
 
@@ -31,6 +31,14 @@ func (a App) AddGate(cwd, id, text string) error {
 func (a App) SetGate(cwd, id string, n int, done bool) error {
 	return a.editGates(cwd, id, func(content []byte) ([]byte, error) {
 		return task.SetGate(content, n, done)
+	})
+}
+
+// SetAllGates ticks or unticks every gate of the task id resolves to, under the
+// tree write lock in one write.
+func (a App) SetAllGates(cwd, id string, done bool) error {
+	return a.editGates(cwd, id, func(content []byte) ([]byte, error) {
+		return task.SetAllGates(content, done), nil
 	})
 }
 

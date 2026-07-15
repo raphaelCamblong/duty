@@ -14,10 +14,10 @@ import (
 
 const (
 	gatesUsage      = "usage: duty gates <id> [list]"
-	gatesAddUsage   = "usage: duty gates add <id> <text>"
-	gatesExample    = "  duty gates T-07\n  duty gates add T-07 \"build passes\"\n  duty gates check T-07 1"
-	gatesFlipUsage  = "usage: duty gates %s <id> <n>"
-	gatesAddExample = `  duty gates add T-07 "build passes"`
+	gatesAddUsage   = "usage: duty gates add <id> <text> [<text>...]"
+	gatesExample    = "  duty gates T-07\n  duty gates add T-07 \"build passes\" \"tests green\"\n  duty gates check T-07 --all"
+	gatesFlipUsage  = "usage: duty gates %s <id> <n> (or --all)"
+	gatesAddExample = `  duty gates add T-07 "build passes" "tests green"`
 )
 
 // newGatesCmd builds the gates command: list a task's gates (bare or with the
@@ -62,30 +62,38 @@ func gatesListID(args []string) (string, error) {
 	return "", errors.New(gatesUsage)
 }
 
-// newGatesAddCmd builds gates add: append a gate to a task.
+// newGatesAddCmd builds gates add: append one or more gates to a task in order,
+// in one write.
 func newGatesAddCmd(a app.App, cwd string) *cobra.Command {
 	return &cobra.Command{
-		Use:     "add <id> <text>",
-		Short:   "append a gate to a task",
+		Use:     "add <id> <text>...",
+		Short:   "append one or more gates to a task",
 		Example: gatesAddExample,
 		RunE: func(_ *cobra.Command, args []string) error {
-			if len(args) != 2 || args[0] == "" || args[1] == "" {
+			if len(args) < 2 || args[0] == "" || hasEmpty(args[1:]) {
 				return errors.New(gatesAddUsage)
 			}
-			return a.AddGate(cwd, args[0], args[1])
+			return a.AddGates(cwd, args[0], args[1:])
 		},
 	}
 }
 
 // newGatesFlipCmd builds gates check / uncheck: tick or untick a task's n-th
-// gate (1-based).
+// gate (1-based), or --all of them in one write.
 func newGatesFlipCmd(a app.App, cwd, verb string, done bool) *cobra.Command {
 	usage := fmt.Sprintf(gatesFlipUsage, verb)
-	return &cobra.Command{
+	var all bool
+	cmd := &cobra.Command{
 		Use:     verb + " <id> <n>",
-		Short:   "tick or untick a task's n-th gate",
-		Example: "  duty gates " + verb + " T-07 1",
+		Short:   "tick or untick a task's n-th gate, or --all of them",
+		Example: "  duty gates " + verb + " T-07 1\n  duty gates " + verb + " T-07 --all",
 		RunE: func(_ *cobra.Command, args []string) error {
+			if all {
+				if len(args) != 1 || args[0] == "" {
+					return errors.New(usage)
+				}
+				return a.SetAllGates(cwd, args[0], done)
+			}
 			if len(args) != 2 || args[0] == "" {
 				return errors.New(usage)
 			}
@@ -96,6 +104,18 @@ func newGatesFlipCmd(a app.App, cwd, verb string, done bool) *cobra.Command {
 			return a.SetGate(cwd, args[0], n, done)
 		},
 	}
+	cmd.Flags().BoolVar(&all, "all", false, "flip every gate in one write")
+	return cmd
+}
+
+// hasEmpty reports whether any string in ss is empty.
+func hasEmpty(ss []string) bool {
+	for _, s := range ss {
+		if s == "" {
+			return true
+		}
+	}
+	return false
 }
 
 // printGates writes gates 1-based: human "1 [x] text", or with agent a TSV

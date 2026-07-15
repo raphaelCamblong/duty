@@ -20,7 +20,7 @@ var ageStyle = lipgloss.NewStyle().Faint(true)
 
 const (
 	getUsage       = "usage: duty get <task|tasks|tracks|next> [args]"
-	getTaskUsage   = "usage: duty get task <id> [--agent] [--section NAME]"
+	getTaskUsage   = "usage: duty get task <id> [--agent] [--section NAME] [--body]"
 	getTasksUsage  = "usage: duty get tasks [--status S] [--agent]"
 	getTracksUsage = "usage: duty get tracks [--agent]"
 	getNextUsage   = "usage: duty get next [--claim] [--agent]"
@@ -55,12 +55,14 @@ func newListCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 }
 
 // newGetTaskCmd builds get task: one task's metadata and file path, human
-// aligned or a single --agent TSV record; --section prints one section's body
-// instead.
+// aligned or a single --agent TSV record; --section prints one section's body,
+// --body the whole body below the frontmatter — the two read forms are
+// mutually exclusive with each other and with --agent.
 func newGetTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var (
 		agent   bool
 		section string
+		body    bool
 	)
 	cmd := &cobra.Command{
 		Use:     "task <id>",
@@ -70,29 +72,48 @@ func newGetTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 			if len(args) != 1 || args[0] == "" {
 				return errors.New(getTaskUsage)
 			}
-			if section != "" {
-				body, err := a.Section(cwd, args[0], section)
-				if err != nil {
-					return err
-				}
-				fmt.Fprintln(stdout, body)
-				return nil
-			}
-			info, err := a.GetTask(cwd, args[0])
-			if err != nil {
-				return err
-			}
-			if agent {
-				fmt.Fprintln(stdout, taskAgent(info))
-				return nil
-			}
-			fmt.Fprintln(stdout, taskHuman(info))
-			return nil
+			return getTaskOut(a, cwd, args[0], section, body, agent, stdout)
 		},
 	}
 	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: id, track, status, title, gates-done, gates-total, blocked-by, path, updated")
 	cmd.Flags().StringVar(&section, "section", "", "print only this section's body")
+	cmd.Flags().BoolVar(&body, "body", false, "print the whole body below the frontmatter")
+	cmd.MarkFlagsMutuallyExclusive("body", "section")
+	cmd.MarkFlagsMutuallyExclusive("body", "agent")
 	return cmd
+}
+
+// getTaskOut writes the requested view of task id to stdout: the whole body
+// with body set, one section with section set, the --agent TSV record, else the
+// human metadata block. The three read forms are guarded mutually exclusive on
+// the command.
+func getTaskOut(a app.App, cwd, id, section string, body, agent bool, stdout io.Writer) error {
+	if body {
+		text, err := a.Body(cwd, id)
+		if err != nil {
+			return err
+		}
+		fmt.Fprint(stdout, text)
+		return nil
+	}
+	if section != "" {
+		sec, err := a.Section(cwd, id, section)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(stdout, sec)
+		return nil
+	}
+	info, err := a.GetTask(cwd, id)
+	if err != nil {
+		return err
+	}
+	if agent {
+		fmt.Fprintln(stdout, taskAgent(info))
+		return nil
+	}
+	fmt.Fprintln(stdout, taskHuman(info))
+	return nil
 }
 
 // newGetTracksCmd builds get tracks: one line per board — the root included —
