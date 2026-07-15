@@ -30,5 +30,8 @@ Order top-to-bottom is the intended build order.
 | [T-28](T-28-apply-simplify-pass-findings.md) | Apply simplify-pass findings | done |
 | [T-29](T-29-track-path-addressing-across-commands.md) | Track path addressing across commands | done |
 | [T-30](T-30-atomic-claim-and-write-locking.md) | Atomic claim and write locking | done |
+| [T-31](T-31-relative-task-age-in-tui-and-reads.md) | Relative task age in TUI and reads | todo |
+| [T-32](T-32-section-and-gates-editing-from-the-cli.md) | Section and gates editing from the CLI | todo |
+| [T-33](T-33-justfile-for-developer-experience.md) | Justfile for developer experience | todo |
 
 Completed tasks (0) archived: [archive/](archive/).
