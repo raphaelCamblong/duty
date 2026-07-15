@@ -140,6 +140,47 @@ func MoveRow(content []byte, filename, section string) ([]byte, error) {
 	return joinLines(lines), nil
 }
 
+// ReorderTop relocates the row targeting filename to the top of its section —
+// above the section's first task row — preserving the row's bytes exactly. A
+// row already at the top is left byte-identical.
+func ReorderTop(content []byte, filename string) ([]byte, error) {
+	lines := splitLines(content)
+	i := rowIndex(lines, filename)
+	if i < 0 {
+		return nil, fmt.Errorf("no board row for %s", filename)
+	}
+	return joinLines(relocateRow(lines, i, sectionTop(lines, i))), nil
+}
+
+// ReorderBefore relocates the row targeting filename to sit immediately above
+// the row targeting ref, preserving the moved row's bytes exactly. When ref is
+// in another section the row adopts it — the move is purely positional.
+func ReorderBefore(content []byte, filename, ref string) ([]byte, error) {
+	return reorderAdjacent(content, filename, ref, 0)
+}
+
+// ReorderAfter relocates the row targeting filename to sit immediately below
+// the row targeting ref, preserving the moved row's bytes exactly. When ref is
+// in another section the row adopts it — the move is purely positional.
+func ReorderAfter(content []byte, filename, ref string) ([]byte, error) {
+	return reorderAdjacent(content, filename, ref, 1)
+}
+
+// reorderAdjacent relocates filename's row to ref's row index plus offset (0
+// above ref, 1 below), preserving the moved row's bytes.
+func reorderAdjacent(content []byte, filename, ref string, offset int) ([]byte, error) {
+	lines := splitLines(content)
+	i := rowIndex(lines, filename)
+	if i < 0 {
+		return nil, fmt.Errorf("no board row for %s", filename)
+	}
+	r := rowIndex(lines, ref)
+	if r < 0 {
+		return nil, fmt.Errorf("no board row for %s", ref)
+	}
+	return joinLines(relocateRow(lines, i, r+offset)), nil
+}
+
 // DropRow removes the row targeting filename.
 func DropRow(content []byte, filename string) ([]byte, error) {
 	lines := splitLines(content)
@@ -302,6 +343,42 @@ func rowIndex(lines []string, filename string) int {
 		}
 	}
 	return -1
+}
+
+// relocateRow moves the line at from to sit before index at (both indices into
+// the original slice), returning the reordered lines with the moved line's
+// bytes intact. from == at leaves the slice unchanged.
+func relocateRow(lines []string, from, at int) []string {
+	row := lines[from]
+	rest := append(lines[:from], lines[from+1:]...)
+	if at > from {
+		at--
+	}
+	return insertAt(rest, at, row)
+}
+
+// sectionTop returns the index of the first task row in the section containing
+// line i — the insertion point that makes a row the section's first.
+func sectionTop(lines []string, i int) int {
+	start := sectionStart(lines, i)
+	end := sectionEnd(lines, start)
+	for j := start + 1; j < end; j++ {
+		if rowLinkRe.MatchString(lines[j]) {
+			return j
+		}
+	}
+	return end
+}
+
+// sectionStart returns the index of the "## " heading at or above i, or 0 when
+// i sits above every heading.
+func sectionStart(lines []string, i int) int {
+	for j := i; j >= 0; j-- {
+		if strings.HasPrefix(lines[j], "## ") {
+			return j
+		}
+	}
+	return 0
 }
 
 // lastTableLine returns the index of the last |-prefixed line strictly inside

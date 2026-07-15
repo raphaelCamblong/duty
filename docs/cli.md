@@ -146,16 +146,33 @@ Flags:
 ### move
 
 `duty move <id>` — Move a task to another track, to another board section, or
-both — at least one flag. Across tracks the file is renamed into the target
-folder (ids don't encode tracks) and its status is preserved.
+reorder its row within its board — at least one flag. Across tracks the file is
+renamed into the target folder (ids don't encode tracks) and its status is
+preserved.
 
 ```sh title="Move to the backend track"
 duty move T-07 --track backend --section "Open tasks"
 ```
 
+Board order is priority, so `move` also sets it. `--top`, `--before`, and
+`--after` relocate the row line verbatim — the same bytes, moved. They're
+mutually exclusive, but combine with `--track`/`--section`, applying after the
+relocation. `--before`/`--after` take a task id; the row lands next to that
+task's row and adopts its section. The reference must be in the same board — a
+reference elsewhere errors, telling you to `move --track` it here first. This is
+the one write that touches only the board, never the task file.
+
+```sh title="Make a task the next thing to pick up"
+duty move T-07 --top
+duty move T-07 --after T-03
+```
+
 Flags:
 - `--track PATH` — target track path from the tree root (`.` = root board).
 - `--section NAME` — target board section for the row.
+- `--top` — move the row to the top of its section.
+- `--before REF` — move the row just above `REF`'s row (adopting its section).
+- `--after REF` — move the row just below `REF`'s row (adopting its section).
 
 ### archive
 
@@ -312,7 +329,7 @@ learn the id it picked.
 | `duty status <id> <status>` | set status in file + board row |
 | `duty report <id>` | append a report; `--status` flips status too |
 | `duty gates <id>` | list gates; `add` / `check` / `uncheck` edit them |
-| `duty move <id>` | move a task across tracks / sections |
+| `duty move <id>` | move a task across tracks / sections, or reorder its row |
 | `duty archive` | archive every done task, here and below |
 | `duty delete task <id>` | remove an open task |
 | `duty get tasks` | list open tasks from the files |

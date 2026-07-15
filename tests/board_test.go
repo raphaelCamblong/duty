@@ -402,6 +402,173 @@ func TestMoveRow(t *testing.T) {
 	}
 }
 
+func TestReorderTop(t *testing.T) {
+	fixture := boardFixture()
+	tests := []struct {
+		name     string
+		filename string
+		want     []string
+		wantErr  bool
+	}{
+		{
+			name:     "lifts a lower row above the section's first, byte-identical",
+			filename: "T-03-third-task.md",
+			want:     insertLines(removeLines(fixture, 19, 20), 17, fixture[19]),
+		},
+		{
+			name:     "a row already at the top is left byte-identical",
+			filename: "T-01-first-task.md",
+			want:     fixture,
+		},
+		{
+			name:     "the only row of a section is a no-op",
+			filename: "T-04-someday.md",
+			want:     fixture,
+		},
+		{
+			name:     "errors on a missing row",
+			filename: "T-99-nope.md",
+			wantErr:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := board.ReorderTop(joinBoard(fixture), tt.filename)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("ReorderTop() error = nil, want error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ReorderTop() error = %v", err)
+			}
+			if want := joinBoard(tt.want); string(got) != string(want) {
+				t.Errorf("ReorderTop() =\n%s\nwant:\n%s", got, want)
+			}
+		})
+	}
+}
+
+func TestReorderBefore(t *testing.T) {
+	fixture := boardFixture()
+	tests := []struct {
+		name          string
+		filename, ref string
+		want          []string
+		wantErr       bool
+	}{
+		{
+			name:     "moves a row up before an earlier row in its section",
+			filename: "T-03-third-task.md",
+			ref:      "T-02-weird-spacing.md",
+			want:     insertLines(removeLines(fixture, 19, 20), 18, fixture[19]),
+		},
+		{
+			name:     "moves a row into another section, adopting it, weird bytes intact",
+			filename: "T-02-weird-spacing.md",
+			ref:      "T-04-someday.md",
+			want:     insertLines(removeLines(fixture, 18, 19), 24, fixture[18]),
+		},
+		{
+			name:     "errors on a missing row",
+			filename: "T-99-nope.md",
+			ref:      "T-01-first-task.md",
+			wantErr:  true,
+		},
+		{
+			name:     "errors on a missing reference",
+			filename: "T-01-first-task.md",
+			ref:      "T-99-nope.md",
+			wantErr:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := board.ReorderBefore(joinBoard(fixture), tt.filename, tt.ref)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("ReorderBefore() error = nil, want error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ReorderBefore() error = %v", err)
+			}
+			if want := joinBoard(tt.want); string(got) != string(want) {
+				t.Errorf("ReorderBefore() =\n%s\nwant:\n%s", got, want)
+			}
+		})
+	}
+}
+
+func TestReorderAfter(t *testing.T) {
+	fixture := boardFixture()
+	tests := []struct {
+		name          string
+		filename, ref string
+		want          []string
+		wantErr       bool
+	}{
+		{
+			name:     "moves a row down below a later row in its section",
+			filename: "T-01-first-task.md",
+			ref:      "T-03-third-task.md",
+			want:     insertLines(removeLines(fixture, 17, 18), 19, fixture[17]),
+		},
+		{
+			name:     "moves a row into another section, adopting it",
+			filename: "T-01-first-task.md",
+			ref:      "T-04-someday.md",
+			want:     insertLines(removeLines(fixture, 17, 18), 25, fixture[17]),
+		},
+		{
+			name:     "errors on a missing reference",
+			filename: "T-01-first-task.md",
+			ref:      "T-99-nope.md",
+			wantErr:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := board.ReorderAfter(joinBoard(fixture), tt.filename, tt.ref)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("ReorderAfter() error = nil, want error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ReorderAfter() error = %v", err)
+			}
+			if want := joinBoard(tt.want); string(got) != string(want) {
+				t.Errorf("ReorderAfter() =\n%s\nwant:\n%s", got, want)
+			}
+		})
+	}
+}
+
+// TestReorderRoundTrip: a reorder followed by its inverse restores the board
+// byte-for-byte — the moved row is the same line, relocated and relocated back.
+func TestReorderRoundTrip(t *testing.T) {
+	start := joinBoard(boardFixture())
+
+	lifted, err := board.ReorderTop(start, "T-03-third-task.md")
+	if err != nil {
+		t.Fatalf("ReorderTop() error = %v", err)
+	}
+	if string(lifted) == string(start) {
+		t.Fatal("ReorderTop() left the board unchanged; the round trip proves nothing")
+	}
+	restored, err := board.ReorderAfter(lifted, "T-03-third-task.md", "T-02-weird-spacing.md")
+	if err != nil {
+		t.Fatalf("ReorderAfter() error = %v", err)
+	}
+	if string(restored) != string(start) {
+		t.Errorf("reorder round trip diverged:\ngot:\n%s\nwant:\n%s", restored, start)
+	}
+}
+
 func TestPruneEmptySections(t *testing.T) {
 	fixture := boardFixture()
 	// "Later" emptied: T-04's row dropped, scaffolding left behind.

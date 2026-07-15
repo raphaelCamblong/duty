@@ -483,3 +483,117 @@ func TestMoveTrack(t *testing.T) {
 		oneLine(t, "stderr", stderr)
 	})
 }
+
+// boardRowOrder returns the index at which each id's row appears in board, so
+// tests can assert relative row order without pinning exact bytes.
+func boardRowOrder(t *testing.T, board string, ids ...string) []int {
+	t.Helper()
+	at := make([]int, len(ids))
+	for i, id := range ids {
+		at[i] = strings.Index(board, "["+id+"]")
+		if at[i] < 0 {
+			t.Fatalf("row for %s missing in %q", id, board)
+		}
+	}
+	return at
+}
+
+func TestMoveReorder(t *testing.T) {
+	t.Run("--top lifts the row to the head of its section", func(t *testing.T) {
+		root := initDuty(t)
+		createTask(t, root, "First")
+		createTask(t, root, "Second")
+		createTask(t, root, "Third")
+		mustRun(t, root, "move", "T-03", "--top")
+		got := boardRowOrder(t, readText(t, filepath.Join(root, "BOARD.md")), "T-03", "T-01", "T-02")
+		if !(got[0] < got[1] && got[1] < got[2]) {
+			t.Errorf("want T-03 then T-01 then T-02, got order %v", got)
+		}
+	})
+
+	t.Run("--before and --after adopt the reference's section", func(t *testing.T) {
+		root := initDuty(t)
+		createTask(t, root, "First")
+		createTask(t, root, "Second")
+		mustRun(t, root, "move", "T-02", "--section", "Later")
+		mustRun(t, root, "move", "T-01", "--after", "T-02")
+		got := readText(t, filepath.Join(root, "BOARD.md"))
+		laterAt := strings.Index(got, "## Later")
+		order := boardRowOrder(t, got, "T-02", "T-01")
+		if laterAt < 0 || order[0] < laterAt || order[1] < order[0] {
+			t.Errorf("want T-01 under ## Later just after T-02, got %q", got)
+		}
+		if strings.Count(got, "[T-01]") != 1 {
+			t.Errorf("row for T-01 duplicated in %q", got)
+		}
+	})
+
+	t.Run("position combines with a track move", func(t *testing.T) {
+		root := initDuty(t)
+		mustRun(t, root, "create", "track", "backend")
+		sub := filepath.Join(root, "backend")
+		createTask(t, sub, "Resident")
+		createTask(t, root, "Incoming")
+		mustRun(t, root, "move", "T-02", "--track", "backend", "--top")
+		got := readText(t, filepath.Join(sub, "BOARD.md"))
+		order := boardRowOrder(t, got, "T-02", "T-01")
+		if order[0] > order[1] {
+			t.Errorf("want moved T-02 above the resident T-01, got %q", got)
+		}
+	})
+
+	t.Run("rejects a reference in another board", func(t *testing.T) {
+		root := initDuty(t)
+		mustRun(t, root, "create", "track", "backend")
+		createTask(t, root, "Here")
+		createTask(t, filepath.Join(root, "backend"), "There")
+		before := readText(t, filepath.Join(root, "BOARD.md"))
+		code, stdout, stderr := runDuty(t, root, "move", "T-01", "--after", "T-02")
+		if code == 0 {
+			t.Fatal("move --after a ref in another board succeeded")
+		}
+		oneLine(t, "stderr", stderr)
+		if !strings.Contains(stderr, "another board") {
+			t.Errorf("stderr = %q, want it to point at the other board", stderr)
+		}
+		if stdout != "" {
+			t.Errorf("stdout = %q, want empty", stdout)
+		}
+		if readText(t, filepath.Join(root, "BOARD.md")) != before {
+			t.Error("board changed by failed reorder")
+		}
+	})
+
+	t.Run("rejects contradictory position flags", func(t *testing.T) {
+		root := initDuty(t)
+		createTask(t, root, "First")
+		createTask(t, root, "Second")
+		before := readText(t, filepath.Join(root, "BOARD.md"))
+		for _, args := range [][]string{
+			{"move", "T-01", "--top", "--after", "T-02"},
+			{"move", "T-01", "--before", "T-02", "--after", "T-02"},
+		} {
+			code, _, stderr := runDuty(t, root, args...)
+			if code == 0 {
+				t.Errorf("duty %v succeeded, want a mutual-exclusion error", args)
+			}
+			oneLine(t, "stderr", stderr)
+		}
+		if readText(t, filepath.Join(root, "BOARD.md")) != before {
+			t.Error("board changed by a rejected reorder")
+		}
+	})
+
+	t.Run("unknown reference id errors", func(t *testing.T) {
+		root := initDuty(t)
+		createTask(t, root, "First")
+		code, _, stderr := runDuty(t, root, "move", "T-01", "--after", "T-99")
+		if code == 0 {
+			t.Fatal("move --after an unknown id succeeded")
+		}
+		oneLine(t, "stderr", stderr)
+		if !strings.Contains(stderr, "T-99") {
+			t.Errorf("stderr = %q, want it to name T-99", stderr)
+		}
+	})
+}

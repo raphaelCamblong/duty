@@ -247,6 +247,8 @@ func TestRoundTrip(t *testing.T) {
 	mustRun(t, root, "move", "T-06", "--section", "Waiting")
 	mustRun(t, root, "move", "T-06", "--track", "backend")
 	mustRun(t, filepath.Join(root, "backend"), "move", "T-06", "--track", ".")
+	mustRun(t, root, "move", "T-06", "--top")
+	mustRun(t, root, "move", "T-06", "--after", "T-02")
 	mustRun(t, root, "delete", "task", "T-06")
 	mustRun(t, root, "archive")
 
@@ -345,6 +347,36 @@ func TestSaltedBoardSurvivesEveryMutation(t *testing.T) {
 			},
 			want: func(t *testing.T, w map[string]string) {
 				w["BOARD.md"] = replaceOnce(t, saltedBoard, saltT02Row, normalT02Row)
+			},
+		},
+		{
+			name: "move --top lifts the row above its section's first, bytes intact",
+			run: func(t *testing.T, root string) {
+				mustRun(t, root, "move", "T-02", "--top")
+			},
+			want: func(t *testing.T, w map[string]string) {
+				w["BOARD.md"] = replaceOnce(t, saltedBoard,
+					saltT01Row+"\n"+saltT02Row, saltT02Row+"\n"+saltT01Row)
+			},
+		},
+		{
+			name: "move --after relocates the row below a ref, adopting its section",
+			run: func(t *testing.T, root string) {
+				mustRun(t, root, "move", "T-01", "--after", "T-03")
+			},
+			want: func(t *testing.T, w map[string]string) {
+				b := replaceOnce(t, saltedBoard, saltT01Row+"\n", "")
+				w["BOARD.md"] = replaceOnce(t, b, saltT03Row+"\n", saltT03Row+"\n"+saltT01Row+"\n")
+			},
+		},
+		{
+			name: "move --before relocates the row above a ref, adopting its section",
+			run: func(t *testing.T, root string) {
+				mustRun(t, root, "move", "T-02", "--before", "T-03")
+			},
+			want: func(t *testing.T, w map[string]string) {
+				b := replaceOnce(t, saltedBoard, saltT02Row+"\n", "")
+				w["BOARD.md"] = replaceOnce(t, b, saltT03Row, saltT02Row+"\n"+saltT03Row)
 			},
 		},
 		{

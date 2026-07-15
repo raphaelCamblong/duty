@@ -11,6 +11,24 @@ import (
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
+// Position names where Move places a task's row within its board once the
+// track/section relocation is done: at the top of its section, or adjacent to
+// a reference task's row (adopting that row's section). The zero Position asks
+// for no reordering.
+type Position struct {
+	// Top requests the row move to the top of its section.
+	Top bool
+	// Before is the id of the task whose row the moved row goes above; empty
+	// when unused.
+	Before string
+	// After is the id of the task whose row the moved row goes below; empty
+	// when unused.
+	After string
+}
+
+// None reports whether pos requests no reordering.
+func (p Position) None() bool { return !p.Top && p.Before == "" && p.After == "" }
+
 // Move relocates a task. With a track path — relative to the tree root, "."
 // naming the root board — the file is renamed into that track's folder (same
 // filename — ids don't encode tracks), the source row is dropped and its
@@ -18,11 +36,12 @@ import (
 // "Open tasks") with the file's status preserved; all new contents are
 // computed before the rename and the board writes. With an empty track the
 // row moves under "## <section>" within its own board — the section is
-// created above the footer when absent, and any section left empty is
-// pruned. At least one of track and section must be non-empty.
-func (a App) Move(cwd, id, track, section string) error {
-	if track == "" && section == "" {
-		return errors.New("move: pass --track, --section, or both")
+// created above the footer when absent, and any section left empty is pruned.
+// A non-zero pos then reorders the row within its board (a board-only edit).
+// At least one of track, section, and pos must be non-empty.
+func (a App) Move(cwd, id, track, section string, pos Position) error {
+	if track == "" && section == "" && pos.None() {
+		return errors.New("move: pass --track, --section, --top, --before, or --after")
 	}
 	root, taskPath, err := a.resolveOpenWithRoot(cwd, id)
 	if err != nil {
@@ -33,8 +52,25 @@ func (a App) Move(cwd, id, track, section string) error {
 		return err
 	}
 	defer unlock()
+	taskPath, err = a.relocate(root, id, taskPath, track, section)
+	if err != nil {
+		return err
+	}
+	if pos.None() {
+		return nil
+	}
+	return a.reorderInBoard(root, taskPath, pos)
+}
+
+// relocate performs the track/section phase of a move and returns the task's
+// resulting file path. With no track and no section it is a no-op returning
+// taskPath unchanged — a position-only move.
+func (a App) relocate(root, id, taskPath, track, section string) (string, error) {
+	if track == "" && section == "" {
+		return taskPath, nil
+	}
 	if track == "" {
-		return a.moveRowInBoard(taskPath, section)
+		return taskPath, a.moveRowInBoard(taskPath, section)
 	}
 	if section == "" {
 		section = board.DefaultSection
@@ -43,26 +79,30 @@ func (a App) Move(cwd, id, track, section string) error {
 }
 
 // moveTrack relocates id's file into track's folder, dropping its source row
-// and appending one to the target's section, the file's status preserved.
-func (a App) moveTrack(root, id, taskPath, track, section string) error {
+// and appending one to the target's section, the file's status preserved, and
+// returns the file's new path.
+func (a App) moveTrack(root, id, taskPath, track, section string) (string, error) {
 	target, err := tree.ResolveTrack(a.fs, root, track)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if filepath.Dir(taskPath) == target {
-		return a.moveRowInBoard(taskPath, section)
+		return taskPath, a.moveRowInBoard(taskPath, section)
 	}
 	t, _, err := a.readTask(taskPath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	filename := filepath.Base(taskPath)
 	srcPath := boardBeside(taskPath)
 	pruned, err := a.dropFromBoard(srcPath, filename)
 	if err != nil {
-		return err
+		return "", err
 	}
-	return a.moveAcross(id, taskPath, target, section, pruned, t)
+	if err := a.moveAcross(id, taskPath, target, section, pruned, t); err != nil {
+		return "", err
+	}
+	return filepath.Join(target, filename), nil
 }
 
 // dropFromBoard returns the board index at boardPath with filename's row
@@ -117,4 +157,54 @@ func (a App) moveRowInBoard(taskPath, section string) error {
 		return err
 	}
 	return a.fs.WriteFile(boardPath, board.PruneEmptySections(moved))
+}
+
+// reorderInBoard applies pos to the row of the task at taskPath — a board-only
+// edit that relocates the row line, its bytes intact, leaving the task file
+// untouched. --top lifts it to the top of its section; --before/--after place
+// it adjacent to ref's row within the same board, adopting ref's section. A
+// ref in another board is rejected, naming the fix: move --track first.
+func (a App) reorderInBoard(root, taskPath string, pos Position) error {
+	boardPath := boardBeside(taskPath)
+	filename := filepath.Base(taskPath)
+	index, err := a.fs.ReadFile(boardPath)
+	if err != nil {
+		return err
+	}
+	reordered, err := a.reorder(root, boardPath, index, filename, pos)
+	if err != nil {
+		return err
+	}
+	return a.fs.WriteFile(boardPath, reordered)
+}
+
+// reorder computes the reordered board for pos: --top, or --before/--after a
+// reference row resolved and checked to live in the same board.
+func (a App) reorder(root, boardPath string, index []byte, filename string, pos Position) ([]byte, error) {
+	if pos.Top {
+		return board.ReorderTop(index, filename)
+	}
+	ref, adjacent := pos.Before, board.ReorderBefore
+	if pos.After != "" {
+		ref, adjacent = pos.After, board.ReorderAfter
+	}
+	refFile, err := a.refFilename(root, boardPath, ref)
+	if err != nil {
+		return nil, err
+	}
+	return adjacent(index, filename, refFile)
+}
+
+// refFilename resolves a reference task id to its board row's filename,
+// requiring it to live in the board at boardPath. A ref in another board is an
+// error naming the fix: move it here with --track first.
+func (a App) refFilename(root, boardPath, ref string) (string, error) {
+	refPath, err := tree.ResolveTask(a.fs, root, ref)
+	if err != nil {
+		return "", err
+	}
+	if boardBeside(refPath) != boardPath {
+		return "", fmt.Errorf("%s is in another board — move --track it here first", ref)
+	}
+	return filepath.Base(refPath), nil
 }

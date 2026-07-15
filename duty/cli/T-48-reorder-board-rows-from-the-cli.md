@@ -1,7 +1,7 @@
 ---
 id: T-48
 title: Reorder board rows from the CLI
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -40,8 +40,12 @@ in tests/roundtrip_test.go.
 Reordering tracks in the Boards list; multi-row moves; TUI reordering.
 
 ## Gates
-- [ ] Scratch tree: --top/--before/--after each verified, byte-identical
+- [x] Scratch tree: --top/--before/--after each verified, byte-identical
   outside the moved line (test-proven); reorder + inverse reorder restores
   the exact original board bytes.
-- [ ] `just check` green; docs updated; existing tests unedited except the
+- [x] `just check` green; docs updated; existing tests unedited except the
   round-trip extension.
+
+## Report
+
+Added a pure line-surgical reorder op to internal/board (ReorderTop/Before/After: the moved row keeps its exact bytes) and duty move --top | --before REF | --after REF at the app layer under the write lock, board-only edit. Position flags are mutually exclusive, combine with --track/--section, and --before/--after adopt the ref row section within the same board; a ref in another board errors. Tests: board byte-identity + reorder round-trip, salted-board top/before/after + cross-section adopt, CLI cross-board error and flag exclusivity, and the master round-trip extended with a reorder + inverse. docs/cli.md move section updated. just check green.
