@@ -294,8 +294,10 @@ selection change:
   at least one cell, a dim `empty` for a track with no tasks; the title
   ellipsis-truncates first when narrow and the bar is never dropped; the textual
   per-status rollup lives in the track's preview card. Then tasks under their section headers, one line
-  each: id, title, colored status (`todo` dim, `in-progress` yellow, `blocked` red,
-  `done` green), gate progress `2/3`, a dim relative-age column right of the gates
+  each: id, title, colored status in the duty palette (`todo` bronze, `in-progress`
+  peach, `done` olive, and `blocked` a deliberate red — the palette carries no alarm
+  color; accents are cream on dark / indigo on light), gate progress `2/3`, a dim
+  relative-age column right of the gates
   (`6m ago` / `2h ago`, the absolute date past a week — §humanize), drift badge if any.
   The age column is toggled by `t` and shows by default at ≥100 columns, hidden below
   (the toggle still works on any width). Task rows within each section are

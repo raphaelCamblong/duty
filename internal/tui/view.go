@@ -48,12 +48,26 @@ const (
 // crumbZone is the stable zone name of the breadcrumb segment for board path.
 func crumbZone(path string) string { return crumbZonePrefix + path }
 
+// The duty palette (§8): cream #e1ebaf, peach #e1af7d, bronze #af874b, indigo
+// #1e0f37, olive #9baf37 — mapped to accent and status below. The palette skews
+// dark, so each AdaptiveColor's Light counterpart is a hand-darkened variant
+// (indigo is the light-theme ink) that stays legible on a pale terminal. blocked
+// keeps a plain red: the palette carries no alarm color, and blocked must alarm.
 var (
-	colAccent = lipgloss.AdaptiveColor{Light: "62", Dark: "111"}
-	colDim    = lipgloss.AdaptiveColor{Light: "245", Dark: "243"}
-	colYellow = lipgloss.AdaptiveColor{Light: "136", Dark: "220"}
-	colRed    = lipgloss.AdaptiveColor{Light: "160", Dark: "203"}
-	colGreen  = lipgloss.AdaptiveColor{Light: "28", Dark: "78"}
+	// colAccent tints focused borders, the breadcrumb, the selection, and the
+	// header title: cream on dark, indigo ink on light.
+	colAccent = lipgloss.AdaptiveColor{Light: "#1e0f37", Dark: "#e1ebaf"}
+	// colDim tints chrome — separators, ages, hints, blurred borders — in the
+	// terminal's own grays, untouched by the palette.
+	colDim = lipgloss.AdaptiveColor{Light: "245", Dark: "243"}
+	// colPeach tints in-progress; darkened to a readable terracotta on light.
+	colPeach = lipgloss.AdaptiveColor{Light: "#a5652f", Dark: "#e1af7d"}
+	// colBronze tints todo, the palette's quiet earthy tone; darkened on light.
+	colBronze = lipgloss.AdaptiveColor{Light: "#8a6a38", Dark: "#af874b"}
+	// colOlive tints done; darkened on light so it holds against a pale ground.
+	colOlive = lipgloss.AdaptiveColor{Light: "#6f7d27", Dark: "#9baf37"}
+	// colRed tints blocked, plus scan errors and drift — the deliberate alarm.
+	colRed = lipgloss.AdaptiveColor{Light: "160", Dark: "203"}
 
 	headerBox    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colAccent).Padding(0, 1)
 	focusedBox   = headerBox
@@ -67,22 +81,25 @@ var (
 	driftStyle   = lipgloss.NewStyle().Foreground(colRed)
 )
 
-// statusStyle maps a task status to a foreground style in its color, todo dim,
-// in-progress yellow, blocked red, done green — the palette statusColor owns.
+// statusStyle maps a task status to a foreground style in its color — todo
+// bronze, in-progress peach, blocked red, done olive — the palette statusColor
+// owns.
 func statusStyle(status string) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(statusColor(status))
 }
 
 // statusColor is the fill for a status's segment of a distribution bar,
-// matching statusStyle's foregrounds.
+// matching statusStyle's foregrounds; an unknown status stays dim.
 func statusColor(status string) lipgloss.TerminalColor {
 	switch status {
 	case task.StatusInProgress:
-		return colYellow
+		return colPeach
+	case task.StatusTodo:
+		return colBronze
 	case task.StatusBlocked:
 		return colRed
 	case task.StatusDone:
-		return colGreen
+		return colOlive
 	}
 	return colDim
 }
