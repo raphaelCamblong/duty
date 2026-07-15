@@ -24,7 +24,7 @@ func (a App) Move(cwd, id, track, section string) error {
 	if track == "" && section == "" {
 		return errors.New("move: pass --track, --section, or both")
 	}
-	root, err := tree.FindRoot(a.fs, cwd)
+	root, taskPath, err := a.resolveOpenWithRoot(cwd, id)
 	if err != nil {
 		return err
 	}
@@ -34,21 +34,17 @@ func (a App) Move(cwd, id, track, section string) error {
 	}
 	defer unlock()
 	if track == "" {
-		return a.moveRow(cwd, id, section)
+		return a.moveRowInBoard(taskPath, section)
 	}
 	if section == "" {
 		section = board.DefaultSection
 	}
-	return a.moveTrack(cwd, id, track, section)
+	return a.moveTrack(root, id, taskPath, track, section)
 }
 
 // moveTrack relocates id's file into track's folder, dropping its source row
 // and appending one to the target's section, the file's status preserved.
-func (a App) moveTrack(cwd, id, track, section string) error {
-	root, taskPath, err := a.resolveOpenWithRoot(cwd, id)
-	if err != nil {
-		return err
-	}
+func (a App) moveTrack(root, id, taskPath, track, section string) error {
 	target, err := tree.ResolveTrack(a.fs, root, track)
 	if err != nil {
 		return err
@@ -105,17 +101,6 @@ func (a App) moveAcross(id, taskPath, target, section string, pruned []byte, t t
 		return err
 	}
 	return a.fs.WriteFile(dstPath, withRow)
-}
-
-// moveRow moves a task's board row under "## <section>" line-surgically.
-// Sections live only on the board — the task file carries none — so this is
-// the one mutation that touches a single file.
-func (a App) moveRow(cwd, id, section string) error {
-	taskPath, err := a.resolveOpen(cwd, id)
-	if err != nil {
-		return err
-	}
-	return a.moveRowInBoard(taskPath, section)
 }
 
 // moveRowInBoard moves the row of the task at taskPath under "## <section>"

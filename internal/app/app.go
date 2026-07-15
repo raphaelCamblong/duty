@@ -49,18 +49,21 @@ func (a App) resolveOpenWithRoot(cwd, id string) (root, path string, err error) 
 	return root, path, nil
 }
 
-// resolveOpen resolves id to its open task file anywhere in the tree
-// containing cwd, discarding the tree root.
-func (a App) resolveOpen(cwd, id string) (string, error) {
-	_, path, err := a.resolveOpenWithRoot(cwd, id)
-	return path, err
-}
-
 // lock takes the tree-wide write lock for the tree at root and returns its
 // release function. Every mutating use-case holds it for its whole duration so
 // parallel writers serialize on the board rather than racing on a shared file.
 func (a App) lock(root string) (func(), error) {
 	return a.fs.Lock(filepath.Join(root, names.LockFile))
+}
+
+// lockTree finds cwd's tree root and takes the tree-wide write lock, returning
+// its release function — for mutators whose root is needed only to lock.
+func (a App) lockTree(cwd string) (func(), error) {
+	root, err := tree.FindRoot(a.fs, cwd)
+	if err != nil {
+		return nil, err
+	}
+	return a.lock(root)
 }
 
 // walkBoards returns the board an --in-scoped read targets and every board

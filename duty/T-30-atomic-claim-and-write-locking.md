@@ -105,3 +105,5 @@ the two byte-identity test fingerprints (hashTree, snapshotTree) now skip it —
 the task-content round-trip invariant is unchanged. init does not pre-create a
 per-tree .gitignore (YAGNI; the file is gitignored in this repo and lives only
 transiently). No follow-ups; scope complete.
+
+Simplify pass (T-30 quality bar): extracted App.lockTree(cwd) for the FindRoot->lock->defer prelude (archive, create-track); reworked Move to resolve the id before locking so the write lock covers only the board read-modify-write like the sibling mutators, dropping a duplicate FindRoot walk; deleted the now-unused resolveOpen (inlined into moveRowInBoard). Skipped two findings: moving the "tree is locked" wording up out of the fsys port (would require editing the frozen fsys_test.go assertion) and merging the per-adapter ~5s timeout constants (per-adapter implementation detail, not part of the port contract). Suite green, race clean, golangci-lint 0 issues, gofumpt clean.
