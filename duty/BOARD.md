@@ -39,5 +39,6 @@ Order top-to-bottom is the intended build order.
 | [T-37](T-37-one-shot-forms-for-recurring-agent-seque.md) | One-shot forms for recurring agent sequences | todo |
 | [T-38](T-38-apply-the-duty-color-palette-to-the-tui.md) | Apply the duty color palette to the TUI | done |
 | [T-39](T-39-palette-true-light-theme-via-status-chip.md) | Palette-true light theme via status chips | done |
+| [T-40](T-40-light-theme-flat-colors-bold-selection-s.md) | Light theme flat colors, bold selection, small-screen priority | todo |
 
 Completed tasks (0) archived: [archive/](archive/).
