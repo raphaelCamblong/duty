@@ -42,5 +42,6 @@ Order top-to-bottom is the intended build order.
 | [T-40](T-40-light-theme-flat-colors-bold-selection-s.md) | Light theme flat colors, bold selection, small-screen priority | done |
 | [T-41](T-41-relocate-and-condense-the-spec.md) | Relocate and condense the spec | done |
 | [T-42](T-42-configurable-tui-theme-via-toml.md) | Configurable TUI theme via TOML | done |
+| [T-43](T-43-split-the-spec-and-docs-site-into-topic.md) | Split the spec and docs site into topic pages | todo |
 
 Completed tasks (0) archived: [archive/](archive/).
