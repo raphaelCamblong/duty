@@ -1,7 +1,7 @@
 ---
 id: T-34
 title: Status-sorted task rows in the TUI
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -41,17 +41,19 @@ Sorting the CLI reads or the board file; sorting track rows; per-section
 custom orders; persisting the toggle.
 
 ## Gates
-- [ ] Fixture with all four statuses in scrambled board order renders
+- [x] Fixture with all four statuses in scrambled board order renders
   in-progress → todo → blocked → done, with board order preserved inside each
   group; `s` flips to raw board order and back.
-- [ ] Filtered view still uses fuzzy rank; clearing the filter restores the
+- [x] Filtered view still uses fuzzy rank; clearing the filter restores the
   sort. `TestStartupPerformance` green.
-- [ ] Priority logic untouched: NO file outside `internal/tui` (and the spec)
+- [x] Priority logic untouched: NO file outside `internal/tui` (and the spec)
   is modified; the existing `get next` board-order tests pass unedited —
   `get next` still walks the BOARD.md order, never the display order.
-- [ ] Full suite green (`go test ./tests/... -coverpkg=./internal/... -count=1`);
+- [x] Full suite green (`go test ./tests/... -coverpkg=./internal/... -count=1`);
   `golangci-lint run` 0 issues; `gofumpt -l .` empty; `go vet ./...` clean;
   `go build -o bin/duty ./cmd/duty` ok.
-- [ ] Spec §8 updated in the same change.
+- [x] Spec §8 updated in the same change.
 
 ## Report
+
+Task rows in the TUI left panel now display status-grouped by default: within each section rows are stably sorted by rollupOrder rank (in-progress, todo, blocked, done; unknown last), the board file order surviving as the tiebreak. The sort is display-only, computed once at entry-build time in boardEntries, and leaves BOARD.md, the CLI board-order reads (get tasks, get next), section order, and track rows untouched. New session-only keybind s toggles to raw board order and back (in the ? help grid). While a / filter is active bubbles fuzzy-match rank wins; clearing it restores the sort. Implemented in internal/tui only (entry.go sortedRows/statusRank + boardEntries param, keys.go Sort binding, model.go statusSort field/toggle); spec §8 updated. New tests: TestStatusSortedRows, TestStatusSortToggle, TestStatusSortFilterInterplay. One existing TUI selection test (descending into the backend sub-board) had its expected ids updated to reflect the new default order (T-04 blocked above T-03 done); the get next board-order tests are unedited.

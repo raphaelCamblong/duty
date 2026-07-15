@@ -601,17 +601,19 @@ func TestPanelFocusAndFilter(t *testing.T) {
 		m, _ = press(t, m, "j") // T-01
 		m, _ = press(t, m, "k") // back to backend/
 		m, _ = press(t, m, "enter")
-		if m.BoardPath() != "backend" || m.SelectedID() != "T-03" {
-			t.Fatalf("descend: path=%q selected=%q, want backend / T-03", m.BoardPath(), m.SelectedID())
+		// Backend's rows show status-sorted by default (T-34): blocked T-04
+		// above done T-03, so the descent lands on T-04.
+		if m.BoardPath() != "backend" || m.SelectedID() != "T-04" {
+			t.Fatalf("descend: path=%q selected=%q, want backend / T-04", m.BoardPath(), m.SelectedID())
 		}
-		m, _ = press(t, m, "j") // T-04
+		m, _ = press(t, m, "j") // T-03
 		m, _ = press(t, m, "esc")
 		if m.BoardPath() != "." || m.SelectedID() != "backend" {
 			t.Fatalf("climb: path=%q selected=%q, want . / backend", m.BoardPath(), m.SelectedID())
 		}
 		m, _ = press(t, m, "enter")
-		if m.SelectedID() != "T-04" {
-			t.Errorf("re-descend selection = %q, want the remembered T-04", m.SelectedID())
+		if m.SelectedID() != "T-03" {
+			t.Errorf("re-descend selection = %q, want the remembered T-03", m.SelectedID())
 		}
 	})
 }
@@ -1131,5 +1133,102 @@ func TestFrameAudit(t *testing.T) {
 			}
 			t.Logf("preview %s:\n%s", name, open)
 		})
+	}
+}
+
+// scrambledStatusTree builds a flat board whose six tasks carry all four
+// statuses out of order in the board file, for the display-sort tests: board
+// order T-01..T-06 with statuses done, todo, in-progress, blocked, todo,
+// in-progress.
+func scrambledStatusTree(t *testing.T) string {
+	t.Helper()
+	root := initDuty(t)
+	for _, title := range []string{"One", "Two", "Three", "Four", "Five", "Six"} {
+		mustDuty(t, root, "create", "task", title)
+	}
+	mustDuty(t, root, "status", "T-01", "done")
+	mustDuty(t, root, "status", "T-03", "in-progress")
+	mustDuty(t, root, "status", "T-04", "blocked")
+	mustDuty(t, root, "status", "T-06", "in-progress")
+	return root
+}
+
+// rowOrder walks the left panel top-to-bottom, returning each selectable id in
+// display order (section headers skipped). It leaves the caller's model
+// untouched (the model is a value).
+func rowOrder(t *testing.T, m tui.Model) []string {
+	t.Helper()
+	for i := 0; i < 100; i++ {
+		m, _ = press(t, m, "k")
+	}
+	ids := []string{m.SelectedID()}
+	for i := 0; i < 100; i++ {
+		nm, _ := press(t, m, "j")
+		if nm.SelectedID() == m.SelectedID() {
+			break
+		}
+		m = nm
+		ids = append(ids, m.SelectedID())
+	}
+	return ids
+}
+
+func TestStatusSortedRows(t *testing.T) {
+	root := scrambledStatusTree(t)
+	m := newTUIModelSize(t, root, 120, 35)
+
+	// Default ON: in-progress → todo → blocked → done, board order the stable
+	// tiebreak within each group (T-03 before T-06, T-02 before T-05).
+	want := []string{"T-03", "T-06", "T-02", "T-05", "T-04", "T-01"}
+	if got := rowOrder(t, m); strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("status-sorted rows = %v, want %v", got, want)
+	}
+
+	// Frame check: the in-progress head renders above the done tail.
+	frame := m.View()
+	if lineWith(t, frame, "T-03", 60) >= lineWith(t, frame, "T-01", 60) {
+		t.Errorf("T-03 (in-progress) not rendered above T-01 (done):\n%s", frame)
+	}
+}
+
+func TestStatusSortToggle(t *testing.T) {
+	root := scrambledStatusTree(t)
+	m := newTUIModelSize(t, root, 120, 35)
+
+	sorted := []string{"T-03", "T-06", "T-02", "T-05", "T-04", "T-01"}
+	boardOrder := []string{"T-01", "T-02", "T-03", "T-04", "T-05", "T-06"}
+
+	if got := rowOrder(t, m); strings.Join(got, " ") != strings.Join(sorted, " ") {
+		t.Fatalf("default rows = %v, want status-sorted %v", got, sorted)
+	}
+	m, cmd := press(t, m, "s") // toggle to raw board order
+	m = pump(t, m, cmd)
+	if got := rowOrder(t, m); strings.Join(got, " ") != strings.Join(boardOrder, " ") {
+		t.Fatalf("after s: rows = %v, want board order %v", got, boardOrder)
+	}
+	m, cmd = press(t, m, "s") // toggle back to the status sort
+	m = pump(t, m, cmd)
+	if got := rowOrder(t, m); strings.Join(got, " ") != strings.Join(sorted, " ") {
+		t.Errorf("after s again: rows = %v, want status-sorted %v", got, sorted)
+	}
+}
+
+func TestStatusSortFilterInterplay(t *testing.T) {
+	root := scrambledStatusTree(t)
+	m := newTUIModelSize(t, root, 120, 35)
+
+	var cmd tea.Cmd
+	for _, k := range []string{"/", "o", "n", "e"} { // fuzzy-matches "One" = T-01
+		m, cmd = press(t, m, k)
+		m = pump(t, m, cmd)
+	}
+	m, _ = press(t, m, "enter")
+	if m.SelectedID() != "T-01" {
+		t.Fatalf("filter 'one' selected %q, want T-01 (fuzzy rank, not the status sort)", m.SelectedID())
+	}
+	m, _ = press(t, m, "esc") // clear the filter
+	want := []string{"T-03", "T-06", "T-02", "T-05", "T-04", "T-01"}
+	if got := rowOrder(t, m); strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("clearing the filter did not restore the status sort: rows = %v, want %v", got, want)
 	}
 }

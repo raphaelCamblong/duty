@@ -71,6 +71,7 @@ type Model struct {
 	focus            focusArea
 	showAge          bool
 	ageToggled       bool
+	statusSort       bool
 	preview          viewport.Model
 	previewOpen      bool
 	previewKind      string
@@ -96,19 +97,20 @@ func New(f fsys.FS, root string, cfg config.Config) (Model, error) {
 		return Model{}, err
 	}
 	m := Model{
-		fsys:      f,
-		root:      root,
-		editor:    cfg.Editor,
-		theme:     cfg.TUI.Theme,
-		keys:      defaultKeys(),
-		help:      help.New(),
-		zones:     zone.New(),
-		snap:      snap,
-		path:      ".",
-		memory:    map[string]int{},
-		list:      newList(),
-		spring:    harmonica.NewSpring(harmonica.FPS(scrollFPS), scrollFreq, 1.0),
-		lastClick: -1,
+		fsys:       f,
+		root:       root,
+		editor:     cfg.Editor,
+		theme:      cfg.TUI.Theme,
+		keys:       defaultKeys(),
+		help:       help.New(),
+		zones:      zone.New(),
+		snap:       snap,
+		path:       ".",
+		memory:     map[string]int{},
+		list:       newList(),
+		statusSort: true,
+		spring:     harmonica.NewSpring(harmonica.FPS(scrollFPS), scrollFreq, 1.0),
+		lastClick:  -1,
 	}
 	m, _ = m.rebuildList()
 	return m.fixSelection().layout(), nil
@@ -281,6 +283,10 @@ func (m Model) handleGlobalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		m.showAge = !m.showAge
 		m.ageToggled = true
 		return m.reskinList().layout(), nil, true
+	case key.Matches(msg, m.keys.Sort):
+		m.statusSort = !m.statusSort
+		model, cmd := m.rebuildList()
+		return model.fixSelection().layout(), cmd, true
 	}
 	return m, nil, false
 }
@@ -546,7 +552,7 @@ func (m Model) rebuildList() (Model, tea.Cmd) {
 	if !ok {
 		return m, m.list.SetItems(nil)
 	}
-	return m, m.list.SetItems(boardEntries(b))
+	return m, m.list.SetItems(boardEntries(b, m.statusSort))
 }
 
 // withSnap applies a re-scan: on error the last good snapshot stays on

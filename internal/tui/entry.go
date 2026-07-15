@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"io"
+	"sort"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -55,9 +56,10 @@ func anySelectable(items []list.Item) bool {
 const tracksSection = "Tracks"
 
 // boardEntries lists a board as left-panel entries: a "Tracks" header over the
-// sub-track rows, then every section header followed by its task rows in board
-// order.
-func boardEntries(b Board) []list.Item {
+// sub-track rows, then every section header followed by its task rows. With
+// statusSort on the rows within each section are status-grouped for display
+// (§8); off, they keep the board's file order.
+func boardEntries(b Board, statusSort bool) []list.Item {
 	var items []list.Item
 	if len(b.Subs) > 0 {
 		items = append(items, entry{section: tracksSection})
@@ -67,11 +69,39 @@ func boardEntries(b Board) []list.Item {
 	}
 	for si := range b.Sections {
 		items = append(items, entry{section: b.Sections[si].Name})
-		for ri := range b.Sections[si].Rows {
-			items = append(items, entry{task: &b.Sections[si].Rows[ri]})
+		rows := sortedRows(b.Sections[si].Rows, statusSort)
+		for ri := range rows {
+			items = append(items, entry{task: &rows[ri]})
 		}
 	}
 	return items
+}
+
+// sortedRows groups a section's rows by status for display: stable by
+// rollupOrder rank (unknown statuses last) so the board's build order survives
+// as the tiebreak. It copies first, leaving the snapshot's board order intact
+// for the toggle back; statusSort off returns the rows unchanged.
+func sortedRows(rows []Row, statusSort bool) []Row {
+	if !statusSort {
+		return rows
+	}
+	out := make([]Row, len(rows))
+	copy(out, rows)
+	sort.SliceStable(out, func(i, j int) bool {
+		return statusRank(out[i].Status) < statusRank(out[j].Status)
+	})
+	return out
+}
+
+// statusRank is a status's position in rollupOrder, the display-sort ranking;
+// an unknown status sorts after every known one.
+func statusRank(status string) int {
+	for i, st := range rollupOrder {
+		if st == status {
+			return i
+		}
+	}
+	return len(rollupOrder)
 }
 
 // compactDelegate renders entries one line each: tracks with a colored

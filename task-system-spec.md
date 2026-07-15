@@ -296,8 +296,14 @@ selection change:
   `done` green), gate progress `2/3`, a dim relative-age column right of the gates
   (`6m ago` / `2h ago`, the absolute date past a week — §humanize), drift badge if any.
   The age column is toggled by `t` and shows by default at ≥100 columns, hidden below
-  (the toggle still works on any width). The list's built-in fuzzy
-  filter opens on `/`. **Empty states are intentional:** a board with no tracks or
+  (the toggle still works on any width). Task rows within each section are
+  **status-grouped for display by default** — in-progress, then todo, blocked, done
+  (unknown statuses last), a *stable* sort so the board's build order (§4) survives as
+  the tiebreak. This is presentation only: `BOARD.md`, the CLI's board-order reads (`get
+  tasks`, `get next`), and the section/track order are all untouched; `s` toggles to the
+  raw board order (session-only, no config key). The list's built-in fuzzy
+  filter opens on `/` — while a filter is active the fuzzy-match rank orders the rows and
+  the status sort steps aside, restored the moment the filter clears. **Empty states are intentional:** a board with no tracks or
   tasks shows a centered dim hint (a fresh tree names itself, any other empty track
   nudges toward `duty create task`), and a filter that matches nothing shows the
   list's own styled no-items line rather than a blank panel.
@@ -321,7 +327,9 @@ selection change:
 preview), `esc` back (close the preview / clear the filter / up one track), `tab`
 toggle panel focus while a preview is open, `/` filter, `e` open the selected task in
 `$EDITOR` (suspend TUI, resume on exit), `t` toggle the relative-age column (default on
-at ≥100 columns, off below; listed in the `?` help grid), `r` re-scan the tree now (the
+at ≥100 columns, off below; listed in the `?` help grid), `s` toggle the status-grouped
+row order (default on; flips to the raw board file order, session-only; in the `?` help
+grid), `r` re-scan the tree now (the
 fsnotify watcher already refreshes on any change; `r` is manual reassurance), `?`
 key-hint footer, `q` quit.
 
