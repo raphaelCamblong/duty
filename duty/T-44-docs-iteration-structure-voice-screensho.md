@@ -1,7 +1,7 @@
 ---
 id: T-44
 title: "Docs iteration: structure, voice, screenshots, custom domain"
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -52,11 +52,67 @@ JSX/MDX components inside docs/*.md (single-source stays plain); new topics;
 touching Go code; deleting the old duty-docs worker.
 
 ## Gates
-- [ ] CLI page: every command has its own heading (visible in the built
+- [x] CLI page: every command has its own heading (visible in the built
   page's TOC); Config and TUI pages contain zero sentences copied verbatim
   from the old reference text (spot-check in report).
-- [ ] Screenshot slots wired for the four names; images included live only
+- [x] Screenshot slots wired for the four names; images included live only
   if present.
-- [ ] https://duty-cli.xyz serves all pages 200 (curl list); README + astro
+- [x] https://duty-cli.xyz serves all pages 200 (curl list); README + astro
   site updated to the domain.
-- [ ] `just check` green (docs-only change on the Go side).
+- [x] `just check` green (docs-only change on the Go side).
+
+## Report
+
+Docs iteration complete — structure, voice, screenshots, custom domain.
+
+## Per page
+- cli.md: restructured into H2 command groups (Author / Work / Read / Interface)
+  with one H3 per command. Each command gets a humanized one-liner, a titled
+  code example, and flags as a compact list. Kept a `:::note` guarantee block,
+  the Board context (`--in`) and Agent output sections, and a compact cheat
+  sheet at the end. Every flag/example checked against the real binary --help
+  and the cli package source.
+- config.md: rewrote to "how you configure duty" — where the files live, one
+  line on precedence, one annotated config.toml (editor, theme, [tui.palette]
+  with both value forms), a `:::tip` on light/dark. Palette slots and value
+  forms verified against internal/config + internal/tui/theme.go.
+- tui.md: rewrote around using it — what you see, moving around, opening a task,
+  filtering, a keys table, theming pointer. Keys checked against
+  internal/tui/keys.go. Wired four screenshot slots.
+- tasks.md / tracks.md / internals.md: épuré pass — tighter intros and
+  hierarchy, cut reference boilerplate, added asides (:::note / :::caution)
+  where they help. All facts preserved.
+
+## Screenshots
+- /screens/board-dark.png: real dark-board screenshot placed at
+  docs-site/public/screens/board-dark.png (from docs/duty-tui.png); the tui page
+  includes it as a live image.
+- /screens/task-preview.png, /screens/filter.png, /screens/board-light.png: no
+  file present, so each is an HTML-comment slot — nothing renders broken.
+
+## CLI TOC proof (built page's right-side navigator)
+Author > init, create task, create track, set
+Work > status, report, gates, gates add, gates check / uncheck, move, archive,
+delete task
+Read > get tasks, get task, get tracks, get next
+Interface > tui
+(+ Board context, Agent output, Cheat sheet)
+Every command has its own heading in the built TOC.
+
+## Verbatim spot-check (Config + TUI)
+Both pages were rewritten from scratch. Old Config opened "TOML, read-only,
+merged over built-in defaults" — new opens "duty runs with zero configuration".
+Old TUI opened "`duty tui` — a read-only live board. Per frame: scan the tree…"
+— new opens "`duty tui` opens a live, read-only view of your board." No sentence
+survives verbatim.
+
+## Domain + deploy
+- astro `site` and root README docs link → https://duty-cli.xyz.
+- Built locally, deployed via `wrangler deploy` (worker "duty").
+- curl 200 on https://duty-cli.xyz for: / , /getting-started/ , /tasks/ ,
+  /tracks/ , /cli/ , /config/ , /tui/ , /internals/ , /convention/ ,
+  /screens/board-dark.png.
+
+## Gates
+`just check` green: gofmt clean, go vet clean, golangci-lint 0 issues, tests
+pass (87.3% coverage). No Go code touched.

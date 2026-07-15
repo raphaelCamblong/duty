@@ -4,7 +4,7 @@ import starlight from '@astrojs/starlight';
 
 // https://astro.build/config
 export default defineConfig({
-	site: 'https://duty.raph-camblong.workers.dev',
+	site: 'https://duty-cli.xyz',
 	integrations: [
 		starlight({
 			title: 'duty',

@@ -1,31 +1,42 @@
 # Config
 
-TOML, read-only, merged over built-in defaults: **user**
-(`os.UserConfigDir()/duty/config.toml`) < **project** (`duty.toml` next to the root
-`BOARD.md`; its presence also marks the tree root explicitly — otherwise the walk-up
-stops at the topmost `BOARD.md`). Missing files are fine. Only the root `duty.toml` is
-read; one inside a track is an error (a second root).
+duty runs with zero configuration — every setting has a default. When you want
+to change one, it reads TOML from two optional places, project winning over
+user:
+
+- **User**, per machine: `os.UserConfigDir()/duty/config.toml`.
+- **Project**, committed with the tree: `duty.toml` beside the root `BOARD.md`.
+
+The project file's mere presence also pins the tree root. Only that root
+`duty.toml` is read — a second one inside a track is an error.
+
+## A config file
 
 ```toml
-editor = "nvim"        # falls back to $EDITOR, then vi
+# Editor for the TUI's `e` key. Falls back to $EDITOR, then vi.
+editor = "nvim"
 
 [tui]
-theme = "auto"         # auto | dark | light — background mode, not colors
+# Background mode, not colors: auto follows the terminal.
+theme = "auto"        # auto | dark | light
 
-[tui.palette]          # optional per-slot color overrides; unset = the default
-accent = "#e1ebaf"     # a bare string sets both the light and dark channel
-todo = { light = "#8a6d00", dark = "#af874b" }   # or set each channel apart
+# Recolor any of the TUI's six semantic slots. Unset = the frozen default.
+[tui.palette]
+accent = "#1f3a5f"                               # one value sets both channels
+todo   = { light = "#8a6d00", dark = "#af874b" } # or split light and dark
 ```
 
-`[tui.palette]` recolors the TUI's semantic slots — `accent`, `dim`, `todo`,
-`in-progress`, `done`, `blocked` — over the frozen default described in tui.md; an
-omitted slot (or, in the table form, an omitted channel) keeps its default, so the
-zero config renders the default palette byte-for-byte. Each value is a `#rrggbb` hex
-triplet or an ansi index `0-255`; a malformed value is an error naming the key
-(`tui.palette.todo.dark`). The palette is a distinct table from the `theme` mode
-selector above (TOML forbids one key being both a string and a table). Status colors
-ink the word directly and their dark hue fills that status's distribution bar, so one
-slot drives both.
+That's every key. The palette slots are `accent`, `dim`, `todo`,
+`in-progress`, `done`, and `blocked`; each value is a `#rrggbb` hex triplet or
+an ANSI index `0-255`. A bare string colors both channels; the table form sets
+light and dark apart. An omitted slot — or an omitted channel — keeps its
+default, so the empty file renders the default palette exactly.
 
-Keys get added when a hardcoded value hurts, not before. Config tunes presentation
-only — statuses, naming, and board structure are the convention, never settings.
+:::tip[Light or dark]
+`theme` only picks the background mode. The status hues are tuned twice — the
+raw palette on dark terminals, AA-readable inks on light ones — so both read
+well without touching `[tui.palette]`.
+:::
+
+Config tunes presentation only. Statuses, naming, and board structure are the
+convention, never settings — a key that changed a file format would be a bug.

@@ -24,7 +24,7 @@ go install github.com/raphaelCamblong/duty/cmd/duty@latest
 
 Prebuilt binaries live on the [releases page](https://github.com/raphaelCamblong/duty/releases).
 
-Docs: the same pages, nicely rendered — [duty.raph-camblong.workers.dev](https://duty.raph-camblong.workers.dev).
+Docs: the same pages, nicely rendered — [duty-cli.xyz](https://duty-cli.xyz).
 
 ## Use it
 

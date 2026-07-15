@@ -1,69 +1,293 @@
 # CLI
 
-Verb → resource, kubectl-style: `create`, `get`, `delete` take a resource subcommand;
-the agent hot path stays verb-only. Every mutating command maintains the sync
-invariant (file + board in one shot) and serializes on a tree-wide write lock (see
-internals.md). A recurring agent sequence that would take the lock twice earns a
-one-shot form — `report --status`, `gates check --all`, variadic `gates add`: one
-intent, one lock, one atomic write. Exit codes: `0` ok, `≠0` error with a one-line
-stderr message; `2` for a missing or unknown command — typos suggest the closest
-command within edit distance 2, still exit `2`. `duty --version` prints the build
-version (`dev` unless set via `-ldflags "-X main.version=…"`). An id that resolves
-nowhere hints: `unknown task id "T-99" — try 'duty get tasks'`. Help groups commands
-by role (Author / Work / Read / Interface), opens with the lifecycle, and every
-command has an `Example`.
+`duty` is verb-first, kubectl-style: `create`, `get`, and `delete` take a
+resource (`task` / `track`); every other command is a bare verb. Whatever
+writes keeps the task file and its board row in sync in one atomic step, under a
+tree-wide lock — so a swarm of agents never corrupts a board.
 
-| Command | Behavior |
+It's quiet when it works. An error is one lowercase line on stderr and a
+non-zero exit; a missing or unknown command exits `2` and suggests the closest
+match. `duty --version` prints the build version.
+
+The commands below are grouped by role — the same four groups `duty --help`
+shows.
+
+:::note[The guarantee]
+Every writer is line-surgical and atomic: it changes only the target line or
+cell and writes through a temp-file rename, so a board is never half-written and
+never re-rendered from a model. A full round-trip — create → status → report →
+move → move back → delete → archive — leaves the tree byte-identical. Drift
+between a file and its board row is surfaced, never silently healed.
+:::
+
+## Author
+
+### init
+
+`duty init [title]` — Scaffold a `duty/` tree right here: a `BOARD.md`, the
+convention `README.md`, and an `archive/`. Refuses if you're already inside a
+tree.
+
+```sh title="Start a board"
+duty init "Q3 roadmap"
+```
+
+### create task
+
+`duty create task <title>` — Add a task to the current board. The next id
+(`T-NN`) is picked across the whole tree, and the file plus the board row are
+written together.
+
+```sh title="A task that waits on another"
+duty create task "Add auth" --blocked-by T-03
+```
+
+Flags:
+- `--slug S` — override the filename slug (default: derived from the title).
+- `--blocked-by ID` — a task that must be done first; repeat for several.
+- `--section NAME` — board section for the new row (default `Open tasks`).
+- `--in PATH` — target another board by its track path (`.` = root).
+- `--body` — read the whole markdown body from stdin instead of the skeleton.
+
+:::tip
+`--body` is the agent write path: pipe a whole task in one call. Feed it
+markdown, not JSON — it splices byte-for-byte.
+:::
+
+### create track
+
+`duty create track <name>` — Make a nested track: a folder with its own
+`BOARD.md` and `archive/`, and a bullet appended to the parent's board. The
+name must be `[a-z0-9-]+`.
+
+```sh title="A backend track"
+duty create track backend --title "Backend work"
+```
+
+Flags:
+- `--title T` — track title (default: the name).
+- `--in PATH` — create it under another board.
+
+### set
+
+`duty set <id> [section]` — Replace a task section from stdin, line-surgically:
+everything outside the section survives. Name a section to replace that one;
+give no name and stdin is one or more `## ` blocks, each replaced or created in
+order, in one write.
+
+```sh title="Rewrite one section"
+duty set T-07 goal < goal.md
+```
+
+## Work
+
+### status
+
+`duty status <id> <status>` — Set a task's status — `todo`, `in-progress`,
+`done`, or `blocked` — in both its file and its board row. Every transition is
+free except claiming a task already `in-progress`, refused so a live claim is
+never silently stolen.
+
+```sh title="Start a task"
+duty status T-07 in-progress
+```
+
+Flags:
+- `--force` — take over a task already `in-progress`.
+
+### report
+
+`duty report <id>` — Append stdin under the task's `## Report` heading, created
+once and then accumulating. With `--status`, flip the status in the same write —
+the atomic "done" or "blocked" ending.
+
+```sh title="Report and mark done in one write"
+duty report T-07 --status done < report.txt
+```
+
+Flags:
+- `--status S` — also set the status (file + board) in the same write.
+- `--force` — with `--status in-progress`, take over an existing claim.
+
+### gates
+
+`duty gates <id>` — List a task's gates, 1-based (`1 [x] build passes`).
+
+```sh title="List the gates"
+duty gates T-07
+```
+
+Flags:
+- `--agent` — TSV: `index`, `done`, `text`.
+
+### gates add
+
+`duty gates add <id> <text>...` — Append one or more gates, in order, in one
+write (creating `## Gates` if absent).
+
+```sh title="Add two gates"
+duty gates add T-07 "build passes" "tests green"
+```
+
+### gates check / uncheck
+
+`duty gates check <id> <n>` and `duty gates uncheck <id> <n>` — Tick or untick
+the n-th gate (1-based), or `--all` of them in one write.
+
+```sh title="Tick every gate"
+duty gates check T-07 --all
+```
+
+Flags:
+- `--all` — flip every gate at once, no `<n>`.
+
+### move
+
+`duty move <id>` — Move a task to another track, to another board section, or
+both — at least one flag. Across tracks the file is renamed into the target
+folder (ids don't encode tracks) and its status is preserved.
+
+```sh title="Move to the backend track"
+duty move T-07 --track backend --section "Open tasks"
+```
+
+Flags:
+- `--track PATH` — target track path from the tree root (`.` = root board).
+- `--section NAME` — target board section for the row.
+
+### archive
+
+`duty archive` — Move every `done` task in the current board and below into its
+own board's `archive/`, dropping the row and fixing the count. Idempotent —
+"nothing to archive" is a clean no-op.
+
+```sh title="Archive finished work"
+duty archive
+```
+
+Flags:
+- `--in PATH` — archive from another board (`.` = root).
+
+### delete task
+
+`duty delete task <id>` — Remove an open task and its board row. Refuses a
+`done` task without `--force` — that's `archive`'s job.
+
+```sh title="Delete a scratch task"
+duty delete task T-07 --force
+```
+
+Flags:
+- `--force` — allow deleting a `done` task.
+
+## Read
+
+Reads never lock and never write. Each takes `--agent` for stable TSV — see
+[Agent output](#agent-output) below.
+
+### get tasks
+
+`duty get tasks` — List open tasks from the current board down, straight from
+the files: `id  status  title`, a relative age, a track prefix when not local,
+and a `⚠ board says …` flag when the board row disagrees.
+
+```sh title="Only what's in progress"
+duty get tasks --status in-progress
+```
+
+Flags:
+- `--status S` — only this status.
+- `--in PATH` — start from another board.
+- `--agent` — TSV: `id`, `board-path`, `status`, `title`, `drift`, `updated`.
+
+### get task
+
+`duty get task <id>` — One task's metadata, from its file (never its body): id,
+title, status, track, blocked-by, gates `n/m`, age, and path. `--section`
+prints one section's body instead; `--body` prints the whole body.
+
+```sh title="Inspect a task"
+duty get task T-07
+```
+
+Flags:
+- `--section NAME` — print only that section's body.
+- `--body` — print the whole body below the frontmatter.
+- `--agent` — one TSV record (fields under Agent output).
+
+### get tracks
+
+`duty get tracks` — One line per board, the root shown as `.`: path, title,
+per-status counts of its own tasks, and its archived count.
+
+```sh title="Board-by-board counts"
+duty get tracks
+```
+
+Flags:
+- `--in PATH` — start from another board.
+- `--agent` — TSV: `path`, `title`, `todo`, `in-progress`, `done`, `blocked`, `archived`.
+
+### get next
+
+`duty get next` — The first actionable task: board order first, then sub-tracks
+depth-first — the first `todo` whose `blocked-by` are all done. Nothing
+actionable means no output and exit `0`. Output shape matches `get task`.
+
+```sh title="Claim the next task"
+duty get next --claim
+```
+
+Flags:
+- `--claim` — atomically mark it `in-progress` and print it, so parallel agents each get a distinct task.
+- `--in PATH` — start from another board.
+- `--agent` — same fields as `get task`.
+
+## Interface
+
+### tui
+
+`duty tui` — Launch the live board viewer: read-only, refreshing as files
+change. See [TUI](/tui/).
+
+```sh title="Watch the board"
+duty tui
+```
+
+## Board context (`--in`)
+
+`create task`, `create track`, `get tasks`, `get tracks`, `get next`, and
+`archive` take `--in` to name a board by a root-relative slash path (`.` = the
+root board): the tree root is found from cwd, then the board becomes
+`<root>/<PATH>`. Id-addressed commands take no `--in` — ids resolve tree-wide.
+
+## Agent output
+
+Every read takes `--agent`: stable, token-lean TSV — one record per line, no
+padding, no color, the field order part of the contract. `updated` is always
+the trailing field (the file's mtime, RFC3339) so parsers of the earlier fields
+keep working. Mutating commands stay quiet either way.
+
+- `get tasks` — `id  board-path  status  title  drift  updated` (drift empty, `board=<status>`, or `no-row`).
+- `get task` / `get next` — `id  track-path  status  title  gates-done  gates-total  blocked-by  path  updated` (blocked-by comma-joined; `get next` prints nothing when nothing's actionable).
+- `get tracks` — `path  title  todo  in-progress  done  blocked  archived`.
+
+## Cheat sheet
+
+| Command | What it does |
 |---|---|
-| `duty init [title]` | Bootstrap: create `duty/` in cwd with skeleton `BOARD.md` (H1 = title, default `Board`), `README.md`, `archive/`. Refuse if already inside a tree. |
-| `duty create task <title> [--slug S] [--blocked-by ID…] [--section NAME] [--in PATH] [--body]` | Create in the **current board** (or the `--in` board). Validate every `--blocked-by` id exists (anywhere in the tree). Next NN scans the whole tree. Write the task file (frontmatter + generated H1 + body) and append the board row (`todo`) to the section's table — default `Open tasks`, created if absent — under one lock. Body: the section skeleton by default, or with **`--body`** the entire markdown body (everything below the H1) read from stdin — `## ` sections verbatim, gates as `- [ ]` checkboxes under `## Gates`; `--body` refuses empty stdin and requires the body to open at a `## ` heading. Print the created path. |
-| `duty create track <name> [--title T] [--in PATH]` | Create track `<name>/` (validated `[a-z0-9-]+`) under the current board (or the `--in` board): skeleton `BOARD.md` (H1 = title, default: the name) + `archive/`. Append its bullet to the parent's `## Boards` (created if absent). Refuse if the folder exists. |
-| `duty status <id> <status> [--force]` | Rewrite the frontmatter `status:` line + the row's status cell. Reject unknown statuses. Setting `in-progress` on a task already `in-progress` is refused (`T-x is already in-progress — someone claimed it; use --force to take it over`) unless `--force` — the one guarded transition, so a live claim is never silently stolen; every other transition stays free (see tasks.md). |
-| `duty move <id> [--track PATH] [--section NAME]` | At least one flag. `--track` moves the task to another track: `PATH` is relative to the tree root (`.` = root board); rename the file into the target folder (same filename — ids don't encode tracks), drop the source row (prune), append to the target's `--section` (default `Open tasks`), status preserved. `--section` alone moves the row under `## <section>` within its own board (created if absent, inserted above the footer); prune any section left empty. |
-| `duty report <id> [--status S] [--force]` | Append stdin under `## Report` (heading created once, content accumulates). With `--status S` also flip the status (frontmatter + board row) in the *same* locked write — the atomic done/blocked lifecycle endings; both edits are computed before either file is written, so any error lands neither. `--status in-progress` obeys the claim guard (`--force` to take over). Refuse empty stdin. |
-| `duty set <id> [section]` | With a `section` argument, replace that one section's body from stdin, line-surgically (heading line and every byte outside the section survive); the name matches the `## <name>` heading case-insensitively, a missing section is created before `## Report` (or at end of file). With **no argument**, stdin is one or more `## Section` blocks and each is replaced (created if missing) in payload order, all under one lock in one file write — the bulk form must open at a `## ` heading. Refuse empty stdin either way. |
-| `duty gates <id> [list]` | List the task's gates, 1-based (`1 [x] build passes`); `--agent` emits `index<TAB>done<TAB>text` TSV. `gates add <id> <text>...` appends a `- [ ]` gate per text, in order, in one write (creating `## Gates` if absent); `gates check <id> <n>` / `gates uncheck <id> <n>` flip the n-th checkbox surgically (erroring when `n` is out of range), or `--all` flips every gate in one write. |
-| `duty archive [--in PATH]` | For every open task with `status: done`, in the current board (or the `--in` board) and every board below it: rename → its own board's `archive/`, drop its row, prune empty sections, rewrite that board's footer count. Idempotent; "nothing to archive" is a clean no-op. |
-| `duty delete task <id> [--force]` | Refuse on `done` without `--force` (that's `archive`'s job). Remove the file, drop the row, prune. |
-| `duty get tasks [--status S] [--in PATH]` | Recursive from the current board (or the `--in` board). One line per open task **from the files**: `id  status  title`, prefixed with the track path when not local (`backend/ T-12 …`), closed by a dim relative-age column (`2h ago` / `3d ago`; "just now" under a minute; the absolute date past seven days). If the board row's status disagrees (or the row is missing), append a `⚠ board says …` drift flag. `list` survives as a hidden alias. |
-| `duty get task <id> [--section NAME] [--body]` | One task's metadata **from its file** — never its body (the path is printed; readers `cat` it). Resolves the id anywhere in the tree. Human: aligned `key: value` lines (id, title, status, track, blocked-by, gates `n/m`, updated (relative age), path). `--section NAME` instead prints that one section's body (exit 1 `no section "x" in T-05` when absent); `--body` prints the entire body below the frontmatter, verbatim (read-only, no lock). `--body`, `--section`, and `--agent` are mutually exclusive. |
-| `duty get tracks [--in PATH]` | One line per board — the starting board included as `.` — recursive from the current board (or the `--in` board): path, title, per-status counts of its **own** (directly-filed) tasks, and its archived count. |
-| `duty get next [--claim] [--in PATH]` | The first **actionable** task: walk the current board's (or the `--in` board's) rows in board order (build order is priority), then sub-tracks depth-first in scan order; return the first `todo` whose `blocked-by` are all `done` (an archived dependency counts as done). Output shape = `get task`. **Nothing actionable → no output, exit 0.** With **`--claim`** it atomically marks that task `in-progress` (file + board row) under the tree-wide lock before printing it — the printed status is the truthful `in-progress`, the `--agent` shape unchanged — so parallel agents each get a distinct task and losers of the race transparently receive the following one; a claim with nothing to do stays a pure read (no lock-file side effect). |
-| `duty tui` | Launch the live board viewer (see tui.md). |
-
-**Board context (`--in PATH`).** `create task`, `create track`, `get tasks`,
-`get tracks`, `get next`, and `archive` take a long-only `--in` naming the board by a
-**root-relative** slash path (`.` = root board): the tree root is still resolved from
-cwd, then the current board becomes `<root>/<PATH>`. The path must name an existing
-board, else `unknown track "api/auth"` — the one validator and error shape
-`move --track` uses. Id-addressed commands take no `--in`: ids resolve tree-wide.
-
-**One-shot authoring (the agent write path).** `create task --body` and bulk `set`
-author a whole task in a single call each. The body is fed as **markdown, not JSON**:
-markdown-in splices byte-for-byte, JSON would double-encode and re-render — the drift
-the line-surgical writers exist to avoid.
-
-**Agent output.** Reading commands accept `--agent` (long-only): stable, token-lean
-TSV — one record per line, no padding, no color; the field order is part of the
-contract. Mutating commands stay quiet either way.
-
-- `get tasks --agent` — `id<TAB>board-path<TAB>status<TAB>title<TAB>drift<TAB>updated`
-  (drift empty, or `board=<status>`, or `no-row`).
-- `get task --agent` / `get next --agent` — one record
-  `id<TAB>track-path<TAB>status<TAB>title<TAB>gates-done<TAB>gates-total<TAB>blocked-by<TAB>path<TAB>updated`
-  (blocked-by comma-joined, empty when none); `get next` prints nothing when nothing
-  is actionable.
-- `get tracks --agent` — one record per board
-  `path<TAB>title<TAB>todo<TAB>in-progress<TAB>done<TAB>blocked<TAB>archived`.
-
-`updated` is **trailing** so parsers of earlier positional fields keep working; it is
-the file's mtime (RFC3339), not a frontmatter timestamp — no task file gains a field.
-
-**Behavioral invariants:**
-- **Lossless round-trip:** create → status → report → move to a section → move to
-  another track → move back → delete → archive on a scratch task leaves the `duty/`
-  tree byte-identical (hash before/after) — every writer preserves what it doesn't own.
-- **Board edits are line-surgical:** touch only the target line/cell, write the rest
-  back verbatim — never re-render the board from a model.
-- Section pruning never removes the default section, and `get tasks` reads files as
-  truth and only *reports* drift — never auto-heals.
+| `duty init [title]` | scaffold a `duty/` tree here |
+| `duty create task <title>` | add a task to the current board |
+| `duty create track <name>` | add a nested track |
+| `duty set <id> [section]` | replace section(s) from stdin |
+| `duty status <id> <status>` | set status in file + board row |
+| `duty report <id>` | append a report; `--status` flips status too |
+| `duty gates <id>` | list gates; `add` / `check` / `uncheck` edit them |
+| `duty move <id>` | move a task across tracks / sections |
+| `duty archive` | archive every done task, here and below |
+| `duty delete task <id>` | remove an open task |
+| `duty get tasks` | list open tasks from the files |
+| `duty get task <id>` | one task's metadata |
+| `duty get tracks` | per-board counts |
+| `duty get next` | first actionable task; `--claim` takes it |
+| `duty tui` | live board viewer |
