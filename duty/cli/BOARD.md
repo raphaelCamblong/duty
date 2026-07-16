@@ -19,5 +19,6 @@ Order top-to-bottom is the intended build order.
 | [T-49](T-49-reports-date-themselves.md) | Reports date themselves | done |
 | [T-51](T-51-get-tasks-follows-board-order.md) | get tasks follows board order | done |
 | [T-52](T-52-duty-watch-streaming-events-for.md) | duty watch: streaming events for orchestrators | done |
+| [T-54](T-54-scaffolding-commands-say-what-they-made.md) | Scaffolding commands say what they made | todo |
 
 Completed tasks (0) archived: [archive/](archive/).
