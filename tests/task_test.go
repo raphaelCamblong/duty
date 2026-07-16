@@ -304,6 +304,85 @@ func TestSetStatus(t *testing.T) {
 	}
 }
 
+func TestSetClaimedBy(t *testing.T) {
+	const base = "---\nid: T-01\ntitle: X\nstatus: in-progress\nblocked-by: []\n---\n\n# T-01 — X\n"
+	tests := []struct {
+		name    string
+		content string
+		claimer string
+		want    string
+		wantErr bool
+	}{
+		{
+			name:    "inserts the line right after the status line",
+			content: base,
+			claimer: "sonnet-2",
+			want:    "---\nid: T-01\ntitle: X\nstatus: in-progress\nclaimed-by: sonnet-2\nblocked-by: []\n---\n\n# T-01 — X\n",
+		},
+		{
+			name:    "replaces an existing line in place",
+			content: "---\nid: T-01\ntitle: X\nstatus: in-progress\nclaimed-by: old\nblocked-by: []\n---\n",
+			claimer: "new",
+			want:    "---\nid: T-01\ntitle: X\nstatus: in-progress\nclaimed-by: new\nblocked-by: []\n---\n",
+		},
+		{
+			name:    "an empty name removes the line",
+			content: "---\nid: T-01\ntitle: X\nstatus: done\nclaimed-by: gone\nblocked-by: []\n---\n",
+			claimer: "",
+			want:    "---\nid: T-01\ntitle: X\nstatus: done\nblocked-by: []\n---\n",
+		},
+		{
+			name:    "an empty name on an unclaimed file is a no-op",
+			content: base,
+			claimer: "",
+			want:    base,
+		},
+		{
+			name:    "a name needing YAML quoting is quoted",
+			content: base,
+			claimer: "weird: name",
+			want:    "---\nid: T-01\ntitle: X\nstatus: in-progress\nclaimed-by: \"weird: name\"\nblocked-by: []\n---\n\n# T-01 — X\n",
+		},
+		{
+			name:    "no status line to anchor to errors",
+			content: "---\nid: T-01\ntitle: X\nblocked-by: []\n---\n",
+			claimer: "sonnet-2",
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := task.SetClaimedBy([]byte(tt.content), tt.claimer)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("SetClaimedBy() = %q, want error", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("SetClaimedBy() error = %v", err)
+			}
+			if string(got) != tt.want {
+				t.Errorf("SetClaimedBy() =\n%q\nwant:\n%q", got, tt.want)
+			}
+		})
+	}
+
+	t.Run("claiming then clearing restores the bytes exactly", func(t *testing.T) {
+		claimed, err := task.SetClaimedBy([]byte(base), "sonnet-2")
+		if err != nil {
+			t.Fatalf("claim: %v", err)
+		}
+		cleared, err := task.SetClaimedBy(claimed, "")
+		if err != nil {
+			t.Fatalf("clear: %v", err)
+		}
+		if string(cleared) != base {
+			t.Errorf("round-trip =\n%q\nwant the original:\n%q", cleared, base)
+		}
+	})
+}
+
 func TestReportHeading(t *testing.T) {
 	at := time.Date(2026, 3, 4, 9, 5, 0, 0, time.UTC)
 	tests := []struct {

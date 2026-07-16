@@ -54,11 +54,16 @@ type Task struct {
 	Status string `yaml:"status"`
 	// BlockedBy lists ids of tasks that must be done first.
 	BlockedBy []string `yaml:"blocked-by"`
+	// ClaimedBy names the agent currently holding an in-progress task, empty
+	// when unclaimed. It is optional and machine-owned: absent from new-task
+	// templates, written and cleared line-surgically as claims come and go.
+	ClaimedBy string `yaml:"claimed-by,omitempty"`
 }
 
 var (
 	frontmatterRE = regexp.MustCompile(`(?s)\A---\n(.*?)\n---\n`)
 	statusLineRE  = regexp.MustCompile(`(?m)^status: \S+`)
+	claimedLineRE = regexp.MustCompile(`(?m)^claimed-by: .*\r?\n`)
 	reportHeadRE  = regexp.MustCompile(`(?m)^## Report[ \t]*\r?$`)
 )
 
@@ -136,6 +141,55 @@ func SetStatus(content []byte, status string) ([]byte, error) {
 	out = append(out, status...)
 	out = append(out, content[loc[1]:]...)
 	return out, nil
+}
+
+// SetClaimedBy writes the frontmatter claimed-by line, line-surgically: an
+// existing line is replaced in place, an absent one is inserted right after the
+// status line, and an empty name removes the line entirely. Every other byte is
+// untouched — the field is machine-owned and never re-serialized, so inserting
+// a claim then clearing it restores the file byte-for-byte. It errors on
+// content without a status line.
+func SetClaimedBy(content []byte, name string) ([]byte, error) {
+	if loc := claimedLineRE.FindIndex(content); loc != nil {
+		return spliceClaim(content, loc[0], loc[1], name), nil
+	}
+	if name == "" {
+		return content, nil
+	}
+	at, err := afterStatusLine(content)
+	if err != nil {
+		return nil, err
+	}
+	return spliceClaim(content, at, at, name), nil
+}
+
+// spliceClaim replaces content[start:end) with the claimed-by line for name, or
+// with nothing when name is empty (the removal case).
+func spliceClaim(content []byte, start, end int, name string) []byte {
+	var line string
+	if name != "" {
+		line = "claimed-by: " + yamlScalar(name) + "\n"
+	}
+	out := make([]byte, 0, len(content)-(end-start)+len(line))
+	out = append(out, content[:start]...)
+	out = append(out, line...)
+	out = append(out, content[end:]...)
+	return out
+}
+
+// afterStatusLine returns the offset just past the status line's newline, where
+// an absent claimed-by line is inserted. It errors when content has no status
+// line to anchor to.
+func afterStatusLine(content []byte) (int, error) {
+	loc := statusLineRE.FindIndex(content)
+	if loc == nil {
+		return 0, errors.New("no status line")
+	}
+	nl := bytes.IndexByte(content[loc[1]:], '\n')
+	if nl < 0 {
+		return 0, errors.New("no status line")
+	}
+	return loc[1] + nl + 1, nil
 }
 
 // ReportHeading formats the dated heading a report append opens with: at in

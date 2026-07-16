@@ -42,11 +42,14 @@ func TestTaskAgeReads(t *testing.T) {
 
 		_, agent, _ := runDuty(t, root, "get", "task", "T-01", "--agent")
 		fields := strings.Split(strings.TrimRight(agent, "\n"), "\t")
-		if len(fields) != 9 {
-			t.Fatalf("record %q: got %d fields, want 9", agent, len(fields))
+		if len(fields) != 10 {
+			t.Fatalf("record %q: got %d fields, want 10", agent, len(fields))
 		}
 		if got, want := fields[8], mtimeRFC3339(t, path); got != want {
-			t.Errorf("trailing field = %q, want the RFC3339 mtime %q", got, want)
+			t.Errorf("mtime field = %q, want the RFC3339 mtime %q", got, want)
+		}
+		if fields[9] != "" {
+			t.Errorf("claimed-by field = %q, want empty (unclaimed)", fields[9])
 		}
 	})
 
@@ -82,11 +85,14 @@ func TestTaskAgeReads(t *testing.T) {
 
 		_, agent, _ := runDuty(t, root, "get", "next", "--agent")
 		fields := strings.Split(strings.TrimRight(agent, "\n"), "\t")
-		if len(fields) != 9 {
-			t.Fatalf("record %q: got %d fields, want 9", agent, len(fields))
+		if len(fields) != 10 {
+			t.Fatalf("record %q: got %d fields, want 10", agent, len(fields))
 		}
 		if got, want := fields[8], mtimeRFC3339(t, path); got != want {
-			t.Errorf("trailing field = %q, want the RFC3339 mtime %q", got, want)
+			t.Errorf("mtime field = %q, want the RFC3339 mtime %q", got, want)
+		}
+		if fields[9] != "" {
+			t.Errorf("claimed-by field = %q, want empty (unclaimed)", fields[9])
 		}
 	})
 }

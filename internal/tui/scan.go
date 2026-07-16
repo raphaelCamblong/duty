@@ -81,6 +81,8 @@ type Row struct {
 	GatesDone, GatesTotal int
 	// BlockedBy lists the ids the task's frontmatter declares as prerequisites.
 	BlockedBy []string
+	// ClaimedBy names the agent holding an in-progress task, "" when unclaimed.
+	ClaimedBy string
 	// Drift is "" when file and board agree, else "board says <status>",
 	// "no row", "no file", or "unparsable file".
 	Drift string
@@ -183,6 +185,7 @@ func readTasks(f fsys.FS, dir string) (files map[string]Row, bad map[string][]by
 			File: e.Name(), Path: abs,
 			GatesDone: gd, GatesTotal: gt,
 			BlockedBy: t.BlockedBy,
+			ClaimedBy: t.ClaimedBy,
 			Content:   content,
 			UpdatedAt: entryModTime(e),
 		}

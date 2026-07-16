@@ -243,6 +243,9 @@ func (m Model) headerAge(r Row) string {
 // it before the blocked-by link; age is "" when the age column is hidden.
 func (t Theme) taskHeader(r Row, track, age string) string {
 	parts := []string{t.accent().Render(r.ID), t.statusStyle(r.Status).Render(r.Status)}
+	if who := claimerTag(r); who != "" {
+		parts = append(parts, t.dim().Render(who))
+	}
 	if g := gatesCell(r); g != "" {
 		parts = append(parts, t.dim().Render(g))
 	}
@@ -511,6 +514,15 @@ func gatesCell(r Row) string {
 		return ""
 	}
 	return fmt.Sprintf("%d/%d", r.GatesDone, r.GatesTotal)
+}
+
+// claimerTag is the holder name shown dim beside an in-progress row or preview
+// header, "" for any other status or an unclaimed task.
+func claimerTag(r Row) string {
+	if r.Status == task.StatusInProgress {
+		return r.ClaimedBy
+	}
+	return ""
 }
 
 // pad truncates s to w cells with an ellipsis and pads it back to exactly w.

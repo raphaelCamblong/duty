@@ -25,6 +25,7 @@ type TaskInfo struct {
 	GatesTotal int
 	Path       string    // absolute path of the task file
 	UpdatedAt  time.Time // file modification time
+	ClaimedBy  string    // agent holding an in-progress task, "" when unclaimed
 }
 
 // TrackInfo is one board's line for GetTracks: its path, title, per-status
@@ -89,9 +90,9 @@ func (a App) GetTracks(cwd, in string) ([]TrackInfo, error) {
 // order, it returns the first todo whose blocked-by are all done — archived
 // dependencies count as done. It returns nil when nothing is actionable. With
 // claim set it atomically marks that task in-progress under the tree lock and
-// returns it with the truthful post-claim status, so parallel callers each get
-// a distinct task.
-func (a App) GetNext(cwd, in string, claim bool) (*TaskInfo, error) {
+// returns it with the truthful post-claim status and as as its claimer, so
+// parallel callers each get a distinct task.
+func (a App) GetNext(cwd, in string, claim bool, as string) (*TaskInfo, error) {
 	root, err := tree.FindRoot(a.fs, cwd)
 	if err != nil {
 		return nil, err
@@ -100,7 +101,7 @@ func (a App) GetNext(cwd, in string, claim bool) (*TaskInfo, error) {
 	if err != nil || info == nil || !claim {
 		return info, err
 	}
-	return a.claim(root, cwd, in)
+	return a.claim(root, cwd, in, as)
 }
 
 // claim marks the next actionable task in-progress under the tree lock and
@@ -108,7 +109,7 @@ func (a App) GetNext(cwd, in string, claim bool) (*TaskInfo, error) {
 // the authoritative pass — is what makes parallel claims each pick a distinct
 // task; the caller's earlier unlocked scan only decides whether to lock at all,
 // so a claim with nothing to do leaves no lock-file side effect.
-func (a App) claim(root, cwd, in string) (*TaskInfo, error) {
+func (a App) claim(root, cwd, in, as string) (*TaskInfo, error) {
 	unlock, err := a.lock(root)
 	if err != nil {
 		return nil, err
@@ -118,10 +119,11 @@ func (a App) claim(root, cwd, in string) (*TaskInfo, error) {
 	if err != nil || info == nil {
 		return info, err
 	}
-	if err := a.setStatusLocked(info.Path, info.ID, task.StatusInProgress, false); err != nil {
+	if err := a.setStatusLocked(info.Path, info.ID, task.StatusInProgress, false, as); err != nil {
 		return nil, err
 	}
 	info.Status = task.StatusInProgress
+	info.ClaimedBy = as
 	return info, nil
 }
 
@@ -166,6 +168,7 @@ func buildTaskInfo(root, path string, content []byte, t task.Task, updated time.
 		GatesTotal: total,
 		Path:       path,
 		UpdatedAt:  updated,
+		ClaimedBy:  t.ClaimedBy,
 	}
 }
 

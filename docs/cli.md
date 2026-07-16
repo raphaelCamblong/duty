@@ -88,14 +88,18 @@ duty set T-07 goal < goal.md
 `duty status <id> <status>` — Set a task's status — `todo`, `in-progress`,
 `done`, or `blocked` — in both its file and its board row. Every transition is
 free except claiming a task already `in-progress`, refused so a live claim is
-never silently stolen.
+never silently stolen — the refusal names who holds it. Moving to `in-progress`
+records the claimer (`--as`, else `$DUTY_AGENT`, else unnamed); any other status
+clears the claim.
 
-```sh title="Start a task"
-duty status T-07 in-progress
+```sh title="Start a task, claiming it"
+duty status T-07 in-progress --as sonnet-2
 ```
 
 Flags:
 - `--force` — take over a task already `in-progress`.
+- `--as NAME` — record NAME as the claimer when moving to `in-progress` (falls
+  back to `$DUTY_AGENT`).
 
 ### report
 
@@ -110,6 +114,8 @@ duty report T-07 --status done < report.txt
 Flags:
 - `--status S` — also set the status (file + board) in the same write.
 - `--force` — with `--status in-progress`, take over an existing claim.
+- `--as NAME` — with `--status in-progress`, record NAME as the claimer (falls
+  back to `$DUTY_AGENT`).
 
 ### gates
 
@@ -224,7 +230,8 @@ Flags:
 ### get task
 
 `duty get task <id>` — One task's metadata, from its file (never its body): id,
-title, status, track, blocked-by, gates `n/m`, age, and path. `--section`
+title, status, track, blocked-by, gates `n/m`, age, and path — plus a
+`claimed-by:` line when an `in-progress` task names its holder. `--section`
 prints one section's body instead; `--body` prints the whole body.
 
 ```sh title="Inspect a task"
@@ -261,6 +268,7 @@ duty get next --claim
 
 Flags:
 - `--claim` — atomically mark it `in-progress` and print it, so parallel agents each get a distinct task.
+- `--as NAME` — with `--claim`, record NAME as the claimer (falls back to `$DUTY_AGENT`).
 - `--in PATH` — start from another board.
 - `--agent` — same fields as `get task`.
 
@@ -310,14 +318,15 @@ root board): the tree root is found from cwd, then the board becomes
 ## Agent output
 
 Every read takes `--agent`: stable, token-lean TSV — one record per line, no
-padding, no color, the field order part of the contract. `updated` is always
-the trailing field (the file's mtime, RFC3339) so parsers of the earlier fields
-keep working. Mutating commands stay quiet either way, except `create task`,
-which always prints its one `<id><TAB><path>` line — there's no other way to
-learn the id it picked.
+padding, no color, the field order part of the contract. New fields only ever
+append, so parsers of the earlier fields keep working: `updated` (the file's
+mtime, RFC3339) trails every record, and `get task`/`get next` append
+`claimed-by` after it. Mutating commands stay quiet either way, except `create
+task`, which always prints its one `<id><TAB><path>` line — there's no other way
+to learn the id it picked.
 
 - `get tasks` — `id  board-path  status  title  drift  updated` (drift empty, `board=<status>`, or `no-row`).
-- `get task` / `get next` — `id  track-path  status  title  gates-done  gates-total  blocked-by  path  updated` (blocked-by comma-joined; `get next` prints nothing when nothing's actionable).
+- `get task` / `get next` — `id  track-path  status  title  gates-done  gates-total  blocked-by  path  updated  claimed-by` (blocked-by comma-joined; claimed-by empty unless an in-progress task names its holder; `get next` prints nothing when nothing's actionable).
 - `get tracks` — `path  title  todo  in-progress  done  blocked  archived`.
 
 ## Cheat sheet

@@ -13,6 +13,7 @@ import (
 
 	"github.com/raphaelCamblong/duty/internal/app"
 	"github.com/raphaelCamblong/duty/internal/humanize"
+	"github.com/raphaelCamblong/duty/internal/task"
 )
 
 // ageStyle dims the trailing relative-age column of get tasks' human output.
@@ -75,7 +76,7 @@ func newGetTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 			return getTaskOut(a, cwd, args[0], section, body, agent, stdout)
 		},
 	}
-	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: id, track, status, title, gates-done, gates-total, blocked-by, path, updated")
+	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: id, track, status, title, gates-done, gates-total, blocked-by, path, updated, claimed-by")
 	cmd.Flags().StringVar(&section, "section", "", "print only this section's body")
 	cmd.Flags().BoolVar(&body, "body", false, "print the whole body below the frontmatter")
 	cmd.MarkFlagsMutuallyExclusive("body", "section")
@@ -160,6 +161,7 @@ func newGetNextCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 		agent bool
 		claim bool
 		in    string
+		as    string
 	)
 	cmd := &cobra.Command{
 		Use:     "next",
@@ -169,7 +171,7 @@ func newGetNextCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 			if len(args) != 0 {
 				return errors.New(getNextUsage)
 			}
-			info, err := a.GetNext(cwd, in, claim)
+			info, err := a.GetNext(cwd, in, claim, claimer(as))
 			if err != nil {
 				return err
 			}
@@ -187,6 +189,7 @@ func newGetNextCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output, same fields as get task")
 	cmd.Flags().BoolVar(&claim, "claim", false, "atomically mark the task in-progress and print it")
 	addInFlag(cmd, &in)
+	addAsFlag(cmd, &as)
 	return cmd
 }
 
@@ -235,6 +238,9 @@ func taskHuman(info app.TaskInfo) string {
 	kv(&b, "id", info.ID)
 	kv(&b, "title", info.Title)
 	kv(&b, "status", info.Status)
+	if info.ClaimedBy != "" {
+		kv(&b, "claimed-by", info.ClaimedBy)
+	}
 	kv(&b, "track", info.Track)
 	kv(&b, "blocked-by", blockedByHuman(info.BlockedBy))
 	kv(&b, "gates", fmt.Sprintf("%d/%d", info.GatesDone, info.GatesTotal))
@@ -259,7 +265,8 @@ func blockedByHuman(ids []string) string {
 
 // taskAgent renders info as one agent-output TSV record: id, track, status,
 // title, gates-done, gates-total, blocked-by (comma-joined), path, updated
-// (RFC3339 mtime, the trailing field so existing parsers keep working).
+// (RFC3339 mtime), and claimed-by. New fields only ever append, so parsers of
+// the earlier fields keep working; claimed-by is empty for an unclaimed task.
 func taskAgent(info app.TaskInfo) string {
 	return strings.Join([]string{
 		info.ID,
@@ -271,6 +278,7 @@ func taskAgent(info app.TaskInfo) string {
 		strings.Join(info.BlockedBy, ","),
 		info.Path,
 		info.UpdatedAt.Format(time.RFC3339),
+		info.ClaimedBy,
 	}, "\t")
 }
 
@@ -318,7 +326,7 @@ func humanLine(r app.Row) string {
 	}
 	b.WriteString(r.ID)
 	b.WriteString("  ")
-	b.WriteString(r.Status)
+	b.WriteString(statusCell(r))
 	b.WriteString("  ")
 	b.WriteString(r.Title)
 	if drift := humanDrift(r); drift != "" {
@@ -328,6 +336,15 @@ func humanLine(r app.Row) string {
 	b.WriteString("  ")
 	b.WriteString(ageStyle.Render(humanize.RelTime(r.UpdatedAt, time.Now())))
 	return b.String()
+}
+
+// statusCell renders a row's status column, appending "· <claimer>" when an
+// in-progress task names who holds it.
+func statusCell(r app.Row) string {
+	if r.Status == task.StatusInProgress && r.ClaimedBy != "" {
+		return r.Status + " · " + r.ClaimedBy
+	}
+	return r.Status
 }
 
 // humanDrift renders r's drift flag for a human, "" when in sync.

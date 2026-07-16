@@ -189,6 +189,22 @@ func grouped(cmd *cobra.Command, id string) *cobra.Command {
 	return cmd
 }
 
+// claimer resolves the agent name a claim records: the --as flag value when
+// set, else the DUTY_AGENT environment variable, else empty for an unnamed
+// claim (today's behavior — nothing breaks for callers that name no one).
+func claimer(as string) string {
+	if as = strings.TrimSpace(as); as != "" {
+		return as
+	}
+	return strings.TrimSpace(os.Getenv("DUTY_AGENT"))
+}
+
+// addAsFlag registers the --as flag on cmd, binding it to as: the agent name a
+// claim records. Shared by every command that can move a task to in-progress.
+func addAsFlag(cmd *cobra.Command, as *string) {
+	cmd.Flags().StringVar(as, "as", "", "agent name to record as the claimer (falls back to $DUTY_AGENT)")
+}
+
 // newGroupCmd builds a verb command that only dispatches to its resource
 // subcommands: invoked bare it reports usage, with an unknown resource it
 // reports the unknown command — both map to exit 2.

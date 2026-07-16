@@ -243,6 +243,9 @@ func (d compactDelegate) taskLine(r Row, selected bool, w int, idM, titleM []int
 		pad(styleMatches(r.ID, idM, boldWhen(d.theme.accent(), selected)), d.idW) + "  " +
 		pad(styleMatches(r.Title, titleM, boldWhen(lipgloss.NewStyle(), selected)), max(w-fixed, minTitleWidth)) + "  " +
 		boldWhen(d.theme.statusStyle(r.Status), selected).Render(pad(r.Status, statusColWidth))
+	if who := claimerTag(r); who != "" {
+		line += dim.Render(" · " + who)
+	}
 	if d.showGates {
 		line += "  " + dim.Render(pad(gatesCell(r), gatesColWidth))
 	}

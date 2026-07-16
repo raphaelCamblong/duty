@@ -61,6 +61,12 @@ What NOT to touch. YAGNI with teeth.
 - **Statuses:** `todo | in-progress | done | blocked`. A flat setter — any
   transition is legal. Discipline lives in the lifecycle contract below, not a
   state machine.
+- **Claim identity:** an optional `claimed-by: <name>` line names the agent
+  currently holding an `in-progress` task. It is machine-owned and absent from
+  fresh tasks — `duty get next --claim --as <name>` and `duty status <id>
+  in-progress --as <name>` write it (falling back to the `DUTY_AGENT` env var,
+  else the claim stays unnamed), and any status leaving `in-progress` clears it.
+  The field only ever means "currently holds it": one owner, no history.
 
 :::note[Who owns what]
 Frontmatter is machine-owned; the body is yours but CLI-editable. Automated sync

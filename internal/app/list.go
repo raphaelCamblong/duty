@@ -20,6 +20,7 @@ type Row struct {
 	RowMissing bool      // the board index has no row for the task
 	RowStatus  string    // the board row's status when it disagrees with the file, "" when in sync
 	UpdatedAt  time.Time // file modification time
+	ClaimedBy  string    // agent holding an in-progress task, "" when unclaimed
 }
 
 // List returns one Row per open task in the board in — a root-relative track
@@ -117,7 +118,7 @@ func (a App) taskRow(index []byte, dir, filename, boardPath string) (Row, error)
 	return Row{
 		ID: t.ID, Title: t.Title, Status: t.Status,
 		Board: boardPath, RowMissing: missing, RowStatus: rowStatus,
-		UpdatedAt: a.mtime(path),
+		UpdatedAt: a.mtime(path), ClaimedBy: t.ClaimedBy,
 	}, nil
 }
 

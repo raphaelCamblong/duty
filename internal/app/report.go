@@ -15,9 +15,10 @@ import (
 // status is non-empty it also flips the task's status (file + board row) in
 // the same locked write, the done/blocked lifecycle endings: both edits are
 // computed before either file is written, so any error leaves neither the
-// report nor the status applied. Empty (or blank) input is refused; r is
-// read only after the id resolves.
-func (a App) Report(cwd, id string, r io.Reader, status string, force bool) error {
+// report nor the status applied. Moving to in-progress records as as the
+// claimer; every other status clears the claim. Empty (or blank) input is
+// refused; r is read only after the id resolves.
+func (a App) Report(cwd, id string, r io.Reader, status string, force bool, as string) error {
 	if status != "" && !task.ValidStatus(status) {
 		return unknownStatusErr(status)
 	}
@@ -46,7 +47,7 @@ func (a App) Report(cwd, id string, r io.Reader, status string, force bool) erro
 	if err != nil {
 		return fmt.Errorf("%s: %w", taskPath, err)
 	}
-	return a.statusWrite(taskPath, id, status, force, withReport, t.Status)
+	return a.statusWrite(taskPath, id, status, force, withReport, t.Status, t.ClaimedBy, as)
 }
 
 // readNonBlank reads all of r and rejects blank input, naming the piped content
