@@ -221,9 +221,12 @@ Reads never lock and never write. Each takes `--agent` for stable TSV — see
 
 `duty get tasks` — List open tasks from the current board down, straight from
 the files: `id  status  title`, a relative age, a track prefix when not local,
-and a `⚠ board says …` flag when the board row disagrees. Rows come out in
-board order — board order is priority order, the same order `get next` walks
-— with a task whose file has no board row appended after, still flagged.
+and a `⚠ board says …` flag when the board row disagrees. A task with unmet
+dependencies also trails a dim `waits T-01,T-03` naming the ids still blocking
+it (a done or archived dependency counts as met, the same rule `get next`
+walks). Rows come out in board order — board order is priority order, the same
+order `get next` walks — with a task whose file has no board row appended
+after, still flagged.
 
 ```sh title="Only what's in progress"
 duty get tasks --status in-progress
@@ -238,8 +241,9 @@ Flags:
 
 `duty get task <id>` — One task's metadata, from its file (never its body): id,
 title, status, track, blocked-by, gates `n/m`, age, and path — plus a
-`claimed-by:` line when an `in-progress` task names its holder. `--section`
-prints one section's body instead; `--body` prints the whole body.
+`claimed-by:` line when an `in-progress` task names its holder. Each `blocked-by`
+id carries its status in parentheses (`T-01 (done)`, `T-03 (in-progress)`).
+`--section` prints one section's body instead; `--body` prints the whole body.
 
 ```sh title="Inspect a task"
 duty get task T-07

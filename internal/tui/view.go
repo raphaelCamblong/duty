@@ -238,9 +238,10 @@ func (m Model) headerAge(r Row) string {
 }
 
 // taskHeader joins a task's identity into the preview's pinned line: id ·
-// status · gates n/m · track title, then blocked-by ids, any drift badge, and
-// the relative age trailing dim. age trails last so a narrow header truncates
-// it before the blocked-by link; age is "" when the age column is hidden.
+// status · gates n/m · track title, then blocked-by ids (met ones struck
+// through), any drift badge, and the relative age trailing dim. age trails last
+// so a narrow header truncates it before the blocked-by link; age is "" when
+// the age column is hidden.
 func (t Theme) taskHeader(r Row, track, age string) string {
 	parts := []string{t.accent().Render(r.ID), t.statusStyle(r.Status).Render(r.Status)}
 	if who := claimerTag(r); who != "" {
@@ -254,7 +255,7 @@ func (t Theme) taskHeader(r Row, track, age string) string {
 	}
 	line := strings.Join(parts, t.dim().Render(" · "))
 	if len(r.BlockedBy) > 0 {
-		line += "  " + t.dim().Render("blocked-by "+strings.Join(r.BlockedBy, ", "))
+		line += "  " + t.blockedByCell(r)
 	}
 	if r.Drift != "" {
 		line += "  " + t.alert().Render("⚠ "+r.Drift)
@@ -263,6 +264,45 @@ func (t Theme) taskHeader(r Row, track, age string) string {
 		line += "  " + t.dim().Render(age)
 	}
 	return line
+}
+
+// blockedByCell renders the preview header's dim "blocked-by <ids>" segment,
+// striking through every met prerequisite so a reader sees at a glance which
+// ids still block the task. r.Waits (from the scan) names the unmet ones; the
+// label and first-listed unmet id stay contiguous, base-styled, so the segment
+// reads plainly when nothing is met yet.
+func (t Theme) blockedByCell(r Row) string {
+	label := "blocked-by "
+	s := label + strings.Join(r.BlockedBy, ", ")
+	met := metRunes(len(label), r.BlockedBy, r.Waits)
+	if len(met) == 0 {
+		return t.dim().Render(s)
+	}
+	return lipgloss.StyleRunes(s, met, t.dim().Strikethrough(true), t.dim())
+}
+
+// metRunes lists, within a "blocked-by <ids>" string, the rune indices of the
+// met prerequisites — those absent from waits. ids and the label are ASCII, so
+// rune index equals byte offset.
+func metRunes(labelLen int, ids, waits []string) []int {
+	unmet := make(map[string]bool, len(waits))
+	for _, id := range waits {
+		unmet[id] = true
+	}
+	var runes []int
+	pos := labelLen
+	for i, id := range ids {
+		if i > 0 {
+			pos += len(", ")
+		}
+		if !unmet[id] {
+			for k := 0; k < len(id); k++ {
+				runes = append(runes, pos+k)
+			}
+		}
+		pos += len(id)
+	}
+	return runes
 }
 
 // previewContent renders the open subject from the snapshot alone: a task's
@@ -523,6 +563,15 @@ func claimerTag(r Row) string {
 		return r.ClaimedBy
 	}
 	return ""
+}
+
+// waitsTag is the dim "waits T-01,T-03" annotation for a row with unmet
+// dependencies, "" when every blocked-by prerequisite is already met.
+func waitsTag(r Row) string {
+	if len(r.Waits) == 0 {
+		return ""
+	}
+	return "waits " + strings.Join(r.Waits, ",")
 }
 
 // pad truncates s to w cells with an ellipsis and pads it back to exactly w.

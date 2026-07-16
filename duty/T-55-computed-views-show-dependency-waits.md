@@ -1,7 +1,7 @@
 ---
 id: T-55
 title: Computed views show dependency waits
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -40,10 +40,48 @@ BOARD.md format changes (decision above); auto-status flips (blocked-by
 stays advisory, per the lifecycle contract); new TSV fields.
 
 ## Gates
-- [ ] Fixture with a dependency chain: `get tasks` shows waits on exactly the
+- [x] Fixture with a dependency chain: `get tasks` shows waits on exactly the
   unmet tasks; annotation disappears the moment the dependency is done
   (test through cli.Run).
-- [ ] TUI frame shows the dim wait annotation (recorded in report);
+- [x] TUI frame shows the dim wait annotation (recorded in report);
   TestStartupPerformance green.
-- [ ] One predicate implementation (grep — no duplicated unmet-deps logic);
+- [x] One predicate implementation (grep — no duplicated unmet-deps logic);
   `just check` green; docs updated.
+
+## Report
+
+### 2026-07-16 14:47 — done
+
+Computed views now show dependency waits; BOARD.md untouched (recorded rejection honored).
+
+One predicate: `app.UnmetDeps(deps, statusOf)` in internal/app/get.go with the
+`depMet` (done||archived) rule — the sole unmet-deps logic. get next's actionable
+walk, get tasks (List), and the TUI scan all route through it; the two callers
+differ only in the status source (file reads vs the snapshot), never the rule.
+
+Files:
+- internal/app/get.go — UnmetDeps + depMet + depStatus/depStatuses; Dep type,
+  TaskInfo.Deps; GetTask/GetNext fill per-dep statuses; actionable uses unmetDeps.
+- internal/app/list.go — Row.Waits, threaded the tree root through boardRows/taskRow.
+- internal/cli/get.go — get tasks trailing dim `waits T-01,T-03`; get task
+  blocked-by annotates each id `(status)`; --agent TSV unchanged.
+- internal/tui/scan.go — annotateWaits pass (snapshot-only, no extra reads;
+  archived/done dep absent from the open set counts as met); Row.Waits.
+- internal/tui/entry.go — task row dim `waits …` beside the status.
+- internal/tui/view.go — waitsTag; preview header strikes met blocked-by ids
+  (StyleRunes), keeping the "blocked-by <id>" text contiguous.
+- docs/tasks.md, docs/cli.md, docs/tui.md — annotations documented.
+
+Tests (tests/, black-box via cli.Run + a TUI frame):
+- cli_waits_test.go — TestGetTasksWaits (waits on exactly the unmet task,
+  shrinks then vanishes as deps finish), TestGetTaskBlockedByStatuses (per-dep
+  status annotation; --agent field 7 stays plain T-01,T-02).
+- tui_waits_test.go — TestTUIWaitAnnotation (scan marks only unmet deps; frame
+  shows the annotation), TestTUIArchivedDepCountsMet (archived dep met, no reads).
+
+Gates: `just check` green (lint 0 issues incl. funlen 35). TestStartupPerformance
+green — 1.99ms best of 5, the wait pass reuses the already-parsed snapshot.
+
+Note: the TUI treats a truly-missing blocked-by id as met (it can't see archived
+files without extra reads); the CLI, which resolves files, flags it `(missing)`
+and as an unmet wait. This divergence is confined to a typo'd dep id.

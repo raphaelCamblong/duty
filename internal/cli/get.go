@@ -16,7 +16,8 @@ import (
 	"github.com/raphaelCamblong/duty/internal/task"
 )
 
-// ageStyle dims the trailing relative-age column of get tasks' human output.
+// ageStyle dims the trailing columns of get tasks' human output: the
+// relative-age column and the unmet-dependency "waits" annotation.
 var ageStyle = lipgloss.NewStyle().Faint(true)
 
 const (
@@ -242,7 +243,7 @@ func taskHuman(info app.TaskInfo) string {
 		kv(&b, "claimed-by", info.ClaimedBy)
 	}
 	kv(&b, "track", info.Track)
-	kv(&b, "blocked-by", blockedByHuman(info.BlockedBy))
+	kv(&b, "blocked-by", blockedByHuman(info.Deps))
 	kv(&b, "gates", fmt.Sprintf("%d/%d", info.GatesDone, info.GatesTotal))
 	kv(&b, "updated", humanize.RelTime(info.UpdatedAt, time.Now()))
 	kv(&b, "path", info.Path)
@@ -255,12 +256,17 @@ func kv(b *strings.Builder, key, value string) {
 	fmt.Fprintf(b, "%-*s %s\n", taskKeyWidth, key+":", value)
 }
 
-// blockedByHuman joins ids with ", ", or "none" when the list is empty.
-func blockedByHuman(ids []string) string {
-	if len(ids) == 0 {
+// blockedByHuman joins each prerequisite as "id (status)" with ", ", or "none"
+// when the task depends on nothing.
+func blockedByHuman(deps []app.Dep) string {
+	if len(deps) == 0 {
 		return "none"
 	}
-	return strings.Join(ids, ", ")
+	parts := make([]string, len(deps))
+	for i, d := range deps {
+		parts[i] = d.ID + " (" + d.Status + ")"
+	}
+	return strings.Join(parts, ", ")
 }
 
 // taskAgent renders info as one agent-output TSV record: id, track, status,
@@ -335,7 +341,20 @@ func humanLine(r app.Row) string {
 	}
 	b.WriteString("  ")
 	b.WriteString(ageStyle.Render(humanize.RelTime(r.UpdatedAt, time.Now())))
+	if wait := waitsCell(r); wait != "" {
+		b.WriteString("  ")
+		b.WriteString(ageStyle.Render(wait))
+	}
 	return b.String()
+}
+
+// waitsCell renders a row's unmet-dependency annotation, "" when the task is
+// actionable — every blocked-by id already done.
+func waitsCell(r app.Row) string {
+	if len(r.Waits) == 0 {
+		return ""
+	}
+	return "waits " + strings.Join(r.Waits, ",")
 }
 
 // statusCell renders a row's status column, appending "· <claimer>" when an

@@ -246,6 +246,9 @@ func (d compactDelegate) taskLine(r Row, selected bool, w int, idM, titleM []int
 	if who := claimerTag(r); who != "" {
 		line += dim.Render(" · " + who)
 	}
+	if wait := waitsTag(r); wait != "" {
+		line += "  " + dim.Render(wait)
+	}
 	if d.showGates {
 		line += "  " + dim.Render(pad(gatesCell(r), gatesColWidth))
 	}

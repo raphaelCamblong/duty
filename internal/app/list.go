@@ -21,6 +21,7 @@ type Row struct {
 	RowStatus  string    // the board row's status when it disagrees with the file, "" when in sync
 	UpdatedAt  time.Time // file modification time
 	ClaimedBy  string    // agent holding an in-progress task, "" when unclaimed
+	Waits      []string  // blocked-by ids not yet done, "" when the task is actionable
 }
 
 // List returns one Row per open task in the board in — a root-relative track
@@ -32,13 +33,17 @@ func (a App) List(cwd, status, in string) ([]Row, error) {
 		return nil, unknownStatusErr(status)
 	}
 
+	root, err := tree.FindRoot(a.fs, cwd)
+	if err != nil {
+		return nil, err
+	}
 	boardDir, boards, err := a.walkBoards(cwd, in)
 	if err != nil {
 		return nil, err
 	}
 	var rows []Row
 	for _, b := range boards {
-		boardRows, err := a.boardRows(boardDir, b)
+		boardRows, err := a.boardRows(root, boardDir, b)
 		if err != nil {
 			return nil, err
 		}
@@ -54,11 +59,12 @@ func (a App) List(cwd, status, in string) ([]Row, error) {
 
 // boardRows returns one Row per task file directly in board b (its
 // tracks are separate entries in the caller's board list), tagged with
-// its path relative to root — the board list started from. Rows come out
+// its path relative to listDir — the board list started from. Rows come out
 // in board order, mirroring nextInBoard; a file with no board row (drift)
-// is appended after, still flagged.
-func (a App) boardRows(root, b string) ([]Row, error) {
-	boardPath := relBoard(root, b)
+// is appended after, still flagged. treeRoot resolves each row's blocked-by
+// ids for its wait state.
+func (a App) boardRows(treeRoot, listDir, b string) ([]Row, error) {
+	boardPath := relBoard(listDir, b)
 	index, err := a.fs.ReadFile(filepath.Join(b, names.BoardFile))
 	if err != nil {
 		return nil, err
@@ -69,7 +75,7 @@ func (a App) boardRows(root, b string) ([]Row, error) {
 	}
 	rows := make([]Row, 0, len(files))
 	for _, name := range boardOrder(index, files) {
-		row, err := a.taskRow(index, b, name, boardPath)
+		row, err := a.taskRow(treeRoot, index, b, name, boardPath)
 		if err != nil {
 			return nil, err
 		}
@@ -105,10 +111,14 @@ func boardOrder(index []byte, files []string) []string {
 }
 
 // taskRow assembles filename's Row from its file in dir, its drift computed
-// against its row in the board index.
-func (a App) taskRow(index []byte, dir, filename, boardPath string) (Row, error) {
+// against its row in the board index and its wait state against treeRoot.
+func (a App) taskRow(treeRoot string, index []byte, dir, filename, boardPath string) (Row, error) {
 	path := filepath.Join(dir, filename)
 	t, _, err := a.readTask(path)
+	if err != nil {
+		return Row{}, err
+	}
+	waits, err := a.unmetDeps(treeRoot, t.BlockedBy)
 	if err != nil {
 		return Row{}, err
 	}
@@ -117,6 +127,7 @@ func (a App) taskRow(index []byte, dir, filename, boardPath string) (Row, error)
 	return Row{
 		ID: t.ID, Title: t.Title, Status: t.Status,
 		Board: boardPath, RowMissing: missing, RowStatus: rowStatus,
+		Waits:     waits,
 		UpdatedAt: a.mtime(path), ClaimedBy: t.ClaimedBy,
 	}, nil
 }

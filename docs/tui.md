@@ -14,7 +14,8 @@ nothing renders a task until you open one.
 - **List** — sub-tracks first, under a "Tracks" header, each with a
   right-aligned bar of its subtree; then tasks under their section headers,
   each showing id, title, colored status, gates `2/3`, and a relative age. A
-  `⚠` marks a row whose board status disagrees with the file. Rows group by
+  task with unmet dependencies shows a dim `waits T-01,T-03` beside its status;
+  a `⚠` marks a row whose board status disagrees with the file. Rows group by
   status by default (in-progress first); the age column always shows, the gate
   column hides below 100 columns.
 - **Preview** — opens on the right when you open a task. Below ~80 columns it
@@ -32,8 +33,9 @@ scrolls whatever's under it.
 
 `enter` on a task splits the view and renders the file on the right, focus on
 the preview; `esc` closes it. The preview is topped by a pinned header — id,
-status, gates, track, age. `enter` on a track descends into it instead; with a
-preview already open it shows the track's summary card.
+status, gates, track, age, and any `blocked-by` ids (met ones struck through).
+`enter` on a track descends into it instead; with a preview already open it
+shows the track's summary card.
 
 ![A task open in the split preview](/screens/task-preview.png)
 

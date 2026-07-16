@@ -97,3 +97,11 @@ Respect `blocked-by`: don't start a task whose dependencies aren't `done`, and
 never guess past a blocker. If a task turns out to be two, finish the stated
 scope and name the split in the report — don't expand.
 :::
+
+`blocked-by` is advisory metadata, never a computed status — but the read views
+make the wait visible so you can tell actionable from waiting at a glance. A
+task with unmet dependencies gains a dim `waits T-01,T-03` in `duty get tasks`
+and in the TUI (a done or archived dependency counts as met, the same rule
+`get next` walks); `duty get task` annotates each `blocked-by` id with its
+status (`T-01 (done)`, `T-03 (in-progress)`). The `BOARD.md` files stay
+untouched — the richness lives in the computed views, not the index.

@@ -26,6 +26,15 @@ type TaskInfo struct {
 	Path       string    // absolute path of the task file
 	UpdatedAt  time.Time // file modification time
 	ClaimedBy  string    // agent holding an in-progress task, "" when unclaimed
+	Deps       []Dep     // blocked-by ids paired with their computed status
+}
+
+// Dep is one blocked-by prerequisite with the status duty computes for it:
+// a lifecycle status for an open task, "archived" for an archived one, or
+// "missing" when the id resolves to no task.
+type Dep struct {
+	ID     string
+	Status string
 }
 
 // TrackInfo is one board's line for GetTracks: its path, title, per-status
@@ -47,7 +56,14 @@ func (a App) GetTask(cwd, id string) (TaskInfo, error) {
 	if err != nil {
 		return TaskInfo{}, err
 	}
-	return a.taskInfo(root, path)
+	info, err := a.taskInfo(root, path)
+	if err != nil {
+		return TaskInfo{}, err
+	}
+	if err := a.fillDeps(root, &info); err != nil {
+		return TaskInfo{}, err
+	}
+	return info, nil
 }
 
 // Body returns the whole markdown body below the frontmatter of the task id
@@ -98,10 +114,19 @@ func (a App) GetNext(cwd, in string, claim bool, as string) (*TaskInfo, error) {
 		return nil, err
 	}
 	info, err := a.nextActionable(root, cwd, in)
-	if err != nil || info == nil || !claim {
+	if err != nil || info == nil {
 		return info, err
 	}
-	return a.claim(root, cwd, in, as)
+	if claim {
+		info, err = a.claim(root, cwd, in, as)
+		if err != nil || info == nil {
+			return info, err
+		}
+	}
+	if err := a.fillDeps(root, info); err != nil {
+		return nil, err
+	}
+	return info, nil
 }
 
 // claim marks the next actionable task in-progress under the tree lock and
@@ -249,47 +274,97 @@ func (a App) actionable(root, b, filename string) (*TaskInfo, error) {
 	if t.Status != task.StatusTodo {
 		return nil, nil
 	}
-	ready, err := a.depsDone(root, t.BlockedBy)
+	waits, err := a.unmetDeps(root, t.BlockedBy)
 	if err != nil {
 		return nil, err
 	}
-	if !ready {
+	if len(waits) > 0 {
 		return nil, nil
 	}
 	info := buildTaskInfo(root, path, content, t, a.mtime(path))
 	return &info, nil
 }
 
-// depsDone reports whether every id in deps resolves to a done task.
-func (a App) depsDone(root string, deps []string) (bool, error) {
+// statusArchived and statusMissing are the computed dependency statuses for a
+// blocked-by id that resolves to an archived task, or to no task at all;
+// neither is a lifecycle status, so neither is ever written to a file.
+const (
+	statusArchived = "archived"
+	statusMissing  = "missing"
+)
+
+// UnmetDeps returns the ids in deps that are not yet satisfied, each dep's
+// status read through statusOf: a dep counts as met when its status is done or
+// archived, unmet otherwise (a task still in flight, or one statusOf reports as
+// missing). It is the single wait-state rule behind get next's actionable walk,
+// get tasks' waits column, and the TUI's wait annotation.
+func UnmetDeps(deps []string, statusOf func(id string) (string, error)) ([]string, error) {
+	var unmet []string
 	for _, id := range deps {
-		done, err := a.depDone(root, id)
+		s, err := statusOf(id)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
-		if !done {
-			return false, nil
+		if !depMet(s) {
+			unmet = append(unmet, id)
 		}
 	}
-	return true, nil
+	return unmet, nil
 }
 
-// depDone reports whether dependency id counts as satisfied: a done open task
-// or any archived task. An id that resolves nowhere counts as not done,
-// leaving the dependent task blocked.
-func (a App) depDone(root, id string) (bool, error) {
+// depMet reports whether a computed dependency status counts as satisfied:
+// done, or archived — archived prerequisites are treated as done.
+func depMet(status string) bool {
+	return status == task.StatusDone || status == statusArchived
+}
+
+// unmetDeps returns deps' unmet ids, reading each dep's status from the files.
+func (a App) unmetDeps(root string, deps []string) ([]string, error) {
+	return UnmetDeps(deps, func(id string) (string, error) {
+		return a.depStatus(root, id)
+	})
+}
+
+// depStatuses pairs each blocked-by id with its computed status, in order.
+func (a App) depStatuses(root string, deps []string) ([]Dep, error) {
+	out := make([]Dep, 0, len(deps))
+	for _, id := range deps {
+		s, err := a.depStatus(root, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, Dep{ID: id, Status: s})
+	}
+	return out, nil
+}
+
+// fillDeps resolves info's blocked-by ids to their statuses and stores them.
+func (a App) fillDeps(root string, info *TaskInfo) error {
+	deps, err := a.depStatuses(root, info.BlockedBy)
+	if err != nil {
+		return err
+	}
+	info.Deps = deps
+	return nil
+}
+
+// depStatus resolves dependency id to the status duty computes for it: the open
+// task's lifecycle status, statusArchived for an archived task, or
+// statusMissing when the id resolves to no task. It is the one source the wait
+// computation and get task's annotations both read.
+func (a App) depStatus(root, id string) (string, error) {
 	path, err := tree.ResolveTask(a.fs, root, id)
 	if err != nil {
 		if errors.Is(err, tree.ErrArchived) {
-			return true, nil
+			return statusArchived, nil
 		}
-		return false, nil
+		return statusMissing, nil
 	}
 	t, _, err := a.readTask(path)
 	if err != nil {
-		return false, err
+		return "", err
 	}
-	return t.Status == task.StatusDone, nil
+	return t.Status, nil
 }
 
 // taskStatuses returns the file status of every task filed directly in dir.

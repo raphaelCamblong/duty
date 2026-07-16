@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/raphaelCamblong/duty/internal/app"
 	"github.com/raphaelCamblong/duty/internal/board"
 	"github.com/raphaelCamblong/duty/internal/fsys"
 	"github.com/raphaelCamblong/duty/internal/names"
@@ -81,6 +82,10 @@ type Row struct {
 	GatesDone, GatesTotal int
 	// BlockedBy lists the ids the task's frontmatter declares as prerequisites.
 	BlockedBy []string
+	// Waits lists the BlockedBy ids not yet met — the wait state the scan
+	// computes from the snapshot's own statuses; empty when the task is
+	// actionable.
+	Waits []string
 	// ClaimedBy names the agent holding an in-progress task, "" when unclaimed.
 	ClaimedBy string
 	// Drift is "" when file and board agree, else "board says <status>",
@@ -115,7 +120,41 @@ func Scan(f fsys.FS, root string) (Snapshot, error) {
 		paths = append(paths, path)
 	}
 	link(snap, paths)
+	annotateWaits(snap)
 	return snap, nil
+}
+
+// annotateWaits fills each task row's Waits from the snapshot's own statuses:
+// the blocked-by ids not yet met. It reads no files — done and archived deps
+// have left the open set, so a dep absent from the snapshot counts as met,
+// keeping this pass O(rows) so startup stays fast. A blocked-by that resolves
+// nowhere is thus treated as met here (unlike the CLI, which can see archived
+// files and flags a truly-missing id); the common archived case matches.
+func annotateWaits(snap Snapshot) {
+	status := make(map[string]string)
+	for _, b := range snap.Boards {
+		for _, s := range b.Sections {
+			for _, r := range s.Rows {
+				if r.ID != "" {
+					status[r.ID] = r.Status
+				}
+			}
+		}
+	}
+	statusOf := func(id string) (string, error) {
+		if s, ok := status[id]; ok {
+			return s, nil
+		}
+		return task.StatusDone, nil
+	}
+	for _, b := range snap.Boards {
+		for si := range b.Sections {
+			for ri := range b.Sections[si].Rows {
+				r := &b.Sections[si].Rows[ri]
+				r.Waits, _ = app.UnmetDeps(r.BlockedBy, statusOf)
+			}
+		}
+	}
 }
 
 // scanBoard reads one board directory: its index for title and row order,
