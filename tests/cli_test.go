@@ -24,13 +24,15 @@ func runDuty(t *testing.T, dir string, args ...string) (code int, stdout, stderr
 }
 
 // initDuty bootstraps a fresh duty tree in a t.TempDir() via the init command
-// and returns the tree root (the duty/ directory).
+// and returns the tree root (the duty/ directory). init prints where it
+// landed, so only code and stderr are pinned here; TestInit covers the
+// printed line itself.
 func initDuty(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	code, stdout, stderr := runDuty(t, dir, "init")
-	if code != 0 || stdout != "" || stderr != "" {
-		t.Fatalf("init: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	code, _, stderr := runDuty(t, dir, "init")
+	if code != 0 || stderr != "" {
+		t.Fatalf("init: code=%d stderr=%q", code, stderr)
 	}
 	return filepath.Join(dir, "duty")
 }
@@ -122,7 +124,7 @@ func TestRunDispatch(t *testing.T) {
 }
 
 func TestInit(t *testing.T) {
-	t.Run("bootstraps the skeleton tree quietly", func(t *testing.T) {
+	t.Run("bootstraps the skeleton tree", func(t *testing.T) {
 		root := initDuty(t)
 		if got, want := readText(t, filepath.Join(root, "BOARD.md")), string(board.Render("Board")); got != want {
 			t.Errorf("BOARD.md = %q, want %q", got, want)
@@ -136,6 +138,18 @@ func TestInit(t *testing.T) {
 		info, err := os.Stat(filepath.Join(root, "archive"))
 		if err != nil || !info.IsDir() {
 			t.Errorf("archive/ not a directory: %v", err)
+		}
+	})
+
+	t.Run("prints where it landed", func(t *testing.T) {
+		dir := t.TempDir()
+		code, stdout, stderr := runDuty(t, dir, "init")
+		if code != 0 || stderr != "" {
+			t.Fatalf("init: code=%d stderr=%q", code, stderr)
+		}
+		want := "initialized duty tree in " + filepath.Join(dir, "duty") + "\n"
+		if stdout != want {
+			t.Errorf("stdout = %q, want %q", stdout, want)
 		}
 	})
 
@@ -337,13 +351,16 @@ func TestCreate(t *testing.T) {
 }
 
 func TestCreateTrack(t *testing.T) {
-	t.Run("creates skeleton and parent bullet quietly", func(t *testing.T) {
+	t.Run("creates skeleton and parent bullet, printing name and path", func(t *testing.T) {
 		root := initDuty(t)
 		code, stdout, stderr := runDuty(t, root, "create", "track", "backend", "--title", "Backend")
-		if code != 0 || stdout != "" || stderr != "" {
-			t.Fatalf("create track: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+		if code != 0 || stderr != "" {
+			t.Fatalf("create track: code=%d stderr=%q", code, stderr)
 		}
 		sub := filepath.Join(root, "backend")
+		if want := "backend\t" + sub + "\n"; stdout != want {
+			t.Errorf("stdout = %q, want %q", stdout, want)
+		}
 		if got, want := readText(t, filepath.Join(sub, "BOARD.md")), string(board.Render("Backend")); got != want {
 			t.Errorf("sub BOARD.md = %q, want %q", got, want)
 		}

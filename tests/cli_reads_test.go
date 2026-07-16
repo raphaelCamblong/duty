@@ -53,7 +53,7 @@ func TestGetTask(t *testing.T) {
 	t.Run("resolves a sub-track task and lists its blocked-by", func(t *testing.T) {
 		root := initDuty(t)
 		createTask(t, root, "Dep")
-		mustRun(t, root, "create", "track", "backend")
+		mustRunOut(t, root, "create", "track", "backend")
 		sub := filepath.Join(root, "backend")
 		if code, _, stderr := runDuty(t, sub, "create", "task", "Blocked task", "--blocked-by", "T-01"); code != 0 {
 			t.Fatalf("create: code=%d stderr=%q", code, stderr)
@@ -147,7 +147,7 @@ func TestGetTracks(t *testing.T) {
 		mustRun(t, root, "status", "T-02", "in-progress")
 		createTask(t, root, "Three")
 		mustRun(t, root, "status", "T-03", "blocked")
-		mustRun(t, root, "create", "track", "backend", "--title", "Backend")
+		mustRunOut(t, root, "create", "track", "backend", "--title", "Backend")
 		sub := filepath.Join(root, "backend")
 		createTask(t, sub, "B one")
 		createTask(t, sub, "B two")
@@ -200,7 +200,7 @@ func TestGetTracks(t *testing.T) {
 
 	t.Run("scoped to the current board, which reads as \".\"", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "create", "track", "backend")
+		mustRunOut(t, root, "create", "track", "backend")
 		sub := filepath.Join(root, "backend")
 		createTask(t, sub, "B one")
 		code, stdout, stderr := runDuty(t, sub, "get", "tracks", "--agent")
@@ -247,7 +247,7 @@ func TestGetNext(t *testing.T) {
 
 	t.Run("board position is priority, not the id order", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "create", "track", "backend")
+		mustRunOut(t, root, "create", "track", "backend")
 		sub := filepath.Join(root, "backend")
 		createTask(t, sub, "Backend task")
 		createTask(t, root, "Root task")

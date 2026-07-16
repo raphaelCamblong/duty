@@ -25,7 +25,7 @@ func newCreateCmd(a app.App, cwd string, stdin io.Reader, stdout io.Writer) *cob
 	cmd := newGroupCmd("create", "create a task or a track", createUsage, createExample)
 	cmd.AddCommand(
 		newCreateTaskCmd(a, cwd, stdin, stdout),
-		newCreateTrackCmd(a, cwd),
+		newCreateTrackCmd(a, cwd, stdout),
 	)
 	return cmd
 }
@@ -71,8 +71,9 @@ func newCreateTaskCmd(a app.App, cwd string, stdin io.Reader, stdout io.Writer) 
 }
 
 // newCreateTrackCmd builds create track: new track (a folder with its own
-// board) under the current one.
-func newCreateTrackCmd(a app.App, cwd string) *cobra.Command {
+// board) under the current one, printing "<name>\t<path>" — the confirmation
+// symmetric with create task.
+func newCreateTrackCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var (
 		title string
 		in    string
@@ -85,7 +86,12 @@ func newCreateTrackCmd(a app.App, cwd string) *cobra.Command {
 			if len(args) != 1 {
 				return errors.New(createTrackUsage)
 			}
-			return a.CreateTrack(cwd, args[0], title, in)
+			path, err := a.CreateTrack(cwd, args[0], title, in)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(stdout, "%s\t%s\n", args[0], path)
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&title, "title", "", "track title (default: the name)")

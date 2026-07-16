@@ -140,7 +140,7 @@ func TestStatus(t *testing.T) {
 
 	t.Run("resolves ids anywhere in the tree", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "create", "track", "backend")
+		mustRunOut(t, root, "create", "track", "backend")
 		sub := filepath.Join(root, "backend")
 		name := createTask(t, sub, "Backend task")
 		mustRun(t, root, "status", "T-01", "done")
@@ -381,7 +381,7 @@ func TestReportDatesEachAppend(t *testing.T) {
 func TestMoveTrack(t *testing.T) {
 	t.Run("renames the file and swaps rows, preserving status", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "create", "track", "backend")
+		mustRunOut(t, root, "create", "track", "backend")
 		name := createTask(t, root, "Move me")
 		mustRun(t, root, "status", "T-01", "in-progress")
 		mustRun(t, root, "move", "T-01", "--track", "backend")
@@ -408,7 +408,7 @@ func TestMoveTrack(t *testing.T) {
 
 	t.Run("move there and back restores both boards and the file", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "create", "track", "backend")
+		mustRunOut(t, root, "create", "track", "backend")
 		name := createTask(t, root, "Round trip")
 		rootBoard := readText(t, filepath.Join(root, "BOARD.md"))
 		subBoard := readText(t, filepath.Join(root, "backend", "BOARD.md"))
@@ -430,7 +430,7 @@ func TestMoveTrack(t *testing.T) {
 
 	t.Run("section flag places the row and prunes the source section", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "create", "track", "backend")
+		mustRunOut(t, root, "create", "track", "backend")
 		name := createTask(t, root, "Sectioned")
 		mustRun(t, root, "move", "T-01", "--section", "Later")
 		mustRun(t, root, "move", "T-01", "--track", "backend", "--section", "Doing")
@@ -450,8 +450,8 @@ func TestMoveTrack(t *testing.T) {
 
 	t.Run("moves into nested boards by path", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "create", "track", "backend")
-		mustRun(t, filepath.Join(root, "backend"), "create", "track", "api")
+		mustRunOut(t, root, "create", "track", "backend")
+		mustRunOut(t, filepath.Join(root, "backend"), "create", "track", "api")
 		name := createTask(t, root, "Deep task")
 		mustRun(t, root, "move", "T-01", "--track", "backend/api")
 		if _, err := os.Stat(filepath.Join(root, "backend", "api", name)); err != nil {
@@ -565,7 +565,7 @@ func TestMoveReorder(t *testing.T) {
 
 	t.Run("position combines with a track move", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "create", "track", "backend")
+		mustRunOut(t, root, "create", "track", "backend")
 		sub := filepath.Join(root, "backend")
 		createTask(t, sub, "Resident")
 		createTask(t, root, "Incoming")
@@ -579,7 +579,7 @@ func TestMoveReorder(t *testing.T) {
 
 	t.Run("rejects a reference in another board", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "create", "track", "backend")
+		mustRunOut(t, root, "create", "track", "backend")
 		createTask(t, root, "Here")
 		createTask(t, filepath.Join(root, "backend"), "There")
 		before := readText(t, filepath.Join(root, "BOARD.md"))

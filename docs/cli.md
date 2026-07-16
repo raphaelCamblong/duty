@@ -5,9 +5,13 @@ resource (`task` / `track`); every other command is a bare verb. Whatever
 writes keeps the task file and its board row in sync in one atomic step, under a
 tree-wide lock — so a swarm of agents never corrupts a board.
 
-It's quiet when it works. An error is one lowercase line on stderr and a
-non-zero exit; a missing or unknown command exits `2` and suggests the closest
-match. `duty --version` prints the build version.
+It's quiet when it works — with one exception: scaffolding commands (`init`,
+`create track`, `skill install`) print what they made and where, since that's
+the only way to learn it; every lifecycle mutation (`status`, `report`,
+`gates`, `move`, `archive`, `delete`, `set`) stays exactly as silent as before.
+An error is one lowercase line on stderr and a non-zero exit; a missing or
+unknown command exits `2` and suggests the closest match. `duty --version`
+prints the build version.
 
 The commands below are grouped by role — the same four groups `duty --help`
 shows.
@@ -26,10 +30,11 @@ between a file and its board row is surfaced, never silently healed.
 
 `duty init [title]` — Scaffold a `duty/` tree right here: a `BOARD.md`, the
 convention `README.md`, and an `archive/`. Refuses if you're already inside a
-tree.
+tree. Prints where it landed, git-init style.
 
 ```sh title="Start a board"
 duty init "Q3 roadmap"
+# initialized duty tree in /abs/path/to/duty
 ```
 
 ### create task
@@ -60,10 +65,12 @@ markdown, not JSON — it splices byte-for-byte.
 
 `duty create track <name>` — Make a nested track: a folder with its own
 `BOARD.md` and `archive/`, and a bullet appended to the parent's board. The
-name must be `[a-z0-9-]+`.
+name must be `[a-z0-9-]+`. Prints `<name><TAB><path>`, symmetric with `create
+task`.
 
 ```sh title="A backend track"
 duty create track backend --title "Backend work"
+# backend	/abs/path/to/duty/backend
 ```
 
 Flags:
@@ -323,10 +330,13 @@ install <harness>` writes it where a harness will load it:
 Run `duty skill install` with no harness on a terminal and it prompts you to
 pick one. Both `skill` and `skill install` fetch the latest text from
 `https://duty-cli.xyz/skill.md` and fall back silently to the copy baked into
-the binary, so the skill can improve without a new release.
+the binary, so the skill can improve without a new release. `install` prints
+`installed <target> skill → <path>` — the same line whether the content came
+from the remote or the embedded fallback.
 
 ```sh title="Install the skill for Claude Code"
 duty skill install claude
+# installed claude skill → /abs/path/to/.claude/skills/duty/SKILL.md
 ```
 
 Flags:
@@ -347,9 +357,11 @@ Every read takes `--agent`: stable, token-lean TSV — one record per line, no
 padding, no color, the field order part of the contract. New fields only ever
 append, so parsers of the earlier fields keep working: `updated` (the file's
 mtime, RFC3339) trails every record, and `get task`/`get next` append
-`claimed-by` after it. Mutating commands stay quiet either way, except `create
-task`, which always prints its one `<id><TAB><path>` line — there's no other way
-to learn the id it picked.
+`claimed-by` after it. Lifecycle-mutating commands (`status`, `report`,
+`gates`, `move`, `archive`, `delete`, `set`) stay quiet either way; the
+scaffolding commands (`init`, `create task`, `create track`, `skill install`)
+always print their one confirmation line — there's no other way to learn what
+they made.
 
 - `get tasks` — `id  board-path  status  title  drift  updated` (drift empty, `board=<status>`, or `no-row`).
 - `get task` / `get next` — `id  track-path  status  title  gates-done  gates-total  blocked-by  path  updated  claimed-by` (blocked-by comma-joined; claimed-by empty unless an in-progress task names its holder; `get next` prints nothing when nothing's actionable).

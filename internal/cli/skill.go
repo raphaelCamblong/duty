@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 
@@ -38,14 +39,16 @@ func newSkillCmd(a app.App, f fetch.Fetcher, cwd, home string, stdout io.Writer)
 		},
 	}
 	cmd.PersistentFlags().BoolVar(&offline, "offline", false, "skip the network fetch; use the embedded copy")
-	cmd.AddCommand(newSkillInstallCmd(a, f, cwd, home, &offline))
+	cmd.AddCommand(newSkillInstallCmd(a, f, cwd, home, &offline, stdout))
 	return cmd
 }
 
 // newSkillInstallCmd builds skill install: write the skill for a chosen harness
 // (claude, codex, gemini), picking the target from the argument or, on an
-// interactive terminal with no argument, an interactive selector.
-func newSkillInstallCmd(a app.App, f fetch.Fetcher, cwd, home string, offline *bool) *cobra.Command {
+// interactive terminal with no argument, an interactive selector. It prints
+// where the skill landed — same line whether the content came from the
+// remote or the embedded fallback.
+func newSkillInstallCmd(a app.App, f fetch.Fetcher, cwd, home string, offline *bool, stdout io.Writer) *cobra.Command {
 	var (
 		user  bool
 		force bool
@@ -59,8 +62,12 @@ func newSkillInstallCmd(a app.App, f fetch.Fetcher, cwd, home string, offline *b
 			if err != nil {
 				return err
 			}
-			_, err = a.InstallSkill(cwd, home, target, a.Skill(f, skillURL, *offline), user, force)
-			return err
+			path, err := a.InstallSkill(cwd, home, target, a.Skill(f, skillURL, *offline), user, force)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(stdout, "installed %s skill → %s\n", target, path)
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&user, "user", false, "install for claude in your home directory, not this repo")

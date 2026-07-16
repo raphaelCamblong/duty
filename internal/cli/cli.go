@@ -167,7 +167,7 @@ func addCommands(root *cobra.Command, cwd string, stdin io.Reader, stdout io.Wri
 		&cobra.Group{ID: groupInterface, Title: "Interface Commands:"},
 	)
 	root.AddCommand(
-		grouped(newInitCmd(a, cwd), groupAuthor),
+		grouped(newInitCmd(a, cwd, stdout), groupAuthor),
 		grouped(newCreateCmd(a, cwd, stdin, stdout), groupAuthor),
 		grouped(newSetCmd(a, cwd, stdin), groupAuthor),
 		grouped(newGetCmd(a, cwd, stdout), groupRead),

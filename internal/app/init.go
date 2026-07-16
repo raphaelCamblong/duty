@@ -28,20 +28,24 @@ func renderReadme() []byte {
 
 // Init bootstraps a duty tree in cwd: duty/ with a skeleton board index
 // (H1 = title, default "Board"), the convention readme, and archive/. It
-// refuses to run inside an existing tree.
-func (a App) Init(cwd, title string) error {
+// refuses to run inside an existing tree, and on success returns the tree
+// directory's path.
+func (a App) Init(cwd, title string) (string, error) {
 	if title == "" {
 		title = "Board"
 	}
 	if dir, err := tree.CurrentBoard(a.fs, cwd); err == nil {
-		return fmt.Errorf("already inside a duty tree (%s)", dir)
+		return "", fmt.Errorf("already inside a duty tree (%s)", dir)
 	}
 	dir := filepath.Join(cwd, names.TreeDir)
 	if err := a.fs.MkdirAll(filepath.Join(dir, names.ArchiveDir)); err != nil {
-		return fmt.Errorf("init: %w", err)
+		return "", fmt.Errorf("init: %w", err)
 	}
 	if err := a.fs.WriteFile(filepath.Join(dir, names.BoardFile), board.Render(title)); err != nil {
-		return err
+		return "", err
 	}
-	return a.fs.WriteFile(filepath.Join(dir, names.ReadmeFile), renderReadme())
+	if err := a.fs.WriteFile(filepath.Join(dir, names.ReadmeFile), renderReadme()); err != nil {
+		return "", err
+	}
+	return dir, nil
 }

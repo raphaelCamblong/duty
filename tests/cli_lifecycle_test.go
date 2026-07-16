@@ -60,7 +60,7 @@ func TestArchive(t *testing.T) {
 
 	t.Run("archives sub-board tasks into that sub-board's own archive, not the root's", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "create", "track", "backend")
+		mustRunOut(t, root, "create", "track", "backend")
 		sub := filepath.Join(root, "backend")
 		rootName := createTask(t, root, "Root task")
 		subName := createTask(t, sub, "Backend task")
@@ -107,7 +107,7 @@ func TestArchive(t *testing.T) {
 
 	t.Run("a second run is a no-op leaving the tree byte-identical", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "create", "track", "backend")
+		mustRunOut(t, root, "create", "track", "backend")
 		createTask(t, root, "Root task")
 		createTask(t, filepath.Join(root, "backend"), "Backend task")
 		mustRun(t, root, "status", "T-01", "done")
@@ -130,7 +130,7 @@ func TestArchive(t *testing.T) {
 
 	t.Run("only archives the current board and below, not a sibling", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "create", "track", "backend")
+		mustRunOut(t, root, "create", "track", "backend")
 		sub := filepath.Join(root, "backend")
 		rootName := createTask(t, root, "Root task")
 		mustRun(t, root, "status", "T-01", "done")
@@ -259,7 +259,7 @@ func TestGetTasks(t *testing.T) {
 
 	t.Run("prefixes rows from a sub-board with its path", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "create", "track", "backend")
+		mustRunOut(t, root, "create", "track", "backend")
 		createTask(t, filepath.Join(root, "backend"), "Backend task")
 		code, stdout, stderr := runDuty(t, root, "get", "tasks")
 		if code != 0 || stderr != "" {
@@ -367,7 +367,7 @@ func TestGetTasks(t *testing.T) {
 
 	t.Run("--agent emits exact TSV field order, in sync and drifted", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "create", "track", "backend")
+		mustRunOut(t, root, "create", "track", "backend")
 		sub := filepath.Join(root, "backend")
 		rootName := createTask(t, root, "Root task")
 		createTask(t, sub, "Backend task")

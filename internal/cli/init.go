@@ -2,6 +2,8 @@ package cli
 
 import (
 	"errors"
+	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
 
@@ -13,8 +15,10 @@ const (
 	initExample = `  duty init "Q3 roadmap"`
 )
 
-// newInitCmd builds the init command: bootstrap a duty tree in cwd.
-func newInitCmd(a app.App, cwd string) *cobra.Command {
+// newInitCmd builds the init command: bootstrap a duty tree in cwd, printing
+// where it landed — the one confirmation a scaffolding command owes, since
+// there's no other way to see what it made.
+func newInitCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	return &cobra.Command{
 		Use:     "init [title]",
 		Short:   "bootstrap a duty tree in the current directory",
@@ -27,7 +31,12 @@ func newInitCmd(a app.App, cwd string) *cobra.Command {
 			if len(args) == 1 {
 				title = args[0]
 			}
-			return a.Init(cwd, title)
+			path, err := a.Init(cwd, title)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(stdout, "initialized duty tree in %s\n", path)
+			return nil
 		},
 	}
 }

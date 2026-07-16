@@ -13,8 +13,8 @@ import (
 func treeWithTracks(t *testing.T) string {
 	t.Helper()
 	root := initDuty(t)
-	mustRun(t, root, "create", "track", "api")
-	mustRun(t, root, "create", "track", "auth", "--in", "api")
+	mustRunOut(t, root, "create", "track", "api")
+	mustRunOut(t, root, "create", "track", "auth", "--in", "api")
 	return root
 }
 
@@ -81,8 +81,8 @@ func TestCreateTaskIn(t *testing.T) {
 func TestCreateTrackIn(t *testing.T) {
 	t.Run("creates the sub-track under the --in board with its parent bullet", func(t *testing.T) {
 		root := initDuty(t)
-		mustRun(t, root, "create", "track", "api")
-		mustRun(t, root, "create", "track", "billing", "--in", "api")
+		mustRunOut(t, root, "create", "track", "api")
+		mustRunOut(t, root, "create", "track", "billing", "--in", "api")
 
 		if _, err := os.Stat(filepath.Join(root, "api", "billing", "BOARD.md")); err != nil {
 			t.Errorf("sub-track board missing: %v", err)

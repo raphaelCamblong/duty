@@ -394,7 +394,7 @@ func TestSaltedBoardSurvivesEveryMutation(t *testing.T) {
 		{
 			name: "create track appends one bullet after the last hand-written one",
 			run: func(t *testing.T, root string) {
-				mustRun(t, root, "create", "track", "api")
+				mustRunOut(t, root, "create", "track", "api")
 			},
 			want: func(t *testing.T, w map[string]string) {
 				w["BOARD.md"] = replaceOnce(t, saltedBoard, saltBullet+"\n",

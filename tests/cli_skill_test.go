@@ -92,8 +92,11 @@ func TestSkillInstallClaude(t *testing.T) {
 	path := filepath.Join(dir, ".claude", "skills", "duty", "SKILL.md")
 
 	code, stdout, stderr := runDuty(t, dir, "skill", "install", "claude", "--offline")
-	if code != 0 || stdout != "" || stderr != "" {
-		t.Fatalf("install claude: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	if code != 0 || stderr != "" {
+		t.Fatalf("install claude: code=%d stderr=%q", code, stderr)
+	}
+	if want := "installed claude skill → " + path + "\n"; stdout != want {
+		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
 	if got := readText(t, path); !strings.HasPrefix(got, "---\nname: duty\n") {
 		t.Errorf("claude SKILL.md missing frontmatter:\n%q", got[:min(len(got), 40)])
@@ -108,7 +111,7 @@ func TestSkillInstallClaude(t *testing.T) {
 		t.Errorf("stderr = %q, want it to say already exists", stderr)
 	}
 
-	mustRun(t, dir, "skill", "install", "claude", "--offline", "--force")
+	mustRunOut(t, dir, "skill", "install", "claude", "--offline", "--force")
 }
 
 func TestSkillInstallMarkers(t *testing.T) {
@@ -122,7 +125,7 @@ func TestSkillInstallMarkers(t *testing.T) {
 			dir := t.TempDir()
 			path := filepath.Join(dir, tc.file)
 
-			mustRun(t, dir, "skill", "install", tc.target, "--offline")
+			mustRunOut(t, dir, "skill", "install", tc.target, "--offline")
 			got := readText(t, path)
 			if !strings.Contains(got, "<!-- duty:skill start -->") || !strings.Contains(got, "<!-- duty:skill end -->") {
 				t.Fatalf("%s missing skill markers:\n%q", tc.file, got)
@@ -137,7 +140,7 @@ func TestSkillInstallMarkers(t *testing.T) {
 				t.Fatalf("reinstall without --force: code=%d stderr=%q", code, stderr)
 			}
 
-			mustRun(t, dir, "skill", "install", tc.target, "--offline", "--force")
+			mustRunOut(t, dir, "skill", "install", tc.target, "--offline", "--force")
 			got = readText(t, path)
 			if strings.Count(got, "<!-- duty:skill start -->") != 1 || strings.Count(got, "<!-- duty:skill end -->") != 1 {
 				t.Errorf("--force must leave exactly one block:\n%q", got)
@@ -154,7 +157,7 @@ func TestSkillInstallUserScope(t *testing.T) {
 	t.Setenv("HOME", home)
 	dir := t.TempDir()
 
-	mustRun(t, dir, "skill", "install", "claude", "--user", "--offline")
+	mustRunOut(t, dir, "skill", "install", "claude", "--user", "--offline")
 	if got := readText(t, filepath.Join(home, ".claude", "skills", "duty", "SKILL.md")); !strings.HasPrefix(got, "---\nname: duty\n") {
 		t.Errorf("--user did not write a SKILL.md into HOME")
 	}
