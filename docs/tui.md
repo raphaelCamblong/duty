@@ -13,7 +13,8 @@ nothing renders a task until you open one.
   ancestor), the subtree's per-status counts, and a one-line distribution bar.
 - **List** — sub-tracks first, under a "Tracks" header, each with a
   right-aligned bar of its subtree; then tasks under their section headers,
-  each showing id, title, colored status, gates `2/3`, and a relative age. A
+  each showing id, title, colored status (in-progress gets a small animated
+  spinner while work is live), gates `2/3`, and a relative age. A
   task with unmet dependencies shows a dim `waits T-01,T-03` beside its status;
   a `⚠` marks a row whose board status disagrees with the file. Rows group by
   status by default (in-progress first); the age column always shows, the gate
