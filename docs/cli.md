@@ -208,7 +208,9 @@ Reads never lock and never write. Each takes `--agent` for stable TSV — see
 
 `duty get tasks` — List open tasks from the current board down, straight from
 the files: `id  status  title`, a relative age, a track prefix when not local,
-and a `⚠ board says …` flag when the board row disagrees.
+and a `⚠ board says …` flag when the board row disagrees. Rows come out in
+board order — board order is priority order, the same order `get next` walks
+— with a task whose file has no board row appended after, still flagged.
 
 ```sh title="Only what's in progress"
 duty get tasks --status in-progress

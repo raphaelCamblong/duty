@@ -1,7 +1,7 @@
 ---
 id: T-51
 title: get tasks follows board order
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -32,7 +32,21 @@ the reference behavior), the demo that exposed it: `move T-03 --top` changed
 Sorting flags; TUI (already board-ordered); `get tracks` (path order is fine).
 
 ## Gates
-- [ ] Scratch tree: `move T-03 --top` immediately changes `get tasks` output
+- [x] Scratch tree: `move T-03 --top` immediately changes `get tasks` output
   order; `get next` and the first `get tasks` row agree.
-- [ ] A file-without-row still appears (flagged, after ordered rows).
-- [ ] `just check` green; docs updated.
+- [x] A file-without-row still appears (flagged, after ordered rows).
+- [x] `just check` green; docs updated.
+
+## Report
+
+### 2026-07-16 12:21 — done
+
+List now iterates each board's rows in board.Sections order (mirroring
+nextInBoard) instead of filename order; files stay truth for status/title.
+A task file with no board row (drift) is appended after the ordered rows,
+still flagged. Applies identically to human and --agent output. Verified in
+a scratch tree: `move T-03 --top` immediately reorders `get tasks`' output
+to match `get next`'s answer, and a row-less file still appears, flagged,
+at the end. docs/cli.md's `get tasks` line now notes board order = priority
+order. No existing test pinned filename order, so none needed updating;
+`just check` is green.

@@ -53,7 +53,9 @@ func (a App) List(cwd, status, in string) ([]Row, error) {
 
 // boardRows returns one Row per task file directly in board b (its
 // tracks are separate entries in the caller's board list), tagged with
-// its path relative to root — the board list started from.
+// its path relative to root — the board list started from. Rows come out
+// in board order, mirroring nextInBoard; a file with no board row (drift)
+// is appended after, still flagged.
 func (a App) boardRows(root, b string) ([]Row, error) {
 	boardPath := relBoard(root, b)
 	index, err := a.fs.ReadFile(filepath.Join(b, names.BoardFile))
@@ -65,7 +67,7 @@ func (a App) boardRows(root, b string) ([]Row, error) {
 		return nil, err
 	}
 	rows := make([]Row, 0, len(files))
-	for _, name := range files {
+	for _, name := range boardOrder(index, files) {
 		row, err := a.taskRow(index, b, name, boardPath)
 		if err != nil {
 			return nil, err
@@ -73,6 +75,33 @@ func (a App) boardRows(root, b string) ([]Row, error) {
 		rows = append(rows, row)
 	}
 	return rows, nil
+}
+
+// boardOrder sorts files into board order: each present file in the order
+// its row appears across index's sections, then any file with no row
+// (drift) appended in filename order.
+func boardOrder(index []byte, files []string) []string {
+	present := make(map[string]bool, len(files))
+	for _, name := range files {
+		present[name] = true
+	}
+	seen := make(map[string]bool, len(files))
+	ordered := make([]string, 0, len(files))
+	for _, sec := range board.Sections(index) {
+		for _, r := range sec.Rows {
+			if !present[r.File] || seen[r.File] {
+				continue
+			}
+			seen[r.File] = true
+			ordered = append(ordered, r.File)
+		}
+	}
+	for _, name := range files {
+		if !seen[name] {
+			ordered = append(ordered, name)
+		}
+	}
+	return ordered
 }
 
 // taskRow assembles filename's Row from its file in dir, its drift computed
