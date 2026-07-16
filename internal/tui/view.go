@@ -222,7 +222,7 @@ func (m Model) previewTitle() string {
 		}
 	case previewTask:
 		if r, b, ok := m.findRowBoard(m.previewArg); ok {
-			return m.theme.taskHeader(r, b.Title, m.headerAge(r))
+			return m.theme.taskHeader(r, b.Title, m.headerAge(r), m.spinnerGlyph())
 		}
 	}
 	return m.theme.dim().Render("gone")
@@ -242,8 +242,12 @@ func (m Model) headerAge(r Row) string {
 // through), any drift badge, and the relative age trailing dim. age trails last
 // so a narrow header truncates it before the blocked-by link; age is "" when
 // the age column is hidden.
-func (t Theme) taskHeader(r Row, track, age string) string {
-	parts := []string{t.accent().Render(r.ID), t.statusStyle(r.Status).Render(r.Status)}
+func (t Theme) taskHeader(r Row, track, age, glyph string) string {
+	status := t.statusStyle(r.Status).Render(r.Status)
+	if inProgress(r) && glyph != "" {
+		status += " " + glyph
+	}
+	parts := []string{t.accent().Render(r.ID), status}
 	if who := claimerTag(r); who != "" {
 		parts = append(parts, t.dim().Render(who))
 	}
@@ -556,10 +560,14 @@ func gatesCell(r Row) string {
 	return fmt.Sprintf("%d/%d", r.GatesDone, r.GatesTotal)
 }
 
+// inProgress reports whether a row's status is in-progress — the rows that
+// carry the animated spinner glyph beside their status.
+func inProgress(r Row) bool { return r.Status == task.StatusInProgress }
+
 // claimerTag is the holder name shown dim beside an in-progress row or preview
 // header, "" for any other status or an unclaimed task.
 func claimerTag(r Row) string {
-	if r.Status == task.StatusInProgress {
+	if inProgress(r) {
 		return r.ClaimedBy
 	}
 	return ""

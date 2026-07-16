@@ -118,12 +118,14 @@ type compactDelegate struct {
 	showAge   bool
 	showGates bool
 	now       time.Time
+	glyph     string
 }
 
 // newDelegate sizes a compact delegate's columns for one board; showAge governs
 // the always-on relative-age column (whose width is measured here) and showGates
-// the gate column that a narrow terminal drops.
-func newDelegate(theme Theme, z *zone.Manager, b Board, showAge, showGates bool, now time.Time) compactDelegate {
+// the gate column that a narrow terminal drops. glyph is the current spinner
+// frame drawn beside in-progress rows, "" when the tree holds none.
+func newDelegate(theme Theme, z *zone.Manager, b Board, showAge, showGates bool, now time.Time, glyph string) compactDelegate {
 	d := compactDelegate{
 		theme:     theme,
 		zones:     z,
@@ -134,6 +136,7 @@ func newDelegate(theme Theme, z *zone.Manager, b Board, showAge, showGates bool,
 		showAge:   showAge,
 		showGates: showGates,
 		now:       now,
+		glyph:     glyph,
 	}
 	if showAge {
 		d.ageW = maxAgeWidth(b.Sections, now)
@@ -242,7 +245,7 @@ func (d compactDelegate) taskLine(r Row, selected bool, w int, idM, titleM []int
 	line := d.theme.cursorMark(selected) +
 		pad(styleMatches(r.ID, idM, boldWhen(d.theme.accent(), selected)), d.idW) + "  " +
 		pad(styleMatches(r.Title, titleM, boldWhen(lipgloss.NewStyle(), selected)), max(w-fixed, minTitleWidth)) + "  " +
-		boldWhen(d.theme.statusStyle(r.Status), selected).Render(pad(r.Status, statusColWidth))
+		d.statusCell(r, selected)
 	if who := claimerTag(r); who != "" {
 		line += dim.Render(" · " + who)
 	}
@@ -259,6 +262,17 @@ func (d compactDelegate) taskLine(r Row, selected bool, w int, idM, titleM []int
 		line += "  " + boldWhen(d.theme.alert(), selected).Render(pad("⚠ "+r.Drift, d.driftW))
 	}
 	return ansi.Truncate(line, w, "…")
+}
+
+// statusCell renders a row's status word in its status color, the spinner glyph
+// trailing beside an in-progress status so the fixed status column stays aligned
+// across rows.
+func (d compactDelegate) statusCell(r Row, selected bool) string {
+	cell := boldWhen(d.theme.statusStyle(r.Status), selected).Render(pad(r.Status, statusColWidth))
+	if inProgress(r) && d.glyph != "" {
+		cell += " " + d.glyph
+	}
+	return cell
 }
 
 // ageCell renders a task row's relative file age, "" when the row has no file

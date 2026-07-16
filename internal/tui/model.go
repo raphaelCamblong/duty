@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/raphaelCamblong/duty/internal/config"
 	"github.com/raphaelCamblong/duty/internal/fsys"
+	"github.com/raphaelCamblong/duty/internal/task"
 )
 
 // refreshMsg reports a debounced filesystem change from the watcher.
@@ -70,6 +72,8 @@ type Model struct {
 
 	list             list.Model
 	focus            focusArea
+	spinner          spinner.Model
+	spinning         bool
 	showAge          bool
 	showGates        bool
 	statusSort       bool
@@ -115,6 +119,7 @@ func New(f fsys.FS, root string, cfg config.Config) (Model, error) {
 		path:       ".",
 		memory:     map[string]int{},
 		list:       newList(theme),
+		spinner:    newSpinner(theme),
 		showAge:    true,
 		showGates:  true,
 		statusSort: true,
@@ -140,6 +145,15 @@ func newList(theme Theme) list.Model {
 	l.Styles.TitleBar = lipgloss.NewStyle()
 	l.Styles.NoItems = theme.dim().Padding(1, 2)
 	return l
+}
+
+// newSpinner returns the one shared in-progress spinner: a one-cell MiniDot
+// tinted with the theme's in-progress ink (peach on dark, blue on light).
+func newSpinner(theme Theme) spinner.Model {
+	return spinner.New(
+		spinner.WithSpinner(spinner.MiniDot),
+		spinner.WithStyle(theme.statusStyle(task.StatusInProgress)),
+	)
 }
 
 // Close releases the model's zone manager; call it once after the program
@@ -216,13 +230,55 @@ func (m Model) Init() tea.Cmd {
 	return waitRefresh(m.refresh)
 }
 
+// Spinning reports whether the in-progress spinner's tick loop is live (for
+// tests): a quiet snapshot schedules no ticks at all.
+func (m Model) Spinning() bool { return m.spinning }
+
+// arm starts the spinner's tick loop when the snapshot holds an in-progress
+// task and no loop is already running, batching the first tick with base; an
+// already-running loop or a quiet board returns base untouched. It never stops
+// a loop — a live loop halts itself in onSpinnerTick once the last in-progress
+// task leaves the snapshot.
+func (m Model) arm(base tea.Cmd) (tea.Model, tea.Cmd) {
+	if m.spinning || !m.snap.anyInProgress() {
+		return m, base
+	}
+	m.spinning = true
+	return m, tea.Batch(base, m.spinner.Tick)
+}
+
+// onSpinnerTick advances the shared spinner one frame while in-progress work
+// remains, rescheduling the next tick; once the last in-progress task leaves the
+// snapshot it drops the tick — scheduling nothing further — so a quiet board
+// costs zero re-renders.
+func (m Model) onSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd) {
+	if !m.snap.anyInProgress() {
+		m.spinning = false
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.spinner, cmd = m.spinner.Update(msg)
+	return m.reskinList(), cmd
+}
+
+// spinnerGlyph is the in-progress spinner's current frame, "" when the snapshot
+// holds no in-progress task (nothing carries the glyph).
+func (m Model) spinnerGlyph() string {
+	if !m.snap.anyInProgress() {
+		return ""
+	}
+	return m.spinner.View()
+}
+
 // Update is the state transition for every message the program receives.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.help.Width = msg.Width
-		return m.resizeGates(msg.Width).layout(), nil
+		return m.resizeGates(msg.Width).layout().arm(nil)
+	case spinner.TickMsg:
+		return m.onSpinnerTick(msg)
 	case refreshMsg:
 		if m.refresh == nil {
 			return m, scanCmd(m.fsys, m.root)
@@ -314,7 +370,7 @@ func (m Model) resizeGates(w int) Model {
 // visibility, leaving items, selection, and any filter untouched.
 func (m Model) reskinList() Model {
 	b, _ := m.board()
-	m.list.SetDelegate(newDelegate(m.theme, m.zones, b, m.showAge, m.showGates, time.Now()))
+	m.list.SetDelegate(newDelegate(m.theme, m.zones, b, m.showAge, m.showGates, time.Now(), m.spinnerGlyph()))
 	return m
 }
 
@@ -553,7 +609,7 @@ func (m Model) selectNth(n int) Model {
 // snapshot; the returned command re-runs an active filter.
 func (m Model) rebuildList() (Model, tea.Cmd) {
 	b, ok := m.board()
-	m.list.SetDelegate(newDelegate(m.theme, m.zones, b, m.showAge, m.showGates, time.Now()))
+	m.list.SetDelegate(newDelegate(m.theme, m.zones, b, m.showAge, m.showGates, time.Now(), m.spinnerGlyph()))
 	if !ok {
 		return m, m.list.SetItems(nil)
 	}
@@ -577,7 +633,7 @@ func (m Model) withSnap(msg snapMsg) (tea.Model, tea.Cmd) {
 		m.path = textualParent(m.path)
 	}
 	m, cmd := m.rebuildList()
-	return m.fixSelection().renderPreview(false), cmd
+	return m.fixSelection().renderPreview(false).arm(cmd)
 }
 
 // dims returns the terminal size, defaulting to 80×24 before the first

@@ -1,7 +1,7 @@
 ---
 id: T-56
 title: Animated in-progress status in the TUI
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -39,9 +39,22 @@ Animating anything else (bars, done states); configurable spinner styles;
 per-row spinner phases (one shared phase is correct and calm).
 
 ## Gates
-- [ ] Update-transition tests: tick arms when a snapshot gains an in-progress
+- [x] Update-transition tests: tick arms when a snapshot gains an in-progress
   task, stops (no scheduled tick) when the last one leaves; glyph present in
   the rendered row and preview header (frames in report).
-- [ ] TestStartupPerformance green; frame audit green (no ragged lines with
+- [x] TestStartupPerformance green; frame audit green (no ragged lines with
   the extra cell).
-- [ ] `just check` green; docs updated.
+- [x] `just check` green; docs updated.
+
+## Report
+
+### 2026-07-16 18:17 — done
+
+Implementation complete (agent stalled at final verification; orchestrator
+finished the run). One shared MiniDot spinner tinted with the in-progress
+status color, glyph on rows + preview header; tick loop arms only when the
+snapshot holds an in-progress task and halts itself when the last one leaves
+(TestSpinnerTickLifecycle proves both directions; TestSpinnerGlyphOnInProgressRow
+pins the frames). Golden dark/light frames updated for the one glyph cell —
+the sanctioned change. just check green: gofumpt clean, vet clean,
+golangci-lint 0 issues, full suite green, TestStartupPerformance green.

@@ -26,6 +26,13 @@ type Snapshot struct {
 	Boards map[string]Board
 }
 
+// anyInProgress reports whether the whole tree holds at least one in-progress
+// task; the root board's rolled-up counts already tally every board below it,
+// so this is one map lookup — a snapshot-level answer, not a per-row scan.
+func (s Snapshot) anyInProgress() bool {
+	return s.Boards["."].Counts[task.StatusInProgress] > 0
+}
+
 // Board is one board's view model: identity, its direct tracks, and its
 // task rows grouped in board-index section order.
 type Board struct {
