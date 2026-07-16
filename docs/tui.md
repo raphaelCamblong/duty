@@ -35,7 +35,7 @@ the preview; `esc` closes it. The preview is topped by a pinned header — id,
 status, gates, track, age. `enter` on a track descends into it instead; with a
 preview already open it shows the track's summary card.
 
-<!-- screenshot slot: /screens/task-preview.png — a task open in the split preview -->
+ screenshot slot: /screens/task-preview.png — a task open in the split preview 
 
 ## Filtering
 
@@ -43,7 +43,7 @@ preview already open it shows the track's summary card.
 status grouping steps aside; `esc` clears it. A filter with no matches shows the
 list's empty line.
 
-<!-- screenshot slot: /screens/filter.png — the fuzzy filter narrowing the list -->
+ screenshot slot: /screens/filter.png — the fuzzy filter narrowing the list 
 
 ## Keys
 
@@ -67,4 +67,4 @@ Both themes ship tuned: the raw duty palette on dark terminals, AA-readable inks
 on light ones. `theme` in your config picks the background mode, and
 `[tui.palette]` recolors any slot — see [Config](/config/).
 
-<!-- screenshot slot: /screens/board-light.png — the same board on a light terminal -->
+ screenshot slot: /screens/board-light.png — the same board on a light terminal
