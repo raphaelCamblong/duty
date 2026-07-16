@@ -7,7 +7,13 @@ if (!entry) throw new Error('docs/tracks.md not found');
 const { Content, headings } = await render(entry);
 ---
 
-<StarlightPage frontmatter={{ title: 'Tracks & boards' }} headings={headings}>
+<StarlightPage
+	frontmatter={{
+		title: 'Tracks & boards',
+		description: 'Tracks are just folders with a board. They nest all the way down, each one self-contained.',
+	}}
+	headings={headings}
+>
 	<Content />
 </StarlightPage>
 

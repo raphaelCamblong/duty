@@ -7,7 +7,13 @@ if (!entry) throw new Error('docs/config.md not found');
 const { Content, headings } = await render(entry);
 ---
 
-<StarlightPage frontmatter={{ title: 'Config' }} headings={headings}>
+<StarlightPage
+	frontmatter={{
+		title: 'Config',
+		description: 'duty runs with zero config. When you want to change something, it is a little TOML file in your repo.',
+	}}
+	headings={headings}
+>
 	<Content />
 </StarlightPage>
 

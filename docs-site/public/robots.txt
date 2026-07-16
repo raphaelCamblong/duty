@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://duty-cli.xyz/sitemap-index.xml

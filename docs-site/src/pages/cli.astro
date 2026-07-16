@@ -7,7 +7,13 @@ if (!entry) throw new Error('docs/cli.md not found');
 const { Content, headings } = await render(entry);
 ---
 
-<StarlightPage frontmatter={{ title: 'CLI' }} headings={headings}>
+<StarlightPage
+	frontmatter={{
+		title: 'CLI',
+		description: 'Verb-first commands that keep every task file and its board row in sync, in one atomic step.',
+	}}
+	headings={headings}
+>
 	<Content />
 </StarlightPage>
 

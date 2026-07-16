@@ -7,7 +7,13 @@ if (!entry) throw new Error('docs/tasks.md not found');
 const { Content, headings } = await render(entry);
 ---
 
-<StarlightPage frontmatter={{ title: 'Tasks' }} headings={headings}>
+<StarlightPage
+	frontmatter={{
+		title: 'Tasks',
+		description: 'One task, one Markdown file, sized for a single sitting — and a board that always matches it.',
+	}}
+	headings={headings}
+>
 	<Content />
 </StarlightPage>
 

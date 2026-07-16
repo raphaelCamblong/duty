@@ -7,7 +7,13 @@ if (!entry) throw new Error('duty/README.md not found');
 const { Content, headings } = await render(entry);
 ---
 
-<StarlightPage frontmatter={{ title: 'The task convention' }} headings={headings}>
+<StarlightPage
+	frontmatter={{
+		title: 'The task convention',
+		description: 'The one-page contract your team and your agents both read — how a task file and its board fit together.',
+	}}
+	headings={headings}
+>
 	<Content />
 </StarlightPage>
 

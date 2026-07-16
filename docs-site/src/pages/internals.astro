@@ -7,7 +7,13 @@ if (!entry) throw new Error('docs/internals.md not found');
 const { Content, headings } = await render(entry);
 ---
 
-<StarlightPage frontmatter={{ title: 'Internals' }} headings={headings}>
+<StarlightPage
+	frontmatter={{
+		title: 'Internals',
+		description: 'How the binary keeps your files honest: atomic line edits, a tree-wide lock, and quiet success.',
+	}}
+	headings={headings}
+>
 	<Content />
 </StarlightPage>
 
