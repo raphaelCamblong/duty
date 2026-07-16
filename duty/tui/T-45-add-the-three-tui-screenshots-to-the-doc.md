@@ -1,7 +1,7 @@
 ---
 id: T-45
 title: Add the three TUI screenshots to the docs
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -28,5 +28,15 @@ For Raphael, by hand:
 Retaking board-dark.png (already live); layout changes.
 
 ## Gates
-- [ ] Three files exist in docs-site/public/screens/.
-- [ ] https://duty-cli.xyz/tui/ shows all four images.
+- [x] Three files exist in docs-site/public/screens/.
+- [x] https://duty-cli.xyz/tui/ shows all four images.
+
+## Report
+
+### 2026-07-16 12:24 — done
+
+Raphael took and placed the three screenshots (task-preview, filter,
+board-light — all valid PNGs ~2000px wide). Slots in docs/tui.md replaced
+with real image markdown, site rebuilt and deployed: all four images serve
+200 on https://duty-cli.xyz/tui/ and the page contains no leftover slot
+text. Gates verified live.
