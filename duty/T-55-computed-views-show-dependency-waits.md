@@ -85,3 +85,7 @@ green — 1.99ms best of 5, the wait pass reuses the already-parsed snapshot.
 Note: the TUI treats a truly-missing blocked-by id as met (it can't see archived
 files without extra reads); the CLI, which resolves files, flags it `(missing)`
 and as an unmet wait. This divergence is confined to a typo'd dep id.
+
+### 2026-07-16 14:52 — done
+
+Applied feedback-round simplify: folded depStatuses into fillDeps (single-caller indirection, behavior identical) and deleted it. Skipped the waitsCell/waitsTag dup — both reviewers agree there is no clean shared home (cli/tui cannot import each other; app returns data not formatted strings), so it stays the architecture accepted cost.

@@ -325,26 +325,16 @@ func (a App) unmetDeps(root string, deps []string) ([]string, error) {
 	})
 }
 
-// depStatuses pairs each blocked-by id with its computed status, in order.
-func (a App) depStatuses(root string, deps []string) ([]Dep, error) {
-	out := make([]Dep, 0, len(deps))
-	for _, id := range deps {
-		s, err := a.depStatus(root, id)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, Dep{ID: id, Status: s})
-	}
-	return out, nil
-}
-
 // fillDeps resolves info's blocked-by ids to their statuses and stores them.
 func (a App) fillDeps(root string, info *TaskInfo) error {
-	deps, err := a.depStatuses(root, info.BlockedBy)
-	if err != nil {
-		return err
+	info.Deps = make([]Dep, 0, len(info.BlockedBy))
+	for _, id := range info.BlockedBy {
+		s, err := a.depStatus(root, id)
+		if err != nil {
+			return err
+		}
+		info.Deps = append(info.Deps, Dep{ID: id, Status: s})
 	}
-	info.Deps = deps
 	return nil
 }
 
