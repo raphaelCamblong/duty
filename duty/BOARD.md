@@ -45,7 +45,7 @@ Order top-to-bottom is the intended build order.
 | [T-43](T-43-split-the-spec-and-docs-site-into-topic.md) | Split the spec and docs site into topic pages | done |
 | [T-44](T-44-docs-iteration-structure-voice-screensho.md) | Docs iteration: structure, voice, screenshots, custom domain | done |
 | [T-50](T-50-claim-identity-who-holds-each-task.md) | Claim identity: who holds each task | done |
-| [T-53](T-53-docs-seo-metadata-social-cards-search.md) | Docs SEO: metadata, social cards, search presence | blocked |
+| [T-53](T-53-docs-seo-metadata-social-cards-search.md) | Docs SEO: metadata, social cards, search presence | done |
 | [T-55](T-55-computed-views-show-dependency-waits.md) | Computed views show dependency waits | done |
 
 Completed tasks (0) archived: [archive/](archive/).

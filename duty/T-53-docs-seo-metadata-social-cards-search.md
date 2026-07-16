@@ -1,7 +1,7 @@
 ---
 id: T-53
 title: "Docs SEO: metadata, social cards, search presence"
-status: blocked
+status: done
 blocked-by: []
 ---
 
@@ -49,7 +49,7 @@ data/JSON-LD (revisit if search presence matters later); paid anything.
   opengraph.xyz or a paste into Slack/Discord) shows title + image —
   screenshot or description in the report.
 - [x] robots.txt served, sitemap referenced, canonicals verified live.
-- [ ] Search Console: property added + sitemap submitted (Raphael).
+- [x] Search Console: property added + sitemap submitted (Raphael).
 - [x] `just check` untouched-green (docs-only); deployed and verified live.
 
 ## Report
@@ -105,3 +105,9 @@ zone:read only).
 2. Search Console -> Sitemaps -> submit https://duty-cli.xyz/sitemap-index.xml
 
 Blocked on those two steps only.
+
+### 2026-07-16 15:12 — done
+
+Raphael completed the Search Console gate: domain property duty-cli.xyz
+verified and sitemap-index.xml submitted. All five gates green — SEO round
+closed.
