@@ -38,6 +38,9 @@ internal/
   tree/              — repository: discovery, walk-up, id resolution, numbering —
                        queries over an injected fsys.FS.
   config/            — TOML load over fsys.FS; user < project precedence.
+  watch/             — the filesystem watcher: fsnotify per-dir watches + debounce
+                       over an injected fsys.FS, one implementation shared by the
+                       TUI and `duty watch`. Deps: fsys + fsnotify.
   app/               — application services: one use-case per verb (Init, CreateTask,
                        CreateBoard, SetStatus, Link, Report, Move, Archive, Delete,
                        List). App{FS} constructor-injected; returns data — never
@@ -48,8 +51,8 @@ internal/
 tests/               — ALL test files. No _test.go anywhere else.
 ```
 
-Dependency rule (inward only): `names` ← domain ← {`fsys`, `tree`, `config`} ← `app` ←
-{`cli`, `tui`}. Nothing imports `cli` or `tui` (main delegates; `cli` launches `tui`).
+Dependency rule (inward only): `names` ← domain ← {`fsys`, `tree`, `config`, `watch`} ←
+`app` ← {`cli`, `tui`}. Nothing imports `cli` or `tui` (main delegates; `cli` launches `tui`).
 If code outside `internal/fsys` calls `os.*` file APIs, the change is in the wrong
 layer — it goes through the port.
 
@@ -75,7 +78,8 @@ layer — it goes through the port.
   outside `internal/fsys`.
 - CLI commands are cobra and stay thin: parse → app service → format. Business logic
   in a cobra `RunE` is a wrong-layer bug.
-- Concurrency exists only in the TUI watcher. Everything else is synchronous.
+- Concurrency lives only in the filesystem watcher (`internal/watch`) and its
+  consumers — the TUI and `duty watch`. Everything else is synchronous.
 - TUI: all styling through lipgloss (no raw ANSI); use bubbles components before
   hand-rolling; keep `update` logic pure so it's testable without a terminal.
 

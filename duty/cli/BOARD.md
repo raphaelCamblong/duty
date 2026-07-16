@@ -18,6 +18,6 @@ Order top-to-bottom is the intended build order.
 | [T-48](T-48-reorder-board-rows-from-the-cli.md) | Reorder board rows from the CLI | done |
 | [T-49](T-49-reports-date-themselves.md) | Reports date themselves | done |
 | [T-51](T-51-get-tasks-follows-board-order.md) | get tasks follows board order | done |
-| [T-52](T-52-duty-watch-streaming-events-for.md) | duty watch: streaming events for orchestrators | todo |
+| [T-52](T-52-duty-watch-streaming-events-for.md) | duty watch: streaming events for orchestrators | done |
 
 Completed tasks (0) archived: [archive/](archive/).

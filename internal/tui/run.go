@@ -10,6 +10,7 @@ import (
 	"github.com/raphaelCamblong/duty/internal/fsys"
 	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/tree"
+	"github.com/raphaelCamblong/duty/internal/watch"
 )
 
 // Run finds the tree containing cwd, loads config, and runs the live board
@@ -30,7 +31,7 @@ func Run(f fsys.FS, cwd string) error {
 		return err
 	}
 	defer m.Close()
-	w, err := NewWatcher(f, root)
+	w, err := watch.NewWatcher(f, root)
 	if err != nil {
 		return err
 	}

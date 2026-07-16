@@ -69,6 +69,19 @@ Each recurring step is one atomic write, so running a swarm just works —
 their writes never collide. Keep `duty tui` open and you see its progress the
 moment it moves.
 
+### For orchestrators
+
+Driving the swarm from a script? `duty watch --agent` streams one TSV line the
+moment any task changes — `status`, `claimed-by`, `created`, `deleted`, `moved`,
+or `gates` — so the orchestrator reacts instead of polling. It's the one
+long-running command: grab a baseline with `get tasks --agent` once, then let
+`watch` push every change until you stop it.
+
+```sh
+duty get tasks --agent   # baseline, once
+duty watch --agent       # then react to each change line
+```
+
 ## Read more
 
 - [The task convention](/convention/) — the one-page contract, for humans and agents.

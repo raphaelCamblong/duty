@@ -18,6 +18,7 @@ import (
 	"github.com/raphaelCamblong/duty/internal/fsys"
 	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/tui"
+	"github.com/raphaelCamblong/duty/internal/watch"
 )
 
 // tuiTree builds a fixture tree via the CLI: root tasks T-01 (in-progress)
@@ -1028,7 +1029,7 @@ func drainTicks(c <-chan struct{}) {
 
 func TestWatcherRefresh(t *testing.T) {
 	root := tuiTree(t)
-	w, err := tui.NewWatcher(fsys.OS{}, root)
+	w, err := watch.NewWatcher(fsys.OS{}, root)
 	if err != nil {
 		t.Fatalf("NewWatcher() error = %v", err)
 	}

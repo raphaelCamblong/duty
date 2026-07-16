@@ -179,6 +179,7 @@ func addCommands(root *cobra.Command, cwd string, stdin io.Reader, stdout io.Wri
 		grouped(newArchiveCmd(a, cwd), groupWork),
 		grouped(newDeleteCmd(a, cwd), groupWork),
 		grouped(newTUICmd(f, cwd), groupInterface),
+		grouped(newWatchCmd(a, f, cwd, stdout), groupInterface),
 		grouped(newSkillCmd(a, fetch.HTTP{}, cwd, home, stdout), groupInterface),
 	)
 }

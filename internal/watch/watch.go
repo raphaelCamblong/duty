@@ -1,4 +1,8 @@
-package tui
+// Package watch is duty's filesystem watcher: one fsnotify layer, shared by
+// the TUI and the watch command. It watches every directory under a tree root
+// and coalesces bursts of events into single notifications; callers re-read the
+// tree on each notification.
+package watch
 
 import (
 	"fmt"

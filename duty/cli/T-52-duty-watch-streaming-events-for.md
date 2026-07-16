@@ -1,7 +1,7 @@
 ---
 id: T-52
 title: "duty watch: streaming events for orchestrators"
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -41,9 +41,15 @@ Filtering flags beyond --in; JSON; history/replay (files+git are history);
 webhooks; the TUI.
 
 ## Gates
-- [ ] Live test: `duty status` / `create` / `move` in another process each
+- [x] Live test: `duty status` / `create` / `move` in another process each
   produce exactly one correct event line within the debounce window.
-- [ ] One watcher implementation shared by tui and watch (grep proves no
+- [x] One watcher implementation shared by tui and watch (grep proves no
   duplicate fsnotify setup).
-- [ ] Ctrl-C exits 0; tree deletion exits non-zero with one lowercase line.
-- [ ] `just check` green; docs updated.
+- [x] Ctrl-C exits 0; tree deletion exits non-zero with one lowercase line.
+- [x] `just check` green; docs updated.
+
+## Report
+
+### 2026-07-16 13:01 — done
+
+Promoted the fsnotify layer into internal/watch, shared by the TUI and the new duty watch command (grep proves one fsnotify home). watch [--agent] [--in] is the one long-running command: it diffs consecutive snapshots and prints one line per changed field (status, claimed-by, created, deleted, moved, gates), TSV under --agent, readable otherwise. Nothing on start; SIGINT exits 0; the tree disappearing exits non-zero with one lowercase line. Pure Diff/Snapshot units plus an end-to-end test driving CLI mutations while the watcher runs, and a command-level test for format + exit codes.

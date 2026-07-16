@@ -283,6 +283,32 @@ change. See [TUI](/tui/).
 duty tui
 ```
 
+### watch
+
+`duty watch` — Stream one line per task state change, live. It's the one
+long-running command — every other `duty` runs and exits; `watch` blocks,
+printing a line the moment a task changes and nothing until then. It prints
+nothing on start (it reports state, not history), so pair it with one `get
+tasks --agent` for the baseline. `Ctrl-C` exits `0`; if the tree disappears
+underneath it, it exits non-zero with one line.
+
+It watches the same files the TUI does, diffing consecutive scans and emitting
+one line per changed field. Six kinds of change surface: `status`, `claimed-by`,
+`created`, `deleted`, `moved` (a task changed board), and `gates` (a gate ticked
+or added). Claiming a task shows two lines — the `status` and the `claimed-by`
+both moved.
+
+```sh title="React to every change (orchestrator)"
+duty get tasks --agent      # baseline snapshot, once
+duty watch --agent          # then stream changes
+# 2026-07-16T12:53:57+02:00	status	T-02	status	todo	in-progress
+# 2026-07-16T12:53:58+02:00	moved	T-07	board	.	backend
+```
+
+Flags:
+- `--in PATH` — watch one board (and below) by its track path (`.` = root).
+- `--agent` — TSV: `time`, `event`, `id`, `field`, `old`, `new` (`time` RFC3339).
+
 ### skill
 
 `duty skill` — Print the duty agent skill to stdout: a short, token-lean brief
@@ -310,9 +336,9 @@ Flags:
 
 ## Board context (`--in`)
 
-`create task`, `create track`, `get tasks`, `get tracks`, `get next`, and
-`archive` take `--in` to name a board by a root-relative slash path (`.` = the
-root board): the tree root is found from cwd, then the board becomes
+`create task`, `create track`, `get tasks`, `get tracks`, `get next`,
+`archive`, and `watch` take `--in` to name a board by a root-relative slash path
+(`.` = the root board): the tree root is found from cwd, then the board becomes
 `<root>/<PATH>`. Id-addressed commands take no `--in` — ids resolve tree-wide.
 
 ## Agent output
@@ -328,6 +354,7 @@ to learn the id it picked.
 - `get tasks` — `id  board-path  status  title  drift  updated` (drift empty, `board=<status>`, or `no-row`).
 - `get task` / `get next` — `id  track-path  status  title  gates-done  gates-total  blocked-by  path  updated  claimed-by` (blocked-by comma-joined; claimed-by empty unless an in-progress task names its holder; `get next` prints nothing when nothing's actionable).
 - `get tracks` — `path  title  todo  in-progress  done  blocked  archived`.
+- `watch` — `time  event  id  field  old  new` (`time` RFC3339; `event` one of `status`, `claimed-by`, `created`, `deleted`, `moved`, `gates`; one line per changed field, streamed until `Ctrl-C`).
 
 ## Cheat sheet
 
@@ -348,4 +375,5 @@ to learn the id it picked.
 | `duty get tracks` | per-board counts |
 | `duty get next` | first actionable task; `--claim` takes it |
 | `duty tui` | live board viewer |
+| `duty watch` | stream one line per task state change (long-running) |
 | `duty skill` | print the agent skill; `install <harness>` writes it |
