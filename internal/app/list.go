@@ -82,23 +82,22 @@ func (a App) boardRows(root, b string) ([]Row, error) {
 // its row appears across index's sections, then any file with no row
 // (drift) appended in filename order.
 func boardOrder(index []byte, files []string) []string {
-	present := make(map[string]bool, len(files))
+	added := make(map[string]bool, len(files))
 	for _, name := range files {
-		present[name] = true
+		added[name] = false
 	}
-	seen := make(map[string]bool, len(files))
 	ordered := make([]string, 0, len(files))
 	for _, sec := range board.Sections(index) {
 		for _, r := range sec.Rows {
-			if !present[r.File] || seen[r.File] {
+			if done, ok := added[r.File]; !ok || done {
 				continue
 			}
-			seen[r.File] = true
+			added[r.File] = true
 			ordered = append(ordered, r.File)
 		}
 	}
 	for _, name := range files {
-		if !seen[name] {
+		if !added[name] {
 			ordered = append(ordered, name)
 		}
 	}

@@ -53,3 +53,7 @@ webhooks; the TUI.
 ### 2026-07-16 13:01 — done
 
 Promoted the fsnotify layer into internal/watch, shared by the TUI and the new duty watch command (grep proves one fsnotify home). watch [--agent] [--in] is the one long-running command: it diffs consecutive snapshots and prints one line per changed field (status, claimed-by, created, deleted, moved, gates), TSV under --agent, readable otherwise. Nothing on start; SIGINT exits 0; the tree disappearing exits non-zero with one lowercase line. Pure Diff/Snapshot units plus an end-to-end test driving CLI mutations while the watcher runs, and a command-level test for format + exit codes.
+
+### 2026-07-16 13:11 — done
+
+Applied two behavior-preserving simplify findings from the visibility round: sortedIDs now uses slices.Sorted(maps.Keys) for the union, and boardOrder collapses its two parallel maps (present + seen) into one. Skipped the rest as test-touching, tui-file, behavior-changing, or architectural relocations. just check green.

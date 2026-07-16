@@ -2,8 +2,9 @@ package app
 
 import (
 	"fmt"
+	"maps"
 	"path/filepath"
-	"sort"
+	"slices"
 
 	"github.com/raphaelCamblong/duty/internal/task"
 	"github.com/raphaelCamblong/duty/internal/tree"
@@ -127,17 +128,12 @@ func gatePair(s TaskState) string {
 
 // sortedIDs returns the union of both maps' ids in lexical order.
 func sortedIDs(before, after map[string]TaskState) []string {
-	seen := make(map[string]bool, len(before)+len(after))
-	ids := make([]string, 0, len(before)+len(after))
+	ids := make(map[string]struct{}, len(before)+len(after))
 	for id := range before {
-		seen[id] = true
-		ids = append(ids, id)
+		ids[id] = struct{}{}
 	}
 	for id := range after {
-		if !seen[id] {
-			ids = append(ids, id)
-		}
+		ids[id] = struct{}{}
 	}
-	sort.Strings(ids)
-	return ids
+	return slices.Sorted(maps.Keys(ids))
 }
