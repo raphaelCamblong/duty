@@ -34,9 +34,9 @@ const (
 )
 
 // rollupOrder is the status sequence for track rollups and summaries: active
-// work first, then queued, blocked, and finished — matching the header bar's
-// colors.
-var rollupOrder = []string{task.StatusInProgress, task.StatusTodo, task.StatusBlocked, task.StatusDone}
+// work first, then queued, blocked, parked, and finished — matching the header
+// bar's colors.
+var rollupOrder = []string{task.StatusInProgress, task.StatusTodo, task.StatusBlocked, task.StatusBacklog, task.StatusDone}
 
 // zoneList and zonePreview are the BubbleZone names of the two panels.
 const (

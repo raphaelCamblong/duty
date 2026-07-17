@@ -153,6 +153,52 @@ func mustClaim(t *testing.T, root, wantID string) {
 	}
 }
 
+func TestBacklogNotActionable(t *testing.T) {
+	root := initDuty(t)
+	createTask(t, root, "Parked") // T-01
+	createTask(t, root, "Work")   // T-02
+	mustRun(t, root, "status", "T-01", "backlog")
+	mustRun(t, root, "move", "T-01", "--top") // backlog first in board order
+
+	t.Run("get next skips a backlog task even first in board order", func(t *testing.T) {
+		code, stdout, stderr := runDuty(t, root, "get", "next")
+		if code != 0 || stderr != "" {
+			t.Fatalf("get next: code=%d stderr=%q", code, stderr)
+		}
+		if !strings.Contains(stdout, "T-02") || strings.Contains(stdout, "T-01") {
+			t.Errorf("get next returned %q, want T-02 (backlog T-01 skipped)", stdout)
+		}
+	})
+
+	t.Run("the TSV status column carries backlog", func(t *testing.T) {
+		_, out, _ := runDuty(t, root, "get", "tasks", "--agent")
+		var found bool
+		for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+			f := strings.Split(l, "\t")
+			if f[0] == "T-01" {
+				found = true
+				if f[2] != "backlog" {
+					t.Errorf("T-01 status column = %q, want backlog", f[2])
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("T-01 missing from get tasks --agent:\n%s", out)
+		}
+	})
+
+	t.Run("promoting backlog to todo makes it claimable immediately", func(t *testing.T) {
+		mustRun(t, root, "status", "T-01", "todo")
+		code, stdout, stderr := runDuty(t, root, "get", "next", "--claim")
+		if code != 0 || stderr != "" {
+			t.Fatalf("get next --claim: code=%d stderr=%q", code, stderr)
+		}
+		if !strings.Contains(stdout, "T-01") || !strings.Contains(stdout, "in-progress") {
+			t.Errorf("after promotion, get next --claim returned %q, want T-01 in-progress", stdout)
+		}
+	})
+}
+
 func TestStatusClaimGuard(t *testing.T) {
 	t.Run("refuses re-claiming an already in-progress task", func(t *testing.T) {
 		root := initDuty(t)

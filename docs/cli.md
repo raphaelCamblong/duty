@@ -93,11 +93,11 @@ duty set T-07 goal < goal.md
 ### status
 
 `duty status <id> <status>` — Set a task's status — `todo`, `in-progress`,
-`done`, or `blocked` — in both its file and its board row. Every transition is
-free except claiming a task already `in-progress`, refused so a live claim is
-never silently stolen — the refusal names who holds it. Moving to `in-progress`
-records the claimer (`--as`, else `$DUTY_AGENT`, else unnamed); any other status
-clears the claim.
+`done`, `blocked`, or `backlog` — in both its file and its board row. Every
+transition is free except claiming a task already `in-progress`, refused so a
+live claim is never silently stolen — the refusal names who holds it. Moving to
+`in-progress` records the claimer (`--as`, else `$DUTY_AGENT`, else unnamed); any
+other status clears the claim.
 
 ```sh title="Start a task, claiming it"
 duty status T-07 in-progress --as sonnet-2

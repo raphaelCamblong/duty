@@ -30,6 +30,9 @@ const (
 	StatusDone = "done"
 	// StatusBlocked marks a task stopped on a named missing input.
 	StatusBlocked = "blocked"
+	// StatusBacklog marks a task parked out of the actionable queue until
+	// groomed; get next never offers it.
+	StatusBacklog = "backlog"
 )
 
 // IDPrefix is the fixed prefix of every task id and task filename, before the
@@ -310,10 +313,10 @@ func ValidSlug(s string) bool {
 	return true
 }
 
-// ValidStatus reports whether s is one of the four task statuses.
+// ValidStatus reports whether s is one of the five task statuses.
 func ValidStatus(s string) bool {
 	switch s {
-	case StatusTodo, StatusInProgress, StatusDone, StatusBlocked:
+	case StatusTodo, StatusInProgress, StatusDone, StatusBlocked, StatusBacklog:
 		return true
 	}
 	return false

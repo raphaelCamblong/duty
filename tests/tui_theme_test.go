@@ -140,6 +140,27 @@ func TestThemePaletteOverride(t *testing.T) {
 	}
 }
 
+func TestBacklogRendersDim(t *testing.T) {
+	root := fiveStatusTree(t)
+	for _, tc := range []struct {
+		name string
+		dark bool
+		dim  string // the dim-grey foreground the backlog word inherits
+	}{
+		{"dark", true, "\x1b[38;5;243m"},
+		{"light", false, "\x1b[38;5;242m"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := config.Config{Editor: "vi"}
+			cfg.TUI.Theme = tc.name
+			frame := themeFrame(t, root, cfg, tc.dark)
+			if !strings.Contains(frame, tc.dim+"backlog") {
+				t.Errorf("backlog word not inked dim grey %q:\n%s", tc.dim, frame)
+			}
+		})
+	}
+}
+
 func TestThemeMalformedColor(t *testing.T) {
 	root := fourStatusTree(t)
 	for _, tc := range []struct {

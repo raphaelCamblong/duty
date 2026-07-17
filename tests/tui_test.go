@@ -282,6 +282,30 @@ func TestTrackBarCells(t *testing.T) {
 		}
 	})
 
+	t.Run("all five statuses each keep at least one cell", func(t *testing.T) {
+		counts := map[string]int{"in-progress": 20, "todo": 1, "blocked": 1, "backlog": 1, "done": 1}
+		cells := tui.BarCells(counts, 14)
+		sum := 0
+		for _, st := range []string{"in-progress", "todo", "blocked", "backlog", "done"} {
+			if cells[st] < 1 {
+				t.Errorf("status %q got %d cells, want >=1 (min-1-cell rule, 5 segments)", st, cells[st])
+			}
+			sum += cells[st]
+		}
+		if sum != 14 {
+			t.Errorf("five-segment bar cells sum = %d, want 14 (fixed width)", sum)
+		}
+	})
+
+	t.Run("width equal to the segment count gives each exactly one cell", func(t *testing.T) {
+		cells := tui.BarCells(map[string]int{"in-progress": 9, "todo": 1, "blocked": 1, "backlog": 1, "done": 1}, 5)
+		for _, st := range []string{"in-progress", "todo", "blocked", "backlog", "done"} {
+			if cells[st] != 1 {
+				t.Errorf("status %q got %d cells at width 5, want exactly 1", st, cells[st])
+			}
+		}
+	})
+
 	t.Run("single status fills the whole bar", func(t *testing.T) {
 		if cells := tui.BarCells(map[string]int{"in-progress": 3}, 14); cells["in-progress"] != 14 {
 			t.Errorf("single-status cells = %v, want in-progress: 14", cells)
@@ -1216,6 +1240,34 @@ func scrambledStatusTree(t *testing.T) string {
 	mustDuty(t, root, "status", "T-04", "blocked")
 	mustDuty(t, root, "status", "T-06", "in-progress")
 	return root
+}
+
+// fiveStatusTree builds a flat board whose five tasks carry all five statuses,
+// board order T-01..T-05 deliberately reversed from the display sort: done,
+// backlog, blocked, todo, in-progress. Sorting must reorder them to
+// in-progress → todo → blocked → backlog → done (T-05..T-01).
+func fiveStatusTree(t *testing.T) string {
+	t.Helper()
+	root := initDuty(t)
+	for _, title := range []string{"One", "Two", "Three", "Four", "Five"} {
+		mustDuty(t, root, "create", "task", title)
+	}
+	mustDuty(t, root, "status", "T-01", "done")
+	mustDuty(t, root, "status", "T-02", "backlog")
+	mustDuty(t, root, "status", "T-03", "blocked")
+	mustDuty(t, root, "status", "T-05", "in-progress")
+	return root
+}
+
+func TestStatusSortPlacesBacklogBeforeDone(t *testing.T) {
+	root := fiveStatusTree(t)
+	m := newTUIModelSize(t, root, 120, 35)
+
+	// Default ON: in-progress → todo → blocked → backlog → done.
+	want := []string{"T-05", "T-04", "T-03", "T-02", "T-01"}
+	if got := rowOrder(t, m); strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("status-sorted rows = %v, want %v (backlog between blocked and done)", got, want)
+	}
 }
 
 // rowOrder walks the left panel top-to-bottom, returning each selectable id in

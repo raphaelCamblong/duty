@@ -1,7 +1,7 @@
 ---
 id: T-58
 title: A backlog status for parked work
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -42,8 +42,37 @@ Auto-promotion rules; per-status boards/sections; TUI mutations; renaming
 existing statuses.
 
 ## Gates
-- [ ] Scratch tree: backlog task never returned by get next --claim even when
+- [x] Scratch tree: backlog task never returned by get next --claim even when
   first in board order; `status <id> todo` makes it claimable immediately.
-- [ ] TUI fixture with all five statuses: sort order correct, 5-segment bar
+- [x] TUI fixture with all five statuses: sort order correct, 5-segment bar
   with min-1-cell holding, backlog rendered dim in both theme frames.
-- [ ] `just check` green; docs updated; round-trip suite green.
+- [x] `just check` green; docs updated; round-trip suite green.
+
+## Report
+
+### 2026-07-18 01:56 — done
+
+Added `backlog` as a fifth full-member status. It's settable via `status` and
+`report --status`, valid in frontmatter, board rows, and the TSV status column
+(contract shape unchanged). `get next`/`--claim` never offer it — actionable
+stays "todo with met deps" — so a parked task waits until `duty status <id>
+todo` grooms it back in; the claim guard doesn't apply since backlog is never
+held.
+
+In the TUI it inks the chrome dim grey in both themes and sorts between blocked
+and done, inherited through `rollupOrder` and `statusColor` (single sources).
+The min-1-cell bar rule holds with five segments. Waits are unchanged: a backlog
+task with unmet deps still shows waits, and a todo blocked-by a backlog dep
+counts it unmet.
+
+Files: internal/task/task.go (StatusBacklog + ValidStatus), internal/app/app.go
+(error listing), internal/tui/view.go (rollupOrder), internal/tui/theme.go
+(statusInk/statusColor). Docs: docs/tasks.md, docs/cli.md.
+
+Tests: TestBacklogNotActionable, TestBacklogWaitsInterplay,
+TestStatusSortPlacesBacklogBeforeDone, TestBacklogRendersDim, two 5-segment
+BarCells subtests, and a backlog transition in TestRoundTrip.
+
+Deliberately out of scope: get tracks kept its fixed 7-column count shape (no
+backlog column added — shape unchanged), and the skill and scaffolded README
+template were left as-is per the task's doc list.

@@ -39,7 +39,7 @@ var nameRE = regexp.MustCompile(`^[a-z0-9-]+$`)
 // unknownStatusErr is the one-line error every use-case rejecting an unknown
 // status string returns.
 func unknownStatusErr(status string) error {
-	return fmt.Errorf("unknown status %q: want todo, in-progress, done or blocked", status)
+	return fmt.Errorf("unknown status %q: want todo, in-progress, done, blocked or backlog", status)
 }
 
 // resolveOpenWithRoot resolves id to its open task file and the root of the

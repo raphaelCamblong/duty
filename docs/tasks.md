@@ -25,7 +25,7 @@ A handful of rules run through everything:
 ---
 id: T-01
 title: Short imperative title
-status: todo            # todo | in-progress | done | blocked
+status: todo            # todo | in-progress | done | blocked | backlog
 blocked-by: []          # task ids that must be done first
 ---
 
@@ -58,9 +58,11 @@ What NOT to touch. YAGNI with teeth.
   past 99. Tree-wide uniqueness lets every command take a bare id; a task's
   board is its folder, so `move` never renames. The `slug` derives from the
   title (lowercased, non-alphanumerics → `-`, collapsed, ≤40 chars).
-- **Statuses:** `todo | in-progress | done | blocked`. A flat setter — any
-  transition is legal. Discipline lives in the lifecycle contract below, not a
-  state machine.
+- **Statuses:** `todo | in-progress | done | blocked | backlog`. A flat setter —
+  any transition is legal. Discipline lives in the lifecycle contract below, not
+  a state machine. `backlog` parks a task out of the actionable queue: it stays
+  visible and counted, but `get next` never offers it until `duty status <id>
+  todo` grooms it back in.
 - **Claim identity:** an optional `claimed-by: <name>` line names the agent
   currently holding an `in-progress` task. It is machine-owned and absent from
   fresh tasks — `duty get next --claim --as <name>` and `duty status <id>

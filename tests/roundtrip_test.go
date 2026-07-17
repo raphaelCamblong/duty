@@ -244,6 +244,8 @@ func TestRoundTrip(t *testing.T) {
 	if code, stdout, stderr := runDutyStdin(t, root, "Scratch report.\n", "report", "T-06"); code != 0 || stdout != "" || stderr != "" {
 		t.Fatalf("report: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
+	mustRun(t, root, "status", "T-06", "backlog") // park it
+	mustRun(t, root, "status", "T-06", "todo")    // groom it back
 	mustRun(t, root, "move", "T-06", "--section", "Waiting")
 	mustRun(t, root, "move", "T-06", "--track", "backend")
 	mustRun(t, filepath.Join(root, "backend"), "move", "T-06", "--track", ".")

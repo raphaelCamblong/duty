@@ -49,6 +49,35 @@ func TestGetTasksWaits(t *testing.T) {
 	})
 }
 
+func TestBacklogWaitsInterplay(t *testing.T) {
+	root := initDuty(t)
+	createTask(t, root, "Dep")                                            // T-01 (todo)
+	mustDuty(t, root, "create", "task", "Parked", "--blocked-by", "T-01") // T-02
+	mustRun(t, root, "status", "T-02", "backlog")
+	mustDuty(t, root, "create", "task", "Waiter", "--blocked-by", "T-02") // T-03 (todo, dep on backlog)
+
+	t.Run("a backlog task with an unmet dep still shows waits", func(t *testing.T) {
+		_, out, _ := runDuty(t, root, "get", "tasks")
+		if w := lineFor(out, "T-02"); !strings.Contains(w, "waits T-01") {
+			t.Errorf("backlog T-02 line %q missing waits T-01", w)
+		}
+	})
+
+	t.Run("a todo blocked-by a backlog dep counts it unmet", func(t *testing.T) {
+		_, out, _ := runDuty(t, root, "get", "tasks")
+		if w := lineFor(out, "T-03"); !strings.Contains(w, "waits T-02") {
+			t.Errorf("todo T-03 line %q should wait on its backlog dep T-02", w)
+		}
+	})
+
+	t.Run("get next offers only the actionable dep, not the backlog or its waiter", func(t *testing.T) {
+		_, out, _ := runDuty(t, root, "get", "next")
+		if !strings.Contains(out, "T-01") || strings.Contains(out, "T-02") || strings.Contains(out, "T-03") {
+			t.Errorf("get next = %q, want only T-01 actionable", out)
+		}
+	})
+}
+
 func TestGetTaskBlockedByStatuses(t *testing.T) {
 	root := initDuty(t)
 	createTask(t, root, "One") // T-01
