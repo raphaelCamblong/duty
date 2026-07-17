@@ -47,5 +47,6 @@ Order top-to-bottom is the intended build order.
 | [T-50](T-50-claim-identity-who-holds-each-task.md) | Claim identity: who holds each task | done |
 | [T-53](T-53-docs-seo-metadata-social-cards-search.md) | Docs SEO: metadata, social cards, search presence | done |
 | [T-55](T-55-computed-views-show-dependency-waits.md) | Computed views show dependency waits | done |
+| [T-58](T-58-a-backlog-status-for-parked-work.md) | A backlog status for parked work | todo |
 
 Completed tasks (0) archived: [archive/](archive/).
