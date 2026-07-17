@@ -21,7 +21,9 @@ duty report <id> --status done   # append what changed and flip to done, one wri
 ```
 
 `get next --claim` hands each agent a distinct task under a lock, so a swarm
-just works. Read the whole task before starting: `duty get task <id> --body`.
+just works. Claim with `--as <your-name>` (or set `DUTY_AGENT`) so the board
+shows who holds what. Read the whole task before starting:
+`duty get task <id> --body`.
 
 ## Rules
 
@@ -51,4 +53,4 @@ This skill is deliberately short and lists no flags. `duty --help` and
 `duty <command> --help` are excellent and authoritative — consult them for
 every command's flags, arguments, and exit codes. When unsure, ask the binary.
 
-<!-- duty skill v1 · canonical: https://duty-cli.xyz/skill.md -->
+<!-- duty skill v2 · canonical: https://duty-cli.xyz/skill.md -->
