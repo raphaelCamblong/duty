@@ -93,8 +93,8 @@ const (
 	groupInterface = "interface"
 )
 
-// rootLong teaches the tool in one screen: what it is, then the five-step
-// lifecycle an agent (or a human) drives it through.
+// rootLong is the root command's long help: what duty is, then the five-step
+// lifecycle it drives.
 const rootLong = `duty is a file-based task system: markdown task files plus nested board
 indexes, kept in sync by one binary.
 
@@ -191,8 +191,7 @@ func grouped(cmd *cobra.Command, id string) *cobra.Command {
 }
 
 // claimer resolves the agent name a claim records: the --as flag value when
-// set, else the DUTY_AGENT environment variable, else empty for an unnamed
-// claim (today's behavior — nothing breaks for callers that name no one).
+// set, else $DUTY_AGENT, else empty for an unnamed claim.
 func claimer(as string) string {
 	if as = strings.TrimSpace(as); as != "" {
 		return as
@@ -222,10 +221,14 @@ func newGroupCmd(use, short, usage, example string) *cobra.Command {
 // addInFlag registers the local --in flag on cmd, binding it to in: a
 // root-relative track path ("." = root board) selecting the board the command
 // acts on instead of the one derived from cwd. Shared by every board-scoped
-// command so the flag reads and behaves the same everywhere.
+// command.
 func addInFlag(cmd *cobra.Command, in *string) {
 	cmd.Flags().StringVar(in, "in", "", `board to act on by track path from the tree root ("." = root)`)
 }
+
+// tsv joins fields into one agent-output record; the tab is the wire contract
+// for --agent output.
+func tsv(fields ...string) string { return strings.Join(fields, "\t") }
 
 // stringList is a repeatable string flag; each occurrence may also carry
 // several comma-separated values.

@@ -16,8 +16,7 @@ const (
 )
 
 // newInitCmd builds the init command: bootstrap a duty tree in cwd, printing
-// where it landed — the one confirmation a scaffolding command owes, since
-// there's no other way to see what it made.
+// where it landed.
 func newInitCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	return &cobra.Command{
 		Use:     "init [title]",

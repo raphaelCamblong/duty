@@ -274,7 +274,7 @@ func blockedByHuman(deps []app.Dep) string {
 // (RFC3339 mtime), and claimed-by. New fields only ever append, so parsers of
 // the earlier fields keep working; claimed-by is empty for an unclaimed task.
 func taskAgent(info app.TaskInfo) string {
-	return strings.Join([]string{
+	return tsv(
 		info.ID,
 		info.Track,
 		info.Status,
@@ -285,7 +285,7 @@ func taskAgent(info app.TaskInfo) string {
 		info.Path,
 		info.UpdatedAt.Format(time.RFC3339),
 		info.ClaimedBy,
-	}, "\t")
+	)
 }
 
 // tracksHuman renders tracks as aligned columns: path, title, then the
@@ -312,7 +312,7 @@ func tracksHuman(tracks []app.TrackInfo) []string {
 // trackAgent renders one track as a TSV record: path, title, todo,
 // in-progress, done, blocked, archived — fixed column order is the contract.
 func trackAgent(tr app.TrackInfo) string {
-	return strings.Join([]string{
+	return tsv(
 		tr.Path,
 		tr.Title,
 		strconv.Itoa(tr.Todo),
@@ -320,7 +320,7 @@ func trackAgent(tr app.TrackInfo) string {
 		strconv.Itoa(tr.Done),
 		strconv.Itoa(tr.Blocked),
 		strconv.Itoa(tr.Archived),
-	}, "\t")
+	)
 }
 
 // humanLine renders r for human reading: "[track/ ]id  status  title[  drift]".
@@ -381,7 +381,7 @@ func humanDrift(r app.Row) string {
 // id<TAB>board-path<TAB>status<TAB>title<TAB>drift<TAB>updated (RFC3339 mtime,
 // the trailing field so existing parsers keep working).
 func tsvLine(r app.Row) string {
-	return strings.Join([]string{r.ID, r.Board, r.Status, r.Title, agentDrift(r), r.UpdatedAt.Format(time.RFC3339)}, "\t")
+	return tsv(r.ID, r.Board, r.Status, r.Title, agentDrift(r), r.UpdatedAt.Format(time.RFC3339))
 }
 
 // agentDrift renders r's drift flag for --agent output: "", "board=<status>",

@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -103,7 +102,7 @@ func emit(w io.Writer, events []app.Event, agent bool) {
 // watchTSV renders one change as the agent record:
 // time<TAB>event<TAB>id<TAB>field<TAB>old<TAB>new, time in RFC3339.
 func watchTSV(now time.Time, e app.Event) string {
-	return strings.Join([]string{now.Format(time.RFC3339), e.Kind, e.ID, e.Field, e.Old, e.New}, "\t")
+	return tsv(now.Format(time.RFC3339), e.Kind, e.ID, e.Field, e.Old, e.New)
 }
 
 // watchHuman renders one change as a readable line: a short clock time, the
