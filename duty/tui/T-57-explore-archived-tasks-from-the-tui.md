@@ -1,7 +1,7 @@
 ---
 id: T-57
 title: Explore archived tasks from the TUI
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -43,9 +43,15 @@ Unarchiving from the TUI; CLI changes (get tasks still lists open only);
 searching across archives; pagination (revisit if archives grow huge).
 
 ## Gates
-- [ ] Fixture with an archived-out track, a never-empty track, and mixed
+- [x] Fixture with an archived-out track, a never-empty track, and mixed
   boards: OFF hides the archived-out track only; ON reveals sections +
   track, preview opens an archived task (frames in report).
-- [ ] Zero archive reads while OFF (test-proven); TestStartupPerformance
+- [x] Zero archive reads while OFF (test-proven); TestStartupPerformance
   green; frame audit green.
-- [ ] `just check` green; docs updated.
+- [x] `just check` green; docs updated.
+
+## Report
+
+### 2026-07-18 02:23 — done
+
+The archive is no longer invisible. `a` toggles it in place (magit-style, session-only, listed in `?`). Off, a track emptied by archiving drops out while a never-used one keeps its dim "empty" row. On, each board grows a dim "Archived (N)" section — id, title, age — archived-out tracks reappear with their counts, and enter opens the normal read-only preview. Archived file *contents* are read only while the toggle is on; off costs nothing (proven with a counting FS). Docs and tests updated.

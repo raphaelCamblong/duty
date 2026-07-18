@@ -16,11 +16,13 @@ import (
 )
 
 // entry is one line of the left panel: a sub-track, a task row, or a bare
-// section header (never selected, never clickable).
+// section header (never selected, never clickable). archived marks a task row
+// that lives in a board's archive/ — rendered dim, previewable, never edited.
 type entry struct {
-	track   *Sub
-	task    *Row
-	section string
+	track    *Sub
+	task     *Row
+	section  string
+	archived bool
 }
 
 // FilterValue feeds the list's fuzzy filter: track name+title for tracks,
@@ -56,15 +58,17 @@ func anySelectable(items []list.Item) bool {
 const tracksSection = "Tracks"
 
 // boardEntries lists a board as left-panel entries: a "Tracks" header over the
-// sub-track rows, then every section header followed by its task rows. With
-// statusSort on the rows within each section are status-grouped for display
-// (§8); off, they keep the board's file order.
-func boardEntries(b Board, statusSort bool) []list.Item {
+// visible sub-track rows, then every section header followed by its task rows,
+// and — when showArchive is on — a dim "Archived (N)" section of the board's
+// archived tasks. With statusSort on the rows within each section are
+// status-grouped for display (§8); off, they keep the board's file order.
+func boardEntries(b Board, statusSort, showArchive bool) []list.Item {
 	var items []list.Item
-	if len(b.Subs) > 0 {
+	subs := visibleSubs(b.Subs, showArchive)
+	if len(subs) > 0 {
 		items = append(items, entry{section: tracksSection})
 	}
-	for i := range b.Subs {
+	for _, i := range subs {
 		items = append(items, entry{track: &b.Subs[i]})
 	}
 	for si := range b.Sections {
@@ -77,7 +81,42 @@ func boardEntries(b Board, statusSort bool) []list.Item {
 			items = append(items, entry{task: &rows[ri]})
 		}
 	}
+	if showArchive && len(b.Archived) > 0 {
+		items = append(items, entry{section: fmt.Sprintf("Archived (%d)", len(b.Archived))})
+		for ri := range b.Archived {
+			items = append(items, entry{task: &b.Archived[ri], archived: true})
+		}
+	}
 	return items
+}
+
+// visibleSubs returns the indices of the sub-tracks the current view shows:
+// all of them when the archive is on, otherwise every one except a track
+// emptied by archiving (zero open tasks, at least one archived) — an
+// archived-out track hides until the archive is revealed.
+func visibleSubs(subs []Sub, showArchive bool) []int {
+	var out []int
+	for i := range subs {
+		if archivedOut(subs[i], showArchive) {
+			continue
+		}
+		out = append(out, i)
+	}
+	return out
+}
+
+// archivedOut reports whether a track is hidden by the archive-off rule: its
+// subtree holds no open tasks but at least one archived one. A track that
+// never held a task (zero archived) stays visible as an intentional container.
+func archivedOut(s Sub, showArchive bool) bool {
+	return !showArchive && emptiedByArchiving(s)
+}
+
+// emptiedByArchiving reports whether a track's subtree holds no open tasks but
+// at least one archived one — the archived-out state, hidden while the archive
+// is off and shown dim with its count while it is on.
+func emptiedByArchiving(s Sub) bool {
+	return s.Total == 0 && s.Archived > 0
 }
 
 // sortedRows groups a section's rows by status for display: stable by
@@ -108,38 +147,50 @@ func statusRank(status string) int {
 // per-status rollup, tasks with status/gates/drift columns, section names
 // dim; selectable lines are wrapped in BubbleZone hit-zones.
 type compactDelegate struct {
-	theme     Theme
-	zones     *zone.Manager
-	nameW     int
-	countW    int
-	idW       int
-	driftW    int
-	ageW      int
-	showAge   bool
-	showGates bool
-	now       time.Time
-	glyph     string
+	theme       Theme
+	zones       *zone.Manager
+	nameW       int
+	countW      int
+	idW         int
+	driftW      int
+	ageW        int
+	showAge     bool
+	showGates   bool
+	showArchive bool
+	now         time.Time
+	glyph       string
 }
 
 // newDelegate sizes a compact delegate's columns for one board; showAge governs
 // the always-on relative-age column (whose width is measured here) and showGates
-// the gate column that a narrow terminal drops. glyph is the current spinner
-// frame drawn beside in-progress rows, "" when the tree holds none.
-func newDelegate(theme Theme, z *zone.Manager, b Board, showAge, showGates bool, now time.Time, glyph string) compactDelegate {
+// the gate column that a narrow terminal drops. showArchive folds the board's
+// archived rows into the id and age widths so they align with the open rows.
+// glyph is the current spinner frame drawn beside in-progress rows, "" when the
+// tree holds none.
+func newDelegate(theme Theme, z *zone.Manager, b Board, showAge, showGates, showArchive bool, now time.Time, glyph string) compactDelegate {
 	d := compactDelegate{
-		theme:     theme,
-		zones:     z,
-		nameW:     maxSubNameWidth(b.Subs),
-		countW:    maxSubCountWidth(b.Subs),
-		idW:       maxIDWidth(b.Sections),
-		driftW:    maxDriftWidth(b.Sections),
-		showAge:   showAge,
-		showGates: showGates,
-		now:       now,
-		glyph:     glyph,
+		theme:       theme,
+		zones:       z,
+		nameW:       maxSubNameWidth(b.Subs),
+		countW:      maxSubCountWidth(b.Subs),
+		idW:         maxIDWidth(b.Sections),
+		driftW:      maxDriftWidth(b.Sections),
+		showAge:     showAge,
+		showGates:   showGates,
+		showArchive: showArchive,
+		now:         now,
+		glyph:       glyph,
 	}
 	if showAge {
 		d.ageW = maxAgeWidth(b.Sections, now)
+	}
+	if showArchive {
+		for _, r := range b.Archived {
+			d.idW = max(d.idW, lipgloss.Width(r.ID))
+			if showAge {
+				d.ageW = max(d.ageW, lipgloss.Width(ageCell(r, now)))
+			}
+		}
 	}
 	return d
 }
@@ -165,10 +216,14 @@ func (d compactDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	}
 	sel := index == m.Index()
 	var line string
-	if e.track != nil {
+	switch {
+	case e.track != nil:
 		head, tail := splitMatches(m.MatchesForItem(index), len(e.track.Name))
 		line = d.trackLine(*e.track, sel, m.Width(), head, tail)
-	} else {
+	case e.archived:
+		head, tail := splitMatches(m.MatchesForItem(index), len(e.task.ID))
+		line = d.archivedLine(*e.task, sel, m.Width(), head, tail)
+	default:
 		head, tail := splitMatches(m.MatchesForItem(index), len(e.task.ID))
 		line = d.taskLine(*e.task, sel, m.Width(), head, tail)
 	}
@@ -211,10 +266,34 @@ func styleMatches(s string, matches []int, base lipgloss.Style) string {
 func (d compactDelegate) trackLine(s Sub, selected bool, w int, nameM, titleM []int) string {
 	rightW := trackRightWidth(d.countW)
 	fixed := 2 + d.nameW + 2 + 2 + rightW
+	nameStyle := boldWhen(d.theme.accent(), selected)
+	rightCell := d.theme.trackBarCell(s.Counts, d.countW)
+	if d.showArchive && emptiedByArchiving(s) {
+		nameStyle = boldWhen(d.theme.dim(), selected)
+		rightCell = pad(d.theme.dim().Render(fmt.Sprintf("%d archived", s.Archived)), rightW)
+	}
 	line := d.theme.cursorMark(selected) +
-		pad(styleMatches(s.Name, nameM, boldWhen(d.theme.accent(), selected)), d.nameW) + "  " +
+		pad(styleMatches(s.Name, nameM, nameStyle), d.nameW) + "  " +
 		pad(styleMatches(s.Title, titleM, boldWhen(lipgloss.NewStyle(), selected)), max(w-fixed, minTitleWidth)) + "  " +
-		d.theme.trackBarCell(s.Counts, d.countW)
+		rightCell
+	return ansi.Truncate(line, w, "…")
+}
+
+// archivedLine renders one archived task row: dim id, title, and relative age
+// only — no status or gate columns, since an archived task is done by
+// convention. The row stays selectable so enter opens its read-only preview.
+func (d compactDelegate) archivedLine(r Row, selected bool, w int, idM, titleM []int) string {
+	fixed := 2 + d.idW + 2
+	if d.showAge {
+		fixed += 2 + d.ageW
+	}
+	dim := boldWhen(d.theme.dim(), selected)
+	line := d.theme.cursorMark(selected) +
+		pad(styleMatches(r.ID, idM, dim), d.idW) + "  " +
+		pad(styleMatches(r.Title, titleM, dim), max(w-fixed, minTitleWidth))
+	if d.showAge {
+		line += "  " + dim.Render(pad(ageCell(r, d.now), d.ageW))
+	}
 	return ansi.Truncate(line, w, "…")
 }
 

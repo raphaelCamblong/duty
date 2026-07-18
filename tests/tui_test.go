@@ -48,7 +48,7 @@ func mustDuty(t *testing.T, dir string, args ...string) string {
 // mustScan scans root, failing the test on error.
 func mustScan(t *testing.T, root string) tui.Snapshot {
 	t.Helper()
-	snap, err := tui.Scan(fsys.OS{}, root)
+	snap, err := tui.Scan(fsys.OS{}, root, false)
 	if err != nil {
 		t.Fatalf("Scan() error = %v", err)
 	}

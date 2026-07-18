@@ -76,6 +76,7 @@ type Model struct {
 	spinning         bool
 	showAge          bool
 	showGates        bool
+	showArchive      bool
 	statusSort       bool
 	preview          viewport.Model
 	previewOpen      bool
@@ -102,7 +103,7 @@ func New(f fsys.FS, root string, cfg config.Config) (Model, error) {
 	if err != nil {
 		return Model{}, err
 	}
-	snap, err := Scan(f, root)
+	snap, err := Scan(f, root, false)
 	if err != nil {
 		return Model{}, err
 	}
@@ -182,6 +183,9 @@ func (m Model) PreviewOpen() bool { return m.previewOpen }
 
 // ShowAge reports whether the relative-age column is visible.
 func (m Model) ShowAge() bool { return m.showAge }
+
+// ShowArchive reports whether the session-only archive view is on.
+func (m Model) ShowArchive() bool { return m.showArchive }
 
 // Cursor returns the selected item index — sub-tracks then tasks, section
 // headers not counted.
@@ -281,13 +285,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.onSpinnerTick(msg)
 	case refreshMsg:
 		if m.refresh == nil {
-			return m, scanCmd(m.fsys, m.root)
+			return m, scanCmd(m.fsys, m.root, m.showArchive)
 		}
-		return m, tea.Batch(scanCmd(m.fsys, m.root), waitRefresh(m.refresh))
+		return m, tea.Batch(scanCmd(m.fsys, m.root, m.showArchive), waitRefresh(m.refresh))
 	case snapMsg:
 		return m.withSnap(msg)
 	case editedMsg:
-		return m, scanCmd(m.fsys, m.root)
+		return m, scanCmd(m.fsys, m.root, m.showArchive)
 	case scrollTickMsg:
 		return m.stepScroll()
 	case tea.MouseMsg:
@@ -335,7 +339,9 @@ func (m Model) handleGlobalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		m.help.ShowAll = !m.help.ShowAll
 		return m.layout(), nil, true
 	case key.Matches(msg, m.keys.Refresh):
-		return m, scanCmd(m.fsys, m.root), true
+		return m, scanCmd(m.fsys, m.root, m.showArchive), true
+	case key.Matches(msg, m.keys.Archive):
+		return m.toggleArchive()
 	case key.Matches(msg, m.keys.Focus):
 		if m.previewOpen {
 			m.focus = otherFocus(m.focus)
@@ -355,6 +361,17 @@ func (m Model) handleGlobalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	return m, nil, false
 }
 
+// toggleArchive flips the session-only archive view. The list rebuilds at once
+// — the hiding rule reads archived counts already in the snapshot — while a
+// re-scan loads the archived rows (toggling on) or drops them (toggling off),
+// so archive contents are read only while the toggle is on.
+func (m Model) toggleArchive() (tea.Model, tea.Cmd, bool) {
+	m.showArchive = !m.showArchive
+	model, cmd := m.rebuildList()
+	scan := scanCmd(m.fsys, m.root, m.showArchive)
+	return model.fixSelection().layout(), tea.Batch(cmd, scan), true
+}
+
 // resizeGates re-derives the gate column's visibility from the new width — wide
 // terminals show it, narrow ones drop it so the always-on age column keeps room —
 // re-skinning the list delegate only when the visibility actually flips.
@@ -370,7 +387,7 @@ func (m Model) resizeGates(w int) Model {
 // visibility, leaving items, selection, and any filter untouched.
 func (m Model) reskinList() Model {
 	b, _ := m.board()
-	m.list.SetDelegate(newDelegate(m.theme, m.zones, b, m.showAge, m.showGates, time.Now(), m.spinnerGlyph()))
+	m.list.SetDelegate(newDelegate(m.theme, m.zones, b, m.showAge, m.showGates, m.showArchive, time.Now(), m.spinnerGlyph()))
 	return m
 }
 
@@ -379,7 +396,7 @@ func (m Model) reskinList() Model {
 func (m Model) handleActionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	switch {
 	case key.Matches(msg, m.keys.Edit):
-		if e, ok := m.selectedEntry(); ok && e.task != nil {
+		if e, ok := m.selectedEntry(); ok && e.task != nil && !e.archived {
 			return m, editCmd(m.editor, e.task.Path), true
 		}
 		return m, nil, true
@@ -529,7 +546,8 @@ func (m Model) renderPreview(reset bool) Model {
 }
 
 // findRowBoard resolves a task id to its row and the board it sits in, used
-// by the preview header for the row's track title.
+// by the preview header for the row's track title. Archived rows are searched
+// too, so an archived task opens the same read-only preview.
 func (m Model) findRowBoard(id string) (Row, Board, bool) {
 	for _, b := range m.snap.Boards {
 		for _, s := range b.Sections {
@@ -537,6 +555,11 @@ func (m Model) findRowBoard(id string) (Row, Board, bool) {
 				if r.ID == id {
 					return r, b, true
 				}
+			}
+		}
+		for _, r := range b.Archived {
+			if r.ID == id {
+				return r, b, true
 			}
 		}
 	}
@@ -609,11 +632,11 @@ func (m Model) selectNth(n int) Model {
 // snapshot; the returned command re-runs an active filter.
 func (m Model) rebuildList() (Model, tea.Cmd) {
 	b, ok := m.board()
-	m.list.SetDelegate(newDelegate(m.theme, m.zones, b, m.showAge, m.showGates, time.Now(), m.spinnerGlyph()))
+	m.list.SetDelegate(newDelegate(m.theme, m.zones, b, m.showAge, m.showGates, m.showArchive, time.Now(), m.spinnerGlyph()))
 	if !ok {
 		return m, m.list.SetItems(nil)
 	}
-	return m, m.list.SetItems(boardEntries(b, m.statusSort))
+	return m, m.list.SetItems(boardEntries(b, m.statusSort, m.showArchive))
 }
 
 // withSnap applies a re-scan: on error the last good snapshot stays on
@@ -668,10 +691,11 @@ func waitRefresh(c <-chan struct{}) tea.Cmd {
 	}
 }
 
-// scanCmd re-reads the whole tree off the update loop.
-func scanCmd(f fsys.FS, root string) tea.Cmd {
+// scanCmd re-reads the whole tree off the update loop, including archived rows
+// only when includeArchive is set.
+func scanCmd(f fsys.FS, root string, includeArchive bool) tea.Cmd {
 	return func() tea.Msg {
-		snap, err := Scan(f, root)
+		snap, err := Scan(f, root, includeArchive)
 		return snapMsg{snap: snap, err: err}
 	}
 }

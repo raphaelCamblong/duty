@@ -4,6 +4,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"path/filepath"
@@ -52,6 +53,17 @@ type Board struct {
 	Done, Total int
 	// Counts tallies this subtree's open tasks by status (file truth).
 	Counts map[string]int
+	// ArchivedCount is the number of archived task files in this board's own
+	// archive/ directory — a cheap listing tallied on every scan.
+	ArchivedCount int
+	// ArchivedSubtree tallies archived tasks in this board and every board
+	// below it; link fills it from each board's local ArchivedCount.
+	ArchivedSubtree int
+	// Archived holds this board's archived task rows, read from archive/ only
+	// when the scan is asked to include them (the TUI's archive toggle); nil
+	// otherwise. The dim archived list shows id, title, and age; the normal
+	// read-only preview renders each file's body.
+	Archived []Row
 }
 
 // Sub is one track line of the parent's view, counts live from files.
@@ -66,6 +78,9 @@ type Sub struct {
 	Done, Total int
 	// Counts tallies the track's subtree by status, like Board's.
 	Counts map[string]int
+	// Archived tallies archived tasks across the track's subtree; the OFF
+	// hiding rule reads it, the ON view shows it beside the reappeared track.
+	Archived int
 }
 
 // Section is one "## <name>" group of task rows.
@@ -104,9 +119,11 @@ type Row struct {
 	UpdatedAt time.Time
 }
 
-// Scan reads every board under root into a Snapshot. Archived tasks are
-// invisible: board discovery skips archive/ directories.
-func Scan(f fsys.FS, root string) (Snapshot, error) {
+// Scan reads every board under root into a Snapshot. Each board's archived
+// task count is always tallied from a cheap archive/ listing; the archived
+// rows themselves are read only when includeArchive is set (the TUI's archive
+// toggle), so the default path never reads an archived file's bytes.
+func Scan(f fsys.FS, root string, includeArchive bool) (Snapshot, error) {
 	dirs, err := tree.Boards(f, root)
 	if err != nil {
 		return Snapshot{}, err
@@ -119,7 +136,7 @@ func Scan(f fsys.FS, root string) (Snapshot, error) {
 			return Snapshot{}, fmt.Errorf("scan %s: %w", dir, err)
 		}
 		path := filepath.ToSlash(rel)
-		b, err := scanBoard(f, dir, path)
+		b, err := scanBoard(f, dir, path, includeArchive)
 		if err != nil {
 			return Snapshot{}, err
 		}
@@ -165,8 +182,9 @@ func annotateWaits(snap Snapshot) {
 }
 
 // scanBoard reads one board directory: its index for title and row order,
-// its task files for truth. Done/Total are local here; link aggregates.
-func scanBoard(f fsys.FS, dir, path string) (Board, error) {
+// its task files for truth, and its archive/ for the archived tally (rows too
+// when includeArchive). Done/Total are local here; link aggregates.
+func scanBoard(f fsys.FS, dir, path string, includeArchive bool) (Board, error) {
 	index, err := f.ReadFile(filepath.Join(dir, names.BoardFile))
 	if err != nil {
 		return Board{}, err
@@ -190,6 +208,17 @@ func scanBoard(f fsys.FS, dir, path string) (Board, error) {
 		b.Sections = append(b.Sections, s)
 	}
 	appendOrphans(&b, files, used)
+	tallyOpen(&b, files)
+	b.ArchivedCount, b.Archived, err = scanArchive(f, filepath.Join(dir, names.ArchiveDir), includeArchive)
+	if err != nil {
+		return Board{}, err
+	}
+	return b, nil
+}
+
+// tallyOpen fills a board's local Done, Total, and per-status Counts from its
+// open task files (file truth); link rolls these up into subtree totals.
+func tallyOpen(b *Board, files map[string]Row) {
 	b.Counts = make(map[string]int)
 	for _, f := range files {
 		if f.Status == task.StatusDone {
@@ -198,7 +227,67 @@ func scanBoard(f fsys.FS, dir, path string) (Board, error) {
 		b.Total++
 		b.Counts[f.Status]++
 	}
-	return b, nil
+}
+
+// scanArchive tallies a board's archive/ directory: the count is always the
+// number of archived task files (a cheap listing), while rows are read from
+// those files only when includeContent is set, so the toggle-off path never
+// reads an archived file's bytes. A missing archive/ is simply no archive.
+func scanArchive(f fsys.FS, archiveDir string, includeContent bool) (int, []Row, error) {
+	entries, err := f.ReadDir(archiveDir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return 0, nil, nil
+		}
+		return 0, nil, fmt.Errorf("scan archive %s: %w", archiveDir, err)
+	}
+	count := 0
+	var rows []Row
+	for _, e := range entries {
+		if e.IsDir() || !tree.IsTaskFile(e.Name()) {
+			continue
+		}
+		count++
+		if !includeContent {
+			continue
+		}
+		row, err := readArchivedTask(f, archiveDir, e)
+		if err != nil {
+			return 0, nil, err
+		}
+		rows = append(rows, row)
+	}
+	return count, rows, nil
+}
+
+// readArchivedTask reads one archived task file into a Row: its parsed id,
+// title, status and gates when the frontmatter is valid, else an id recovered
+// from the filename. Content and Path back the read-only preview.
+func readArchivedTask(f fsys.FS, dir string, e fs.DirEntry) (Row, error) {
+	abs := filepath.Join(dir, e.Name())
+	content, err := f.ReadFile(abs)
+	if err != nil {
+		return Row{}, err
+	}
+	r := Row{File: e.Name(), Path: abs, Content: content, UpdatedAt: entryModTime(e)}
+	t, err := task.Parse(content)
+	if err != nil {
+		r.ID = archivedID(e.Name())
+		return r, nil
+	}
+	r.ID, r.Title, r.Status = t.ID, t.Title, t.Status
+	r.GatesDone, r.GatesTotal = task.CountGates(content)
+	return r, nil
+}
+
+// archivedID recovers a task id from a T-NN-<slug>.md filename, the fallback
+// label when an archived file's frontmatter will not parse.
+func archivedID(name string) string {
+	parts := strings.SplitN(name, "-", 3)
+	if len(parts) >= 2 {
+		return parts[0] + "-" + parts[1]
+	}
+	return strings.TrimSuffix(name, ".md")
 }
 
 // readTasks parses every task file directly in dir: files maps filename to
@@ -307,19 +396,22 @@ func appendOrphans(b *Board, files map[string]Row, used map[string]bool) {
 func link(snap Snapshot, paths []string) {
 	local := make(map[string][2]int, len(paths))
 	localCounts := make(map[string]map[string]int, len(paths))
+	localArch := make(map[string]int, len(paths))
 	for _, p := range paths {
 		b := snap.Boards[p]
 		local[p] = [2]int{b.Done, b.Total}
 		localCounts[p] = b.Counts
+		localArch[p] = b.ArchivedCount
 	}
 	for _, p := range paths {
 		b := snap.Boards[p]
-		b.Done, b.Total = 0, 0
+		b.Done, b.Total, b.ArchivedSubtree = 0, 0, 0
 		b.Counts = make(map[string]int)
 		for _, q := range paths {
 			if within(q, p) {
 				b.Done += local[q][0]
 				b.Total += local[q][1]
+				b.ArchivedSubtree += localArch[q]
 				for st, n := range localCounts[q] {
 					b.Counts[st] += n
 				}
@@ -328,6 +420,12 @@ func link(snap Snapshot, paths []string) {
 		b.Parent = parentOf(snap, p)
 		snap.Boards[p] = b
 	}
+	buildSubs(snap, paths)
+}
+
+// buildSubs appends each non-root board to its parent's Subs as a track view,
+// carrying the subtree counts link already rolled up.
+func buildSubs(snap Snapshot, paths []string) {
 	for _, q := range paths {
 		if q == "." {
 			continue
@@ -337,6 +435,7 @@ func link(snap Snapshot, paths []string) {
 		p.Subs = append(p.Subs, Sub{
 			Path: q, Name: subName(c.Parent, q), Title: c.Title,
 			Done: c.Done, Total: c.Total, Counts: c.Counts,
+			Archived: c.ArchivedSubtree,
 		})
 		snap.Boards[c.Parent] = p
 	}

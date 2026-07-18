@@ -48,6 +48,21 @@ list's empty line.
 
 ![The fuzzy filter narrowing the list](/screens/filter.png)
 
+## Archived tasks
+
+Archived work stays out of the way until you ask for it. `a` reveals it — a
+session toggle, off by default. While it's off, a track whose tasks have all
+been archived drops out of the list; a track that never held a task keeps its
+dim "empty" row, so an intentional container reads differently from one that's
+been cleared out. Turn it on and those tracks come back, dim, with their
+archived counts, and every board grows a dim `Archived (N)` section listing
+each archived task's id, title, and age. `enter` opens the normal read-only
+preview — archived files render like any other. Nothing on an archived row can
+be changed; the archive is a record, not a workspace.
+
+Reading the archive costs nothing until you open it: with the toggle off, the
+viewer never reads an archived file.
+
 ## Keys
 
 | Key | Does |
@@ -60,6 +75,7 @@ list's empty line.
 | `e` | open the task in your editor (suspends, then resumes) |
 | `t` | toggle the age column (on by default) |
 | `s` | toggle raw board order (grouped by default) |
+| `a` | reveal archived tasks (this session) |
 | `r` | re-scan now |
 | `?` | toggle the full key grid |
 | `q` | quit |
