@@ -49,18 +49,5 @@ func (a App) editGates(cwd, id string, edit func([]byte) ([]byte, error)) error 
 	if err != nil {
 		return err
 	}
-	unlock, err := a.lock(root)
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	content, err := a.fs.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	out, err := edit(content)
-	if err != nil {
-		return err
-	}
-	return a.fs.WriteFile(path, out)
+	return a.lockedEdit(root, path, edit)
 }

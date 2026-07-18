@@ -208,13 +208,14 @@ func (a App) mtime(path string) time.Time {
 	return info.ModTime()
 }
 
-// trackInfo assembles one board's TrackInfo, its path taken relative to root.
-func (a App) trackInfo(root, b string) (TrackInfo, error) {
-	index, err := a.fs.ReadFile(filepath.Join(b, names.BoardFile))
+// trackInfo assembles one board's TrackInfo, its path taken relative to
+// listDir — the board the tracks listing started from.
+func (a App) trackInfo(listDir, b string) (TrackInfo, error) {
+	index, err := a.fs.ReadFile(boardIndexPath(b))
 	if err != nil {
 		return TrackInfo{}, err
 	}
-	info := TrackInfo{Path: relBoard(root, b), Title: board.TitleOr(index, filepath.Base(b))}
+	info := TrackInfo{Path: relBoard(listDir, b), Title: board.TitleOr(index, filepath.Base(b))}
 	statuses, err := a.taskStatuses(b)
 	if err != nil {
 		return TrackInfo{}, err
@@ -241,7 +242,7 @@ func (a App) trackInfo(root, b string) (TrackInfo, error) {
 // nextInBoard returns the first actionable task filed directly in board b,
 // scanning its rows in board order, or nil when b holds none.
 func (a App) nextInBoard(root, b string) (*TaskInfo, error) {
-	index, err := a.fs.ReadFile(filepath.Join(b, names.BoardFile))
+	index, err := a.fs.ReadFile(boardIndexPath(b))
 	if err != nil {
 		return nil, err
 	}
@@ -359,16 +360,12 @@ func (a App) depStatus(root, id string) (string, error) {
 
 // taskStatuses returns the file status of every task filed directly in dir.
 func (a App) taskStatuses(dir string) ([]string, error) {
-	files, err := tree.TaskFileNames(a.fs, dir)
+	_, tasks, err := a.tasksIn(dir)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]string, 0, len(files))
-	for _, name := range files {
-		t, _, err := a.readTask(filepath.Join(dir, name))
-		if err != nil {
-			return nil, err
-		}
+	out := make([]string, 0, len(tasks))
+	for _, t := range tasks {
 		out = append(out, t.Status)
 	}
 	return out, nil

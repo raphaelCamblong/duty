@@ -41,7 +41,7 @@ func (a App) Init(cwd, title string) (string, error) {
 	if err := a.fs.MkdirAll(filepath.Join(dir, names.ArchiveDir)); err != nil {
 		return "", fmt.Errorf("init: %w", err)
 	}
-	if err := a.fs.WriteFile(filepath.Join(dir, names.BoardFile), board.Render(title)); err != nil {
+	if err := a.fs.WriteFile(boardIndexPath(dir), board.Render(title)); err != nil {
 		return "", err
 	}
 	if err := a.fs.WriteFile(filepath.Join(dir, names.ReadmeFile), renderReadme()); err != nil {

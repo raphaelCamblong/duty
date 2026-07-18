@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/raphaelCamblong/duty/internal/board"
-	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/task"
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
@@ -65,7 +64,7 @@ func (a App) List(cwd, status, in string) ([]Row, error) {
 // ids for its wait state.
 func (a App) boardRows(treeRoot, listDir, b string) ([]Row, error) {
 	boardPath := relBoard(listDir, b)
-	index, err := a.fs.ReadFile(filepath.Join(b, names.BoardFile))
+	index, err := a.fs.ReadFile(boardIndexPath(b))
 	if err != nil {
 		return nil, err
 	}

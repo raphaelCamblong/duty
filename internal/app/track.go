@@ -36,7 +36,7 @@ func (a App) createTrackLocked(parentDir, name, title string) (string, error) {
 	if _, err := a.fs.Stat(sub); err == nil {
 		return "", fmt.Errorf("cannot create track: %s already exists", sub)
 	}
-	parentPath := filepath.Join(parentDir, names.BoardFile)
+	parentPath := boardIndexPath(parentDir)
 	parent, err := a.fs.ReadFile(parentPath)
 	if err != nil {
 		return "", err
@@ -51,7 +51,7 @@ func (a App) createTrackLocked(parentDir, name, title string) (string, error) {
 	if err := a.fs.MkdirAll(filepath.Join(sub, names.ArchiveDir)); err != nil {
 		return "", fmt.Errorf("create track: %w", err)
 	}
-	if err := a.fs.WriteFile(filepath.Join(sub, names.BoardFile), board.Render(title)); err != nil {
+	if err := a.fs.WriteFile(boardIndexPath(sub), board.Render(title)); err != nil {
 		return "", err
 	}
 	if err := a.fs.WriteFile(parentPath, withBullet); err != nil {

@@ -43,9 +43,9 @@ func (a App) Report(cwd, id string, r io.Reader, status string, force bool, as s
 	if status == "" {
 		return a.fs.WriteFile(taskPath, withReport)
 	}
-	t, err := task.Parse(content)
+	t, err := parseTask(taskPath, content)
 	if err != nil {
-		return fmt.Errorf("%s: %w", taskPath, err)
+		return err
 	}
 	return a.statusWrite(taskPath, id, status, force, withReport, t.Status, t.ClaimedBy, as)
 }

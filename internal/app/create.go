@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/raphaelCamblong/duty/internal/board"
-	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/task"
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
@@ -100,7 +99,7 @@ func (a App) validateBlockedBy(root string, blockedBy []string) error {
 // both contents computed before either write, and returns the new file's path.
 func (a App) writeTask(boardDir, id, slug, title, section string, blockedBy []string, body []byte) (string, error) {
 	filename := id + "-" + slug + ".md"
-	boardPath := filepath.Join(boardDir, names.BoardFile)
+	boardPath := boardIndexPath(boardDir)
 	content, err := a.fs.ReadFile(boardPath)
 	if err != nil {
 		return "", err

@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	"github.com/raphaelCamblong/duty/internal/board"
-	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/task"
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
@@ -125,7 +124,7 @@ func (a App) dropFromBoard(boardPath, filename string) ([]byte, error) {
 func (a App) moveAcross(id, taskPath, target, section string, pruned []byte, t task.Task) error {
 	filename := filepath.Base(taskPath)
 	srcPath := boardBeside(taskPath)
-	dstPath := filepath.Join(target, names.BoardFile)
+	dstPath := boardIndexPath(target)
 	dst, err := a.fs.ReadFile(dstPath)
 	if err != nil {
 		return err
@@ -147,16 +146,13 @@ func (a App) moveAcross(id, taskPath, target, section string, pruned []byte, t t
 // within its own board, byte-preserving the row line and pruning any section
 // left empty. It is the same-board case of both --section and --track moves.
 func (a App) moveRowInBoard(taskPath, section string) error {
-	boardPath := boardBeside(taskPath)
-	index, err := a.fs.ReadFile(boardPath)
-	if err != nil {
-		return err
-	}
-	moved, err := board.MoveRow(index, filepath.Base(taskPath), section)
-	if err != nil {
-		return err
-	}
-	return a.fs.WriteFile(boardPath, board.PruneEmptySections(moved))
+	return a.applyEdit(boardBeside(taskPath), func(index []byte) ([]byte, error) {
+		moved, err := board.MoveRow(index, filepath.Base(taskPath), section)
+		if err != nil {
+			return nil, err
+		}
+		return board.PruneEmptySections(moved), nil
+	})
 }
 
 // reorderInBoard applies pos to the row of the task at taskPath — a board-only
@@ -167,15 +163,9 @@ func (a App) moveRowInBoard(taskPath, section string) error {
 func (a App) reorderInBoard(root, taskPath string, pos Position) error {
 	boardPath := boardBeside(taskPath)
 	filename := filepath.Base(taskPath)
-	index, err := a.fs.ReadFile(boardPath)
-	if err != nil {
-		return err
-	}
-	reordered, err := a.reorder(root, boardPath, index, filename, pos)
-	if err != nil {
-		return err
-	}
-	return a.fs.WriteFile(boardPath, reordered)
+	return a.applyEdit(boardPath, func(index []byte) ([]byte, error) {
+		return a.reorder(root, boardPath, index, filename, pos)
+	})
 }
 
 // reorder computes the reordered board for pos: --top, or --before/--after a

@@ -59,18 +59,7 @@ func (a App) editSection(cwd, id, kind string, r io.Reader, edit func(content, p
 	if err != nil {
 		return err
 	}
-	unlock, err := a.lock(root)
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	content, err := a.fs.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	out, err := edit(content, payload)
-	if err != nil {
-		return err
-	}
-	return a.fs.WriteFile(path, out)
+	return a.lockedEdit(root, path, func(content []byte) ([]byte, error) {
+		return edit(content, payload)
+	})
 }

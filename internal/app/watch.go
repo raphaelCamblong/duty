@@ -58,9 +58,9 @@ func (a App) Snapshot(cwd, in string) (map[string]TaskState, error) {
 }
 
 // boardStates reads every task file directly in b into states, keyed by id and
-// tagged with b's path relative to root — the board the snapshot started from.
-func (a App) boardStates(root, b string, states map[string]TaskState) error {
-	boardPath := relBoard(root, b)
+// tagged with b's path relative to listDir — the board the snapshot started from.
+func (a App) boardStates(listDir, b string, states map[string]TaskState) error {
+	boardPath := relBoard(listDir, b)
 	files, err := tree.TaskFileNames(a.fs, b)
 	if err != nil {
 		return err

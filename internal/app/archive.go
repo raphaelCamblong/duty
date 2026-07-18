@@ -44,7 +44,7 @@ func (a App) archiveBoard(b string) error {
 	if len(done) == 0 {
 		return nil
 	}
-	boardPath := filepath.Join(b, names.BoardFile)
+	boardPath := boardIndexPath(b)
 	index, err := a.fs.ReadFile(boardPath)
 	if err != nil {
 		return err
@@ -94,18 +94,14 @@ func (a App) moveToArchive(b string, filenames []string) (int, error) {
 // doneTasks returns the filenames of every status: done task filed directly
 // in dir.
 func (a App) doneTasks(dir string) ([]string, error) {
-	files, err := tree.TaskFileNames(a.fs, dir)
+	files, tasks, err := a.tasksIn(dir)
 	if err != nil {
 		return nil, err
 	}
 	var done []string
-	for _, name := range files {
-		t, _, err := a.readTask(filepath.Join(dir, name))
-		if err != nil {
-			return nil, err
-		}
+	for i, t := range tasks {
 		if t.Status == task.StatusDone {
-			done = append(done, name)
+			done = append(done, files[i])
 		}
 	}
 	return done, nil
