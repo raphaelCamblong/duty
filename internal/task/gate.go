@@ -28,7 +28,7 @@ func Gates(content []byte) []Gate {
 	}
 	var gates []Gate
 	for _, raw := range strings.Split(string(body), "\n") {
-		if g, ok := parseGate(strings.TrimRight(raw, " \t\r")); ok {
+		if g, ok := parseGate(raw); ok {
 			gates = append(gates, g)
 		}
 	}
@@ -67,21 +67,12 @@ func AddGate(content []byte, text string) []byte {
 // flipping only that line's checkbox character. It errors when n is out of
 // range for the gates present.
 func SetGate(content []byte, n int, done bool) ([]byte, error) {
-	start, end, found := sectionBounds(content, gatesHeading)
-	count := 0
-	if found {
-		for pos := start; pos < end; {
-			line, next := lineAt(content, pos)
-			if _, ok := parseGate(strings.TrimRight(string(line), " \t\r")); ok {
-				count++
-				if count == n {
-					return flipBox(content, pos+boxIndex, done), nil
-				}
-			}
-			pos = next
-		}
+	start, end, _ := sectionBounds(content, gatesHeading)
+	positions := gatePositions(content, start, end)
+	if n < 1 || n > len(positions) {
+		return nil, fmt.Errorf("no gate %d: task has %d", n, len(positions))
 	}
-	return nil, fmt.Errorf("no gate %d: task has %d", n, count)
+	return flipBox(content, positions[n-1]+boxIndex, done), nil
 }
 
 // SetAllGates ticks or unticks every gate under "## Gates", flipping only each
@@ -93,18 +84,14 @@ func SetAllGates(content []byte, done bool) []byte {
 		return content
 	}
 	out := bytes.Clone(content)
-	for pos := start; pos < end; {
-		line, next := lineAt(out, pos)
-		if _, ok := parseGate(strings.TrimRight(string(line), " \t\r")); ok {
-			out[pos+boxIndex] = boxByte(done)
-		}
-		pos = next
+	for _, pos := range gatePositions(content, start, end) {
+		out[pos+boxIndex] = boxByte(done)
 	}
 	return out
 }
 
-// parseGate decodes a right-trimmed line as a gate; ok is false for any other
-// line. Indented checkboxes do not match, mirroring CountGates.
+// parseGate decodes a line as a gate; ok is false for anything else, including
+// an indented checkbox (only a top-level "- [ ]"/"- [x]" is a gate).
 func parseGate(line string) (Gate, bool) {
 	switch {
 	case strings.HasPrefix(line, "- [x]"):
@@ -118,15 +105,26 @@ func parseGate(line string) (Gate, bool) {
 // lastGateEnd returns the offset just past the last gate line within [start,end)
 // and whether the section holds any gate.
 func lastGateEnd(content []byte, start, end int) (int, bool) {
-	at, ok := 0, false
+	positions := gatePositions(content, start, end)
+	if len(positions) == 0 {
+		return 0, false
+	}
+	_, next := lineAt(content, positions[len(positions)-1])
+	return next, true
+}
+
+// gatePositions returns the start offset of each gate line within [start,end),
+// in file order.
+func gatePositions(content []byte, start, end int) []int {
+	var positions []int
 	for pos := start; pos < end; {
 		line, next := lineAt(content, pos)
-		if _, isGate := parseGate(strings.TrimRight(string(line), " \t\r")); isGate {
-			at, ok = next, true
+		if _, ok := parseGate(string(line)); ok {
+			positions = append(positions, pos)
 		}
 		pos = next
 	}
-	return at, ok
+	return positions
 }
 
 // flipBox returns content with the checkbox byte at at set ticked or unticked.

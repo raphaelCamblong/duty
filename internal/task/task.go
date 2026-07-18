@@ -67,7 +67,6 @@ var (
 	frontmatterRE = regexp.MustCompile(`(?s)\A---\n(.*?)\n---\n`)
 	statusLineRE  = regexp.MustCompile(`(?m)^status: \S+`)
 	claimedLineRE = regexp.MustCompile(`(?m)^claimed-by: .*\r?\n`)
-	reportHeadRE  = regexp.MustCompile(`(?m)^## Report[ \t]*\r?$`)
 )
 
 // Parse extracts the frontmatter of a task file. It returns an error when
@@ -217,7 +216,7 @@ func ReportBlock(at time.Time, status string, text []byte) []byte {
 func AppendReport(content, text []byte) []byte {
 	var b bytes.Buffer
 	writeEndingNL(&b, content)
-	if !reportHeadRE.Match(content) {
+	if _, ok := headingIndex(content, reportHeading); !ok {
 		ensureBlankLine(&b)
 		b.WriteString("## Report\n")
 	}
@@ -251,11 +250,20 @@ func endsBlank(b []byte) bool {
 // CountGates counts gate checkboxes under the "## Gates" section: done is the
 // number of ticked gates, total every gate.
 func CountGates(content []byte) (done, total int) {
-	for _, g := range Gates(content) {
-		total++
-		if g.Done {
+	start, end, found := sectionBounds(content, gatesHeading)
+	if !found {
+		return 0, 0
+	}
+	for pos := start; pos < end; {
+		line, next := lineAt(content, pos)
+		switch {
+		case bytes.HasPrefix(line, []byte("- [x]")):
 			done++
+			total++
+		case bytes.HasPrefix(line, []byte("- [ ]")):
+			total++
 		}
+		pos = next
 	}
 	return done, total
 }

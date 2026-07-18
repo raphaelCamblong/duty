@@ -95,13 +95,23 @@ func AddRow(content []byte, section, id, filename, title, status string) ([]byte
 	return joinLines(lines), nil
 }
 
-// SetRowStatus rewrites the status cell of the row targeting filename. Only
-// that cell changes; every other cell keeps its exact spacing.
-func SetRowStatus(content []byte, filename, status string) ([]byte, error) {
+// locateRow splits content into lines and returns the index of the row
+// targeting filename, erroring when no such row exists.
+func locateRow(content []byte, filename string) ([]string, int, error) {
 	lines := splitLines(content)
 	i := rowIndex(lines, filename)
 	if i < 0 {
-		return nil, fmt.Errorf("no board row for %s", filename)
+		return nil, 0, fmt.Errorf("no board row for %s", filename)
+	}
+	return lines, i, nil
+}
+
+// SetRowStatus rewrites the status cell of the row targeting filename. Only
+// that cell changes; every other cell keeps its exact spacing.
+func SetRowStatus(content []byte, filename, status string) ([]byte, error) {
+	lines, i, err := locateRow(content, filename)
+	if err != nil {
+		return nil, err
 	}
 	cells := strings.Split(lines[i], "|")
 	if len(cells) < 3 {
@@ -127,13 +137,12 @@ func RowStatus(row string) (string, bool) {
 // line moves byte-identical. A section left empty is not removed here; callers
 // compose with PruneEmptySections.
 func MoveRow(content []byte, filename, section string) ([]byte, error) {
-	lines := splitLines(content)
-	i := rowIndex(lines, filename)
-	if i < 0 {
-		return nil, fmt.Errorf("no board row for %s", filename)
+	lines, i, err := locateRow(content, filename)
+	if err != nil {
+		return nil, err
 	}
 	row := lines[i]
-	lines, err := insertRow(append(lines[:i], lines[i+1:]...), section, row)
+	lines, err = insertRow(append(lines[:i], lines[i+1:]...), section, row)
 	if err != nil {
 		return nil, err
 	}
@@ -144,10 +153,9 @@ func MoveRow(content []byte, filename, section string) ([]byte, error) {
 // above the section's first task row — preserving the row's bytes exactly. A
 // row already at the top is left byte-identical.
 func ReorderTop(content []byte, filename string) ([]byte, error) {
-	lines := splitLines(content)
-	i := rowIndex(lines, filename)
-	if i < 0 {
-		return nil, fmt.Errorf("no board row for %s", filename)
+	lines, i, err := locateRow(content, filename)
+	if err != nil {
+		return nil, err
 	}
 	return joinLines(relocateRow(lines, i, sectionTop(lines, i))), nil
 }
@@ -169,10 +177,9 @@ func ReorderAfter(content []byte, filename, ref string) ([]byte, error) {
 // reorderAdjacent relocates filename's row to ref's row index plus offset (0
 // above ref, 1 below), preserving the moved row's bytes.
 func reorderAdjacent(content []byte, filename, ref string, offset int) ([]byte, error) {
-	lines := splitLines(content)
-	i := rowIndex(lines, filename)
-	if i < 0 {
-		return nil, fmt.Errorf("no board row for %s", filename)
+	lines, i, err := locateRow(content, filename)
+	if err != nil {
+		return nil, err
 	}
 	r := rowIndex(lines, ref)
 	if r < 0 {
@@ -183,10 +190,9 @@ func reorderAdjacent(content []byte, filename, ref string, offset int) ([]byte, 
 
 // DropRow removes the row targeting filename.
 func DropRow(content []byte, filename string) ([]byte, error) {
-	lines := splitLines(content)
-	i := rowIndex(lines, filename)
-	if i < 0 {
-		return nil, fmt.Errorf("no board row for %s", filename)
+	lines, i, err := locateRow(content, filename)
+	if err != nil {
+		return nil, err
 	}
 	return joinLines(append(lines[:i], lines[i+1:]...)), nil
 }
@@ -198,7 +204,7 @@ func DropRow(content []byte, filename string) ([]byte, error) {
 func PruneEmptySections(content []byte) []byte {
 	lines := splitLines(content)
 	for i := len(lines) - 1; i >= 0; i-- {
-		if !strings.HasPrefix(lines[i], "## ") {
+		if !isHeading(lines[i]) {
 			continue
 		}
 		if strings.TrimSpace(lines[i][len("## "):]) == DefaultSection {
@@ -313,7 +319,7 @@ func sectionBounds(lines []string, section string) (start, end int, ok bool) {
 // start: the next heading, the footer, or len(lines).
 func sectionEnd(lines []string, start int) int {
 	for i := start + 1; i < len(lines); i++ {
-		if strings.HasPrefix(lines[i], "## ") || footerRe.MatchString(lines[i]) {
+		if isHeading(lines[i]) || footerRe.MatchString(lines[i]) {
 			return i
 		}
 	}
@@ -374,7 +380,7 @@ func sectionTop(lines []string, i int) int {
 // i sits above every heading.
 func sectionStart(lines []string, i int) int {
 	for j := i; j >= 0; j-- {
-		if strings.HasPrefix(lines[j], "## ") {
+		if isHeading(lines[j]) {
 			return j
 		}
 	}
@@ -395,7 +401,7 @@ func lastTableLine(lines []string, start, end int) int {
 // firstHeadingIndex returns the index of the first "## " heading, or -1.
 func firstHeadingIndex(lines []string) int {
 	for i, line := range lines {
-		if strings.HasPrefix(line, "## ") {
+		if isHeading(line) {
 			return i
 		}
 	}
@@ -419,6 +425,11 @@ func insertAt(lines []string, i int, insert ...string) []string {
 	out = append(out, insert...)
 	out = append(out, lines[i:]...)
 	return out
+}
+
+// isHeading reports whether line opens a "## " section.
+func isHeading(line string) bool {
+	return strings.HasPrefix(line, "## ")
 }
 
 // splitLines splits content on newlines; joinLines is its exact inverse, so

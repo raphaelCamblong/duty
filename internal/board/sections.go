@@ -35,7 +35,7 @@ func Sections(content []byte) []Section {
 	var out []Section
 	open := false
 	for _, line := range splitLines(content) {
-		if strings.HasPrefix(line, "## ") {
+		if isHeading(line) {
 			name := strings.TrimSpace(line[len("## "):])
 			open = name != boardsSection
 			if open {
