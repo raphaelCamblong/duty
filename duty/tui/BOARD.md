@@ -7,5 +7,6 @@ Order top-to-bottom is the intended build order.
 
 | Task | Title | Status |
 |------|-------|--------|
+| [T-59](T-59-kill-the-osc-background-query.md) | Kill the OSC background query | todo |
 
 Completed tasks (9) archived: [archive/](archive/).
