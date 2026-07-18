@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/raphaelCamblong/duty/internal/board"
@@ -322,7 +322,7 @@ func TestTrackBarCells(t *testing.T) {
 func TestTracksHeaderAndInlineBar(t *testing.T) {
 	root := fourStatusTree(t) // root has a backend track (T-03 done, T-04 blocked)
 	m := newTUIModelSize(t, root, 120, 35)
-	frame := m.View()
+	frame := m.View().Content
 
 	if !strings.Contains(frame, "Tracks") {
 		t.Errorf("Tracks section header missing:\n%s", frame)
@@ -352,7 +352,10 @@ func TestTracksHeaderAndInlineBar(t *testing.T) {
 		m, cmd = press(t, m, k)
 		m = pump(t, m, cmd)
 	}
-	filtered := m.View()
+	// Bubble Tea v2 always renders color, so the fuzzy filter underlines the
+	// matched runes ("back") in place — splitting "backend/" with escapes. Strip
+	// them to assert on the visible text, as the v1 non-tty tests did implicitly.
+	filtered := ansi.Strip(m.View().Content)
 	if strings.Contains(filtered, "Tracks") {
 		t.Errorf("Tracks header still shown while filtering:\n%s", filtered)
 	}
@@ -401,7 +404,7 @@ func TestTrackBarRightAligned(t *testing.T) {
 	for _, sz := range []struct{ w, h int }{{120, 35}, {70, 20}} {
 		t.Run(fmt.Sprintf("%dx%d", sz.w, sz.h), func(t *testing.T) {
 			m := newTUIModelSize(t, root, sz.w, sz.h)
-			frame := m.View()
+			frame := m.View().Content
 			lines := strings.Split(frame, "\n")
 			apiRow := lines[lineWith(t, frame, "api/", 40)]
 			feRow := lines[lineWith(t, frame, "frontend/", 40)]
@@ -435,7 +438,7 @@ func TestMasterDetailLayout(t *testing.T) {
 		m, _ = press(t, m, "tab")   // focus the list
 		m, _ = press(t, m, "k")     // cursor 0: the backend track
 		m, _ = press(t, m, "enter") // open its summary card
-		frame := m.View()
+		frame := m.View().Content
 		for _, want := range []string{"1 blocked", "1 done", "2 tasks · 1 done", "Sections", "█"} {
 			if !strings.Contains(frame, want) {
 				t.Errorf("frame missing %q:\n%s", want, frame)
@@ -448,7 +451,7 @@ func TestMasterDetailLayout(t *testing.T) {
 		m := newTUIModelSize(t, root, 120, 35)
 		m, _ = press(t, m, "j")     // cursor 1: T-01
 		m, _ = press(t, m, "enter") // open its preview
-		frame := m.View()
+		frame := m.View().Content
 		if !strings.Contains(frame, "Ship the alpha milestone") {
 			t.Errorf("task body preview missing for T-01:\n%s", frame)
 		}
@@ -460,7 +463,7 @@ func TestMasterDetailLayout(t *testing.T) {
 
 	t.Run("narrow terminal falls back to a single panel", func(t *testing.T) {
 		m := newTUIModelSize(t, root, 70, 20)
-		frame := m.View()
+		frame := m.View().Content
 		if strings.Contains(frame, "Ship the alpha milestone") || strings.Contains(frame, "Sections") {
 			t.Errorf("70x20 still renders a preview panel:\n%s", frame)
 		}
@@ -471,7 +474,7 @@ func TestMasterDetailLayout(t *testing.T) {
 
 		m, _ = press(t, m, "j")
 		m, _ = press(t, m, "enter")
-		full := m.View()
+		full := m.View().Content
 		if !m.PreviewFocused() || !strings.Contains(full, "Ship the alpha milestone") {
 			t.Fatalf("enter did not open the full-screen preview:\n%s", full)
 		}
@@ -522,7 +525,7 @@ func TestStartupPerformance(t *testing.T) {
 		}
 		nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 35})
 		m = nm.(tui.Model)
-		_ = m.View()
+		_ = m.View().Content
 		if d := time.Since(start); best == 0 || d < best {
 			best = d
 		}
@@ -540,7 +543,7 @@ func TestPreviewOnOpen(t *testing.T) {
 	root := fourStatusTree(t)
 	m := newTUIModelSize(t, root, 120, 35)
 
-	browse := m.View()
+	browse := m.View().Content
 	if m.PreviewOpen() {
 		t.Fatal("a preview is open while browsing")
 	}
@@ -559,7 +562,7 @@ func TestPreviewOnOpen(t *testing.T) {
 	if !m.PreviewOpen() || m.DetailID() != "T-01" {
 		t.Fatalf("enter did not open the task: open=%v detail=%q", m.PreviewOpen(), m.DetailID())
 	}
-	open := m.View()
+	open := m.View().Content
 	if !strings.Contains(open, "Ship the alpha milestone") {
 		t.Errorf("opened frame missing the task body:\n%s", open)
 	}
@@ -572,8 +575,8 @@ func TestPreviewOnOpen(t *testing.T) {
 	if m.PreviewOpen() {
 		t.Fatal("esc did not close the preview")
 	}
-	if strings.Contains(m.View(), "Ship the alpha milestone") {
-		t.Errorf("closed frame still shows the task body:\n%s", m.View())
+	if strings.Contains(m.View().Content, "Ship the alpha milestone") {
+		t.Errorf("closed frame still shows the task body:\n%s", m.View().Content)
 	}
 
 	m, _ = press(t, m, "k") // the backend track
@@ -663,11 +666,11 @@ func TestPanelFocusAndFilter(t *testing.T) {
 		if m.SelectedID() != "T-02" || m.Cursor() != 0 {
 			t.Fatalf("filtered selection = %q at %d, want T-02 at 0", m.SelectedID(), m.Cursor())
 		}
-		if frame := m.View(); strings.Contains(frame, "Alpha task") {
+		if frame := m.View().Content; strings.Contains(frame, "Alpha task") {
 			t.Errorf("filtered list still shows T-01:\n%s", frame)
 		}
 		m, _ = press(t, m, "esc")
-		if frame := m.View(); !strings.Contains(frame, "Alpha task") {
+		if frame := m.View().Content; !strings.Contains(frame, "Alpha task") {
 			t.Errorf("esc did not clear the filter:\n%s", frame)
 		}
 		if m.BoardPath() != "." {
@@ -728,18 +731,18 @@ func newTUIModelSize(t *testing.T, root string, w, h int) tui.Model {
 
 // clickAt sends one left button press at screen cell (x, y).
 func clickAt(m tui.Model, x, y int) tui.Model {
-	msg := tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}
+	msg := tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft}
 	nm, _ := m.Update(msg)
 	return nm.(tui.Model)
 }
 
 // wheelAt sends one wheel event at screen cell (x, y).
 func wheelAt(m tui.Model, down bool, x, y int) tui.Model {
-	b := tea.MouseButtonWheelUp
+	b := tea.MouseWheelUp
 	if down {
-		b = tea.MouseButtonWheelDown
+		b = tea.MouseWheelDown
 	}
-	nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: b})
+	nm, _ := m.Update(tea.MouseWheelMsg{X: x, Y: y, Button: b})
 	return nm.(tui.Model)
 }
 
@@ -747,7 +750,7 @@ func wheelAt(m tui.Model, down bool, x, y int) tui.Model {
 // hit-zones the frame registered, so the next mouse event lands.
 func render(t *testing.T, m tui.Model) string {
 	t.Helper()
-	frame := m.View()
+	frame := m.View().Content
 	time.Sleep(100 * time.Millisecond)
 	return frame
 }
@@ -773,13 +776,13 @@ func press(t *testing.T, m tui.Model, k string) (tui.Model, tea.Cmd) {
 	var msg tea.KeyMsg
 	switch k {
 	case "enter":
-		msg = tea.KeyMsg{Type: tea.KeyEnter}
+		msg = tea.KeyPressMsg{Code: tea.KeyEnter}
 	case "esc":
-		msg = tea.KeyMsg{Type: tea.KeyEsc}
+		msg = tea.KeyPressMsg{Code: tea.KeyEsc}
 	case "tab":
-		msg = tea.KeyMsg{Type: tea.KeyTab}
+		msg = tea.KeyPressMsg{Code: tea.KeyTab}
 	default:
-		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
+		msg = tea.KeyPressMsg{Code: []rune(k)[0], Text: k}
 	}
 	nm, cmd := m.Update(msg)
 	return nm.(tui.Model), cmd
@@ -978,7 +981,7 @@ func TestHeaderBarAndHelpFooter(t *testing.T) {
 	root := tuiTree(t)
 	m := newTUIModel(t, root)
 
-	frame := m.View()
+	frame := m.View().Content
 	if !strings.Contains(frame, "█") {
 		t.Errorf("header status-distribution bar missing from view:\n%s", frame)
 	}
@@ -993,7 +996,7 @@ func TestHeaderBarAndHelpFooter(t *testing.T) {
 	if !m.HelpExpanded() {
 		t.Fatal("? did not expand the help footer")
 	}
-	if full := m.View(); strings.Contains(full, " • ") {
+	if full := m.View().Content; strings.Contains(full, " • ") {
 		t.Errorf("help still showing the short bar after ?:\n%s", full)
 	}
 
@@ -1010,7 +1013,7 @@ func TestViewRendersHeadless(t *testing.T) {
 		return board.SetRowStatus(c, "T-02-beta-task.md", "done")
 	})
 	m := newTUIModel(t, root)
-	frame := m.View()
+	frame := m.View().Content
 	if frame == "" {
 		t.Fatal("board view is empty")
 	}
@@ -1018,14 +1021,14 @@ func TestViewRendersHeadless(t *testing.T) {
 
 	m, _ = press(t, m, "j")
 	m, _ = press(t, m, "enter")
-	detail := m.View()
+	detail := m.View().Content
 	if detail == "" {
 		t.Fatal("detail view is empty")
 	}
 	t.Logf("detail view 100x30:\n%s", detail)
 
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 38, Height: 10})
-	if nm.(tui.Model).View() == "" {
+	if nm.(tui.Model).View().Content == "" {
 		t.Fatal("narrow detail view is empty")
 	}
 }
@@ -1095,8 +1098,8 @@ func TestWatcherRefresh(t *testing.T) {
 func TestManualRefresh(t *testing.T) {
 	root := tuiTree(t)
 	m := newTUIModel(t, root)
-	if strings.Contains(m.View(), "T-04") {
-		t.Fatalf("fixture already carries T-04:\n%s", m.View())
+	if strings.Contains(m.View().Content, "T-04") {
+		t.Fatalf("fixture already carries T-04:\n%s", m.View().Content)
 	}
 
 	mustDuty(t, root, "create", "task", "Epsilon task")
@@ -1108,7 +1111,7 @@ func TestManualRefresh(t *testing.T) {
 	nm, _ := m.Update(cmd())
 	m = nm.(tui.Model)
 
-	frame := m.View()
+	frame := m.View().Content
 	if !strings.Contains(frame, "T-04") || !strings.Contains(frame, "Epsilon task") {
 		t.Errorf("r did not re-scan the new task into the list:\n%s", frame)
 	}
@@ -1133,7 +1136,7 @@ func TestBreadcrumbClickNavigates(t *testing.T) {
 func TestEmptyStates(t *testing.T) {
 	t.Run("fresh tree names itself", func(t *testing.T) {
 		root := initDuty(t)
-		frame := newTUIModelSize(t, root, 100, 30).View()
+		frame := newTUIModelSize(t, root, 100, 30).View().Content
 		if !strings.Contains(frame, "empty tree") || !strings.Contains(frame, `duty create task`) {
 			t.Errorf("fresh-tree hint missing:\n%s", frame)
 		}
@@ -1148,7 +1151,7 @@ func TestEmptyStates(t *testing.T) {
 		if m.BoardPath() != "backend" {
 			t.Fatalf("did not descend into the empty track: path=%q", m.BoardPath())
 		}
-		frame := m.View()
+		frame := m.View().Content
 		if !strings.Contains(frame, "no tasks yet") || !strings.Contains(frame, `duty create task`) {
 			t.Errorf("empty-track hint missing:\n%s", frame)
 		}
@@ -1163,7 +1166,7 @@ func TestEmptyStates(t *testing.T) {
 			m, cmd = press(t, m, k)
 			m = pump(t, m, cmd)
 		}
-		frame := m.View()
+		frame := m.View().Content
 		if !strings.Contains(frame, "No matches") {
 			t.Errorf("empty-filter no-items hint missing:\n%s", frame)
 		}
@@ -1208,14 +1211,14 @@ func TestFrameAudit(t *testing.T) {
 		name := fmt.Sprintf("%dx%d", sz.w, sz.h)
 		t.Run(name, func(t *testing.T) {
 			m := newTUIModelSize(t, root, sz.w, sz.h)
-			browse := m.View()
+			browse := m.View().Content
 			assertNoRagged(t, browse, sz.w)
 			t.Logf("browse %s:\n%s", name, browse)
 
 			m, _ = press(t, m, "j")     // T-01
 			m, _ = press(t, m, "j")     // T-02 (todo, blocked-by T-01)
 			m, _ = press(t, m, "enter") // open its preview
-			open := m.View()
+			open := m.View().Content
 			assertNoRagged(t, open, sz.w)
 			if !strings.Contains(open, "blocked-by T-01") {
 				t.Errorf("preview header missing blocked-by at %s:\n%s", name, open)
@@ -1302,7 +1305,7 @@ func TestStatusSortedRows(t *testing.T) {
 	}
 
 	// Frame check: the in-progress head renders above the done tail.
-	frame := m.View()
+	frame := m.View().Content
 	if lineWith(t, frame, "T-03", 60) >= lineWith(t, frame, "T-01", 60) {
 		t.Errorf("T-03 (in-progress) not rendered above T-01 (done):\n%s", frame)
 	}

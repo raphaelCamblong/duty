@@ -4,7 +4,7 @@ import (
 	"math"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // scrollTickMsg advances the preview scroll spring one animation frame.
@@ -24,16 +24,21 @@ func scrollTickCmd() tea.Cmd {
 
 // handleMouse routes a mouse event: the wheel scrolls the hovered panel and
 // a left press selects the entry (left) or focuses the preview (right), a
-// second press on the same entry opening it.
+// second press on the same entry opening it. Bubble Tea v2 encodes the action
+// in the message type, so the routing switches on that rather than a field.
 func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	switch msg.Button {
-	case tea.MouseButtonWheelUp:
-		return m.wheel(msg, -1)
-	case tea.MouseButtonWheelDown:
-		return m.wheel(msg, 1)
-	}
-	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-		return m.click(msg)
+	switch e := msg.(type) {
+	case tea.MouseWheelMsg:
+		switch e.Button {
+		case tea.MouseWheelUp:
+			return m.wheel(msg, -1)
+		case tea.MouseWheelDown:
+			return m.wheel(msg, 1)
+		}
+	case tea.MouseClickMsg:
+		if e.Button == tea.MouseLeft {
+			return m.click(msg)
+		}
 	}
 	return m, nil
 }
@@ -98,7 +103,7 @@ func (m Model) clickItem(index int) Model {
 
 // previewMax is the preview's highest top line.
 func (m Model) previewMax() int {
-	return max(m.preview.TotalLineCount()-m.preview.Height, 0)
+	return max(m.preview.TotalLineCount()-m.preview.Height(), 0)
 }
 
 // settleAt pins the preview spring at offset, stopping any animation.

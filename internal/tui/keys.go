@@ -1,6 +1,6 @@
 package tui
 
-import "github.com/charmbracelet/bubbles/key"
+import "charm.land/bubbles/v2/key"
 
 // keyMap names every binding of the viewer, with help text ready for a
 // bubbles/help footer. It satisfies help.KeyMap.

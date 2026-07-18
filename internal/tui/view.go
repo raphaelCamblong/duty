@@ -6,9 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NimbleMarkets/ntcharts/barchart"
-	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/glamour/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/NimbleMarkets/ntcharts/v2/barchart"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/raphaelCamblong/duty/internal/task"
@@ -52,7 +53,9 @@ func crumbZone(path string) string { return crumbZonePrefix + path }
 // View renders the current frame: header, the body (a full-width browsing
 // list, the open split, or the narrow full-screen preview), and the help
 // footer. The zone manager's Scan registers the hit-zones and strips markers.
-func (m Model) View() string {
+// The returned view carries the alt-screen and cell-motion mouse modes that
+// were program options under Bubble Tea v1.
+func (m Model) View() tea.View {
 	w, _ := m.dims()
 	var body string
 	switch {
@@ -65,7 +68,10 @@ func (m Model) View() string {
 		body = m.leftPanel()
 	}
 	frame := lipgloss.JoinVertical(lipgloss.Left, m.headerView(w), body, m.footerView(w))
-	return m.zones.Scan(frame)
+	v := tea.NewView(m.zones.Scan(frame))
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+	return v
 }
 
 // layout sizes the list and preview to the current terminal and chrome
@@ -78,12 +84,12 @@ func (m Model) layout() Model {
 	case m.split():
 		lw := leftWidth(w)
 		m.list.SetSize(lw-4, bodyH-2)
-		m.preview.Width = max(w-lw-4, 1)
-		m.preview.Height = max(bodyH-3, 1)
+		m.preview.SetWidth(max(w-lw-4, 1))
+		m.preview.SetHeight(max(bodyH-3, 1))
 	case m.previewOpen:
 		m.list.SetSize(w-4, bodyH-2)
-		m.preview.Width = max(w-2, 1)
-		m.preview.Height = max(bodyH-1, 1)
+		m.preview.SetWidth(max(w-2, 1))
+		m.preview.SetHeight(max(bodyH-1, 1))
 	default:
 		m.list.SetSize(w-4, bodyH-2)
 	}
@@ -100,12 +106,13 @@ func leftWidth(w int) int {
 // place of the list; a filter that matches nothing falls through to the
 // list's own styled no-items state.
 func (m Model) leftPanel() string {
-	cw, ch := m.list.Width()+2, m.list.Height()
-	box := m.theme.panelBox(m.focus == focusList).Width(cw).Height(ch)
+	lw, lh := m.list.Width(), m.list.Height()
+	box := m.theme.panelBox(m.focus == focusList)
+	box = box.Width(lw + box.GetHorizontalFrameSize()).Height(lh + box.GetVerticalFrameSize())
 	inner := m.list.View()
 	switch {
 	case !anySelectable(m.list.Items()):
-		inner = lipgloss.Place(cw, ch, lipgloss.Center, lipgloss.Center, m.emptyHint())
+		inner = lipgloss.Place(lw, lh, lipgloss.Center, lipgloss.Center, m.emptyHint())
 	case !anySelectable(m.list.VisibleItems()):
 		inner = m.list.Styles.NoItems.Render("No matches")
 	}
@@ -128,8 +135,9 @@ func (m Model) emptyHint() string {
 // rightPanel is the preview — pinned title line over the viewport — in its
 // focus-colored border, a full-panel mouse zone.
 func (m Model) rightPanel() string {
-	title := ansi.Truncate(m.previewTitleText, m.preview.Width, "…")
-	box := m.theme.panelBox(m.focus == focusPreview).Width(m.preview.Width + 2).Height(m.preview.Height + 1)
+	title := ansi.Truncate(m.previewTitleText, m.preview.Width(), "…")
+	box := m.theme.panelBox(m.focus == focusPreview)
+	box = box.Width(m.preview.Width() + box.GetHorizontalFrameSize()).Height(m.preview.Height() + 1 + box.GetVerticalFrameSize())
 	content := lipgloss.JoinVertical(lipgloss.Left, title, m.preview.View())
 	return m.zones.Mark(zonePreview, box.Render(content))
 }
@@ -144,7 +152,8 @@ func (m Model) headerView(w int) string {
 		ansi.Truncate(m.breadcrumb(), inner, "…"),
 		m.theme.stateLine(b, inner),
 	)
-	return m.theme.focusBox().Width(max(w-2, 1)).Render(content)
+	box := m.theme.focusBox()
+	return box.Width(inner + box.GetHorizontalFrameSize()).Render(content)
 }
 
 // stateLine renders a board's subtree per-status counts in status colors,
@@ -206,7 +215,7 @@ func (m Model) footerView(w int) string {
 func (m Model) helpView(w int) string {
 	inner := max(w-1, 1)
 	h := m.help
-	h.Width = inner
+	h.SetWidth(inner)
 	lines := strings.Split(h.View(m.keys), "\n")
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], inner, "…")
@@ -317,7 +326,7 @@ func metRunes(labelLen int, ids, waits []string) []int {
 // markdown through the shared renderer, or a track's summary card. It returns
 // the possibly-updated model because building the renderer mutates it.
 func (m Model) previewContent() (Model, string) {
-	w := max(m.preview.Width, 1)
+	w := max(m.preview.Width(), 1)
 	switch m.previewKind {
 	case previewTrack:
 		if s, ok := m.findSub(m.previewArg); ok {
@@ -342,7 +351,7 @@ func (m Model) previewContent() (Model, string) {
 // built lazily on the first open and rebuilt only when the preview width
 // changes; the raw markdown shows on any renderer error.
 func (m Model) taskMarkdown(content []byte) (Model, string) {
-	wrap := max(m.preview.Width-2, 20)
+	wrap := max(m.preview.Width()-2, 20)
 	if m.renderer == nil || m.rendererWidth != wrap {
 		r, err := newRenderer(wrap, m.mode)
 		if err != nil {

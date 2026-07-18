@@ -214,7 +214,7 @@ func TestClaimShownInTUI(t *testing.T) {
 	}
 
 	m := newTUIModelSize(t, root, 120, 35)
-	browse := m.View()
+	browse := m.View().Content
 	if !strings.Contains(browse, "sonnet-2") {
 		t.Errorf("board frame missing the holder next to the row:\n%s", browse)
 	}
@@ -224,7 +224,7 @@ func TestClaimShownInTUI(t *testing.T) {
 	if m.DetailID() != "T-01" {
 		t.Fatalf("enter did not open T-01: detail=%q", m.DetailID())
 	}
-	open := m.View()
+	open := m.View().Content
 	if !strings.Contains(open, "sonnet-2") {
 		t.Errorf("preview header missing the holder name:\n%s", open)
 	}

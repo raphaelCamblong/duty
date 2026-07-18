@@ -12,6 +12,6 @@ Order top-to-bottom is the intended build order.
 
 | Task | Title | Status |
 |------|-------|--------|
-| [T-61](T-61-whole-codebase-simplify-pass-across.md) | Whole-codebase simplify pass across internal/ | backlog |
+| [T-61](T-61-whole-codebase-simplify-pass-across.md) | Whole-codebase simplify pass across internal/ | todo |
 
 Completed tasks (36) archived: [archive/](archive/).

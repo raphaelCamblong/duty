@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/raphaelCamblong/duty/internal/config"
 	"github.com/raphaelCamblong/duty/internal/fsys"
@@ -36,10 +36,10 @@ func allArchivedModel(t *testing.T) tui.Model {
 func TestEmptyBoardFilterIsInert(t *testing.T) {
 	m := allArchivedModel(t)
 
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	nm, _ := m.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
 	m = nm.(tui.Model)
 
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	if cmd == nil {
 		t.Fatalf("q after / did not produce a command — filter swallowed it")
 	}
@@ -54,7 +54,7 @@ func TestEmptyBoardFilterIsInert(t *testing.T) {
 // archived-out board points at "a" instead of claiming the tree is empty.
 func TestAllArchivedHintNamesTheToggle(t *testing.T) {
 	m := allArchivedModel(t)
-	frame := m.View()
+	frame := m.View().Content
 	if !strings.Contains(frame, "press a to browse") {
 		t.Fatalf("all-archived frame missing the toggle hint:\n%s", frame)
 	}

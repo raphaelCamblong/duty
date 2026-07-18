@@ -18,7 +18,7 @@ func TestGateColumnNarrowPriority(t *testing.T) {
 	}
 
 	t.Run("wide terminal shows both the gate and age columns", func(t *testing.T) {
-		frame := newTUIModelSize(t, root, 120, 35).View()
+		frame := newTUIModelSize(t, root, 120, 35).View().Content
 		if !strings.Contains(frame, "1/2") {
 			t.Errorf("120-col frame missing the gate column:\n%s", frame)
 		}
@@ -28,7 +28,7 @@ func TestGateColumnNarrowPriority(t *testing.T) {
 	})
 
 	t.Run("narrow terminal keeps age and drops the gate column", func(t *testing.T) {
-		frame := newTUIModelSize(t, root, 80, 24).View()
+		frame := newTUIModelSize(t, root, 80, 24).View().Content
 		if !strings.Contains(frame, "just now") {
 			t.Errorf("80-col frame dropped the always-on age column:\n%s", frame)
 		}
@@ -66,7 +66,7 @@ func TestAgeColumnToggle(t *testing.T) {
 		if !m.ShowAge() {
 			t.Fatal("age column hidden by default at 120 cols, want shown")
 		}
-		if frame := m.View(); !strings.Contains(frame, "just now") {
+		if frame := m.View().Content; !strings.Contains(frame, "just now") {
 			t.Errorf("120-col frame missing the age column:\n%s", frame)
 		}
 
@@ -74,7 +74,7 @@ func TestAgeColumnToggle(t *testing.T) {
 		if m.ShowAge() {
 			t.Fatal("t did not hide the age column")
 		}
-		if frame := m.View(); strings.Contains(frame, "just now") {
+		if frame := m.View().Content; strings.Contains(frame, "just now") {
 			t.Errorf("age column still rendered after t:\n%s", frame)
 		}
 
@@ -82,7 +82,7 @@ func TestAgeColumnToggle(t *testing.T) {
 		if !m.ShowAge() {
 			t.Fatal("second t did not restore the age column")
 		}
-		if frame := m.View(); !strings.Contains(frame, "just now") {
+		if frame := m.View().Content; !strings.Contains(frame, "just now") {
 			t.Errorf("second t did not bring the age column back:\n%s", frame)
 		}
 	})
@@ -92,7 +92,7 @@ func TestAgeColumnToggle(t *testing.T) {
 		if !m.ShowAge() {
 			t.Fatal("age column hidden by default at 70 cols, want shown (always-on)")
 		}
-		if frame := m.View(); !strings.Contains(frame, "just now") {
+		if frame := m.View().Content; !strings.Contains(frame, "just now") {
 			t.Errorf("70-col frame missing the always-on age column:\n%s", frame)
 		}
 		m, _ = press(t, m, "t")

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/raphaelCamblong/duty/internal/fsys"
 	"github.com/raphaelCamblong/duty/internal/names"
@@ -117,7 +117,7 @@ func TestArchiveHidingRule(t *testing.T) {
 	root := archiveTree(t)
 	m := newTUIModelSize(t, root, 120, 35)
 
-	off := m.View()
+	off := m.View().Content
 	if strings.Contains(off, "gone/") {
 		t.Errorf("archived-out track shown while off:\n%s", off)
 	}
@@ -135,7 +135,7 @@ func TestArchiveHidingRule(t *testing.T) {
 	if !m.ShowArchive() {
 		t.Fatal("a did not turn the archive view on")
 	}
-	on := m.View()
+	on := m.View().Content
 	if !strings.Contains(on, "gone/") {
 		t.Errorf("archived-out track did not reappear while on:\n%s", on)
 	}
@@ -153,12 +153,12 @@ func TestArchiveHidingRule(t *testing.T) {
 	if m.ShowArchive() {
 		t.Error("a did not turn the archive view back off (session toggle)")
 	}
-	if strings.Contains(m.View(), "gone/") {
+	if strings.Contains(m.View().Content, "gone/") {
 		t.Error("archived-out track still shown after toggling off")
 	}
 
 	m, _ = press(t, m, "?")
-	if grid := m.View(); !strings.Contains(grid, "archive") {
+	if grid := m.View().Content; !strings.Contains(grid, "archive") {
 		t.Errorf("? help grid missing the archive key:\n%s", grid)
 	}
 }
@@ -173,8 +173,8 @@ func TestArchivePreviewOpensReadOnly(t *testing.T) {
 	if m.DetailID() != "T-02" || !m.PreviewOpen() {
 		t.Fatalf("enter on the archived row: detail=%q open=%v, want the T-02 preview", m.DetailID(), m.PreviewOpen())
 	}
-	if !strings.Contains(m.View(), "Goal") {
-		t.Errorf("archived preview did not render the file body:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "Goal") {
+		t.Errorf("archived preview did not render the file body:\n%s", m.View().Content)
 	}
 
 	m, _ = press(t, m, "esc")

@@ -1,7 +1,7 @@
 ---
 id: T-61
 title: Whole-codebase simplify pass across internal/
-status: backlog
+status: todo
 blocked-by: []
 ---
 

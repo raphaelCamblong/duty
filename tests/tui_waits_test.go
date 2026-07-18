@@ -47,7 +47,7 @@ func TestTUIWaitAnnotation(t *testing.T) {
 
 	t.Run("frame shows the wait annotation on the blocked row", func(t *testing.T) {
 		m := newTUIModelSize(t, root, 120, 35)
-		line := frameLine(t, m.View(), "Waiter")
+		line := frameLine(t, m.View().Content, "Waiter")
 		if !strings.Contains(line, "waits T-01") {
 			t.Errorf("blocked row missing its wait annotation: %q", line)
 		}

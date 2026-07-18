@@ -6,8 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/raphaelCamblong/duty/internal/config"
 	"github.com/raphaelCamblong/duty/internal/fsys"
@@ -40,14 +39,15 @@ func Run(f fsys.FS, cwd string) error {
 	}
 	defer func() { _ = w.Close() }()
 	m.refresh = w.C
-	_, err = tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
+	_, err = tea.NewProgram(m).Run()
 	return err
 }
 
-// resolveTheme pins lipgloss's background flag and returns a concrete glamour
-// style ("dark" or "light"). The "auto" case reads the environment instead of
-// querying the terminal: an OSC query eats keystrokes as its "response" under
-// terminals that never answer, wedging startup (the v0.4.0 freeze).
+// resolveTheme returns a concrete theme ("dark" or "light"). The "auto" case
+// reads the environment instead of querying the terminal: an OSC query eats
+// keystrokes as its "response" under terminals that never answer, wedging
+// startup (the v0.4.0 freeze). Bubble Tea v2 carries no global background flag —
+// the model resolves the palette from this mode.
 func resolveTheme(theme string) string {
 	dark := true
 	switch theme {
@@ -57,7 +57,6 @@ func resolveTheme(theme string) string {
 	default:
 		dark = DarkFromEnv(os.Getenv("COLORFGBG"))
 	}
-	lipgloss.SetHasDarkBackground(dark)
 	if dark {
 		return "dark"
 	}

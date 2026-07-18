@@ -5,16 +5,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/glamour/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/harmonica"
-	"github.com/charmbracelet/lipgloss"
-	zone "github.com/lrstanley/bubblezone"
+	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/raphaelCamblong/duty/internal/config"
 	"github.com/raphaelCamblong/duty/internal/fsys"
@@ -99,7 +99,7 @@ type Model struct {
 // styled per cfg: the color palette overlaid from [tui.palette] (a malformed
 // color errors) and the dark/light mode from [tui].theme.
 func New(f fsys.FS, root string, cfg config.Config) (Model, error) {
-	theme, err := themeFromConfig(cfg.TUI.Palette)
+	theme, err := themeFromConfig(cfg.TUI.Palette, cfg.TUI.Theme != "light")
 	if err != nil {
 		return Model{}, err
 	}
@@ -142,7 +142,10 @@ func newList(theme Theme) list.Model {
 	l.SetStatusBarItemName("match", "matches")
 	l.DisableQuitKeybindings()
 	l.FilterInput.Prompt = "/ "
-	l.FilterInput.PromptStyle = theme.accent()
+	fs := l.FilterInput.Styles()
+	fs.Focused.Prompt = theme.accent()
+	fs.Blurred.Prompt = theme.accent()
+	l.FilterInput.SetStyles(fs)
 	l.Styles.TitleBar = lipgloss.NewStyle()
 	l.Styles.NoItems = theme.dim().Padding(1, 2)
 	return l
@@ -279,7 +282,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.help.Width = msg.Width
+		m.help.SetWidth(msg.Width)
 		return m.resizeGates(msg.Width).layout().arm(nil)
 	case spinner.TickMsg:
 		return m.onSpinnerTick(msg)
@@ -296,7 +299,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.stepScroll()
 	case tea.MouseMsg:
 		return m.handleMouse(msg)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
 	return m.updateList(msg)
@@ -306,7 +309,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // being typed, global keys next, panel actions after, then the focused panel.
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.list.SettingFilter() {
-		if msg.Type == tea.KeyCtrlC {
+		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
 		return m.updateList(msg)
@@ -426,7 +429,7 @@ func (m Model) filterList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) scrollPreview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.preview, cmd = m.preview.Update(msg)
-	return m.settleAt(m.preview.YOffset), cmd
+	return m.settleAt(m.preview.YOffset()), cmd
 }
 
 // otherFocus toggles between the two panels.
@@ -537,7 +540,7 @@ func (m Model) renderPreview(reset bool) Model {
 	if !m.previewOpen {
 		return m
 	}
-	off := m.preview.YOffset
+	off := m.preview.YOffset()
 	if reset {
 		off = 0
 	}
@@ -545,7 +548,7 @@ func (m Model) renderPreview(reset bool) Model {
 	m.previewTitleText = m.previewTitle()
 	m.preview.SetContent(body)
 	m.preview.SetYOffset(off)
-	return m.settleAt(m.preview.YOffset)
+	return m.settleAt(m.preview.YOffset())
 }
 
 // findRowBoard resolves a task id to its row and the board it sits in, used

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/spinner"
+	"charm.land/bubbles/v2/spinner"
 
 	"github.com/raphaelCamblong/duty/internal/tui"
 )
@@ -18,14 +18,14 @@ func TestSpinnerGlyphOnInProgressRow(t *testing.T) {
 	m := newTUIModelSize(t, root, 120, 35)
 
 	t.Run("the in-progress row carries the glyph beside its status", func(t *testing.T) {
-		line := frameLine(t, m.View(), "T-01")
+		line := frameLine(t, m.View().Content, "T-01")
 		if !strings.Contains(line, "in-progress") || !strings.Contains(line, miniDot) {
 			t.Errorf("in-progress row missing the spinner glyph %q: %q", miniDot, line)
 		}
 	})
 
 	t.Run("a todo row shows no glyph", func(t *testing.T) {
-		line := frameLine(t, m.View(), "T-02")
+		line := frameLine(t, m.View().Content, "T-02")
 		if strings.Contains(line, miniDot) {
 			t.Errorf("todo row unexpectedly shows the spinner glyph: %q", line)
 		}
@@ -40,7 +40,7 @@ func TestSpinnerGlyphOnInProgressRow(t *testing.T) {
 		if pm.DetailID() != "T-01" {
 			t.Fatalf("preview did not open on T-01: DetailID=%q", pm.DetailID())
 		}
-		if frame := pm.View(); !strings.Contains(frame, miniDot) {
+		if frame := pm.View().Content; !strings.Contains(frame, miniDot) {
 			t.Errorf("in-progress preview header missing the spinner glyph:\n%s", frame)
 		}
 	})

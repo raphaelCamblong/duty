@@ -6,36 +6,21 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/raphaelCamblong/duty/internal/config"
 	"github.com/raphaelCamblong/duty/internal/fsys"
 	"github.com/raphaelCamblong/duty/internal/tui"
 )
 
-// forceTrueColor pins lipgloss to TrueColor and the given background so
-// AdaptiveColors resolve deterministically and status hues render as raw ANSI
-// RGB — otherwise a non-tty test strips every color and a palette test proves
-// nothing. It restores the previous global state when the test ends.
-func forceTrueColor(t *testing.T, dark bool) {
-	t.Helper()
-	prevProfile := lipgloss.ColorProfile()
-	prevDark := lipgloss.HasDarkBackground()
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	lipgloss.SetHasDarkBackground(dark)
-	t.Cleanup(func() {
-		lipgloss.SetColorProfile(prevProfile)
-		lipgloss.SetHasDarkBackground(prevDark)
-	})
-}
-
 // themeFrame renders the deterministic 120x35 browsing frame for cfg with the
 // age column hidden (ages carry wall-clock times that would defeat a golden).
+// Bubble Tea v2's lipgloss renders full-color unconditionally and reads the
+// dark/light mode from cfg.TUI.Theme, so the old global colour-profile pin is
+// gone; dark is retained only to key the golden file names.
 func themeFrame(t *testing.T, root string, cfg config.Config, dark bool) string {
 	t.Helper()
-	forceTrueColor(t, dark)
+	_ = dark
 	m, err := tui.New(fsys.OS{}, root, cfg)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -43,7 +28,7 @@ func themeFrame(t *testing.T, root string, cfg config.Config, dark bool) string 
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 35})
 	m = nm.(tui.Model)
 	m, _ = press(t, m, "t") // hide the wall-clock age column
-	return m.View()
+	return m.View().Content
 }
 
 // testdataDir is the absolute path to tests/testdata, resolved before any

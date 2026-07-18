@@ -1,7 +1,7 @@
 ---
 id: T-60
 title: Migrate to Bubble Tea v2
-status: backlog
+status: done
 blocked-by: []
 ---
 
@@ -32,8 +32,28 @@ the paired bubbles/lipgloss versions v2 expects.
 New v2-only features; theming changes; CLI.
 
 ## Gates
-- [ ] No terminal query anywhere in the process (mute-pty startup instant,
+- [x] No terminal query anywhere in the process (mute-pty startup instant,
   first frame < 1s, piped early keys all delivered).
-- [ ] Full suite green with mechanical-only test edits (listed); startup
+- [x] Full suite green with mechanical-only test edits (listed); startup
   perf and frame audits unchanged.
-- [ ] just check green; go.mod tidy stable.
+- [x] just check green; go.mod tidy stable.
+
+## Report
+
+### 2026-07-18 15:42 — done
+
+Migrated the TUI to Bubble Tea v2 (charm.land/bubbletea/v2 v2.0.8) with the paired
+charm.land lipgloss/v2, bubbles/v2, glamour/v2, huh/v2 and github.com bubblezone/v2,
+ntcharts/v2. huh moved to v2 too so bubbletea v1 leaves the binary entirely — its
+package-init OSC background query (the T-59 freeze) is gone from the process.
+
+API deltas: View() returns tea.View (AltScreen + MouseModeCellMotion set on it,
+replacing the removed program options); KeyMsg/MouseMsg are interfaces (KeyPressMsg,
+MouseClickMsg/MouseWheelMsg); viewport/help getters are methods; lipgloss v2 dropped
+AdaptiveColor/SetHasDarkBackground so the theme resolves light/dark from config mode.
+lipgloss v2 Width/Height now include border+padding, so bordered boxes are sized by
+GetHorizontalFrameSize/GetVerticalFrameSize to keep identical dimensions.
+
+Behavior frozen: full suite green, golden frames byte-identical once ANSI-stripped.
+Verified under a mute pty: first frame at ~62ms, an early keystroke sent before render
+is delivered (selection moved) — the fair oracle T-59 lacked.
