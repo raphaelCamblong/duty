@@ -59,12 +59,12 @@ type Color struct {
 
 // UnmarshalTOML reads a Color from a bare string (both channels) or an inline
 // table with light and dark keys.
-func (c *Color) UnmarshalTOML(v interface{}) error {
+func (c *Color) UnmarshalTOML(v any) error {
 	switch val := v.(type) {
 	case string:
 		c.Light, c.Dark = val, val
 		return nil
-	case map[string]interface{}:
+	case map[string]any:
 		c.Light, _ = val["light"].(string)
 		c.Dark, _ = val["dark"].(string)
 		return nil

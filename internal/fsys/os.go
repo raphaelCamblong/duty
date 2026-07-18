@@ -66,26 +66,28 @@ func (OS) Lock(path string) (func(), error) {
 
 // WriteFile writes data to name atomically: a temp file in the same directory,
 // then a rename over the target. The resulting file has 0644 permissions.
-func (OS) WriteFile(name string, data []byte) error {
+func (OS) WriteFile(name string, data []byte) (err error) {
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("write %s: %w", name, err)
+		}
+	}()
 	tmp, err := os.CreateTemp(filepath.Dir(name), ".duty-*")
 	if err != nil {
-		return fmt.Errorf("write %s: %w", name, err)
+		return err
 	}
 	defer func() { _ = os.Remove(tmp.Name()) }()
 
-	if _, err := tmp.Write(data); err != nil {
+	if _, err = tmp.Write(data); err != nil {
 		_ = tmp.Close()
-		return fmt.Errorf("write %s: %w", name, err)
+		return err
 	}
-	if err := tmp.Chmod(0o644); err != nil {
+	if err = tmp.Chmod(0o644); err != nil {
 		_ = tmp.Close()
-		return fmt.Errorf("write %s: %w", name, err)
+		return err
 	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("write %s: %w", name, err)
+	if err = tmp.Close(); err != nil {
+		return err
 	}
-	if err := os.Rename(tmp.Name(), name); err != nil {
-		return fmt.Errorf("write %s: %w", name, err)
-	}
-	return nil
+	return os.Rename(tmp.Name(), name)
 }

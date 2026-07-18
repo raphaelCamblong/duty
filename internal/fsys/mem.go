@@ -120,7 +120,7 @@ func (m *Mem) ReadDir(name string) ([]fs.DirEntry, error) {
 // Stat returns the FileInfo describing name.
 func (m *Mem) Stat(name string) (fs.FileInfo, error) {
 	c := filepath.Clean(name)
-	if _, ok := m.files[c]; !ok && !m.dirs[c] {
+	if !m.exists(c) {
 		return nil, notExist("stat", name)
 	}
 	return m.info(c), nil
@@ -131,7 +131,7 @@ func (m *Mem) Stat(name string) (fs.FileInfo, error) {
 func (m *Mem) WalkDir(root string, fn fs.WalkDirFunc) error {
 	c := filepath.Clean(root)
 	var err error
-	if _, ok := m.files[c]; !ok && !m.dirs[c] {
+	if !m.exists(c) {
 		err = fn(root, nil, notExist("lstat", root))
 	} else {
 		err = m.walkDir(root, fs.FileInfoToDirEntry(m.info(c)), fn)
@@ -194,6 +194,12 @@ func (m *Mem) lockChan(path string) chan struct{} {
 		m.locks[c] = ch
 	}
 	return ch
+}
+
+// exists reports whether the clean path c is a known file or directory.
+func (m *Mem) exists(c string) bool {
+	_, ok := m.files[c]
+	return ok || m.dirs[c]
 }
 
 // info returns the FileInfo for an existing clean path.

@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -30,15 +31,10 @@ var taskNN = regexp.MustCompile(`^` + regexp.QuoteMeta(task.IDPrefix) + `(\d+)-.
 // explicitly and stops the ascent. Outside a tree it falls back to ./duty/
 // if that directory exists.
 func FindRoot(f fsys.FS, cwd string) (string, error) {
-	abs, err := filepath.Abs(cwd)
+	root, err := CurrentBoard(f, cwd)
 	if err != nil {
-		return "", fmt.Errorf("find root: %w", err)
+		return "", err
 	}
-	board, ok := nearestBoard(f, abs)
-	if !ok {
-		return fallbackTree(f, abs)
-	}
-	root := board
 	for {
 		if hasFile(f, root, names.ConfigFile) {
 			return root, nil
@@ -230,10 +226,5 @@ func underArchive(root, path string) bool {
 	if err != nil {
 		return false
 	}
-	for _, part := range strings.Split(rel, string(filepath.Separator)) {
-		if part == names.ArchiveDir {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(strings.Split(rel, string(filepath.Separator)), names.ArchiveDir)
 }
