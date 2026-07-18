@@ -348,6 +348,9 @@ func (m Model) handleGlobalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	case key.Matches(msg, m.keys.Filter):
+		if !anySelectable(m.list.Items()) {
+			return m, nil, true
+		}
 		model, cmd := m.filterList(msg)
 		return model, cmd, true
 	case key.Matches(msg, m.keys.Age):

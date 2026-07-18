@@ -83,7 +83,7 @@ viewer never reads an archived file.
 ## Theming
 
 Both themes ship tuned: the raw duty palette on dark terminals, AA-readable inks
-on light ones. `theme` in your config picks the background mode, and
+on light ones. `theme` in your config picks the background mode (auto reads COLORFGBG from the environment — set dark or light explicitly if your terminal exports nothing), and
 `[tui.palette]` recolors any slot — see [Config](/config/).
 
 ![The same board on a light terminal](/screens/board-light.png)

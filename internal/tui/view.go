@@ -113,8 +113,12 @@ func (m Model) leftPanel() string {
 }
 
 // emptyHint is the centered dim message for a board with no tracks or tasks:
-// a fresh tree names itself, any other empty track nudges toward create.
+// archived-out boards point at the toggle, a fresh tree names itself, any
+// other empty track nudges toward create.
 func (m Model) emptyHint() string {
+	if b, ok := m.snap.Boards[m.path]; ok && b.ArchivedSubtree > 0 {
+		return m.theme.dim().Render("all work archived — press a to browse the record")
+	}
 	if m.path == "." {
 		return m.theme.dim().Render(`empty tree — duty create task "…" to begin`)
 	}

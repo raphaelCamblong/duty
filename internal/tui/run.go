@@ -1,7 +1,10 @@
 package tui
 
 import (
+	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -42,23 +45,32 @@ func Run(f fsys.FS, cwd string) error {
 }
 
 // resolveTheme pins lipgloss's background flag and returns a concrete glamour
-// style ("dark" or "light"). The "auto" case runs the terminal-background
-// query exactly once, here, before the program starts — so neither
-// AdaptiveColors nor the markdown renderer ever query mid-frame.
+// style ("dark" or "light"). The "auto" case reads the environment instead of
+// querying the terminal: an OSC query eats keystrokes as its "response" under
+// terminals that never answer, wedging startup (the v0.4.0 freeze).
 func resolveTheme(theme string) string {
+	dark := true
 	switch theme {
 	case "dark":
-		lipgloss.SetHasDarkBackground(true)
-		return "dark"
 	case "light":
-		lipgloss.SetHasDarkBackground(false)
-		return "light"
+		dark = false
 	default:
-		dark := lipgloss.HasDarkBackground()
-		lipgloss.SetHasDarkBackground(dark)
-		if dark {
-			return "dark"
-		}
-		return "light"
+		dark = DarkFromEnv(os.Getenv("COLORFGBG"))
 	}
+	lipgloss.SetHasDarkBackground(dark)
+	if dark {
+		return "dark"
+	}
+	return "light"
+}
+
+// DarkFromEnv reads a COLORFGBG value ("fg;bg", bg 0-6 or 8 = dark); empty or
+// garbled values default to dark, the overwhelming terminal norm.
+func DarkFromEnv(colorfgbg string) bool {
+	parts := strings.Split(colorfgbg, ";")
+	bg, err := strconv.Atoi(parts[len(parts)-1])
+	if err != nil {
+		return true
+	}
+	return bg <= 6 || bg == 8
 }
