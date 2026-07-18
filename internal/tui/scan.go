@@ -390,31 +390,36 @@ func appendOrphans(b *Board, files map[string]Row, used map[string]bool) {
 	}
 }
 
+// localAgg snapshots one board's own tallies before link rolls each board's
+// subtree up from its descendants'.
+type localAgg struct {
+	done, total, arch int
+	counts            map[string]int
+}
+
 // link resolves each board's parent, rolls local counts up into subtree
 // counts, and fills every parent's Subs. paths is in lexical order, which
 // Subs inherits.
 func link(snap Snapshot, paths []string) {
-	local := make(map[string][2]int, len(paths))
-	localCounts := make(map[string]map[string]int, len(paths))
-	localArch := make(map[string]int, len(paths))
+	locals := make(map[string]localAgg, len(paths))
 	for _, p := range paths {
 		b := snap.Boards[p]
-		local[p] = [2]int{b.Done, b.Total}
-		localCounts[p] = b.Counts
-		localArch[p] = b.ArchivedCount
+		locals[p] = localAgg{done: b.Done, total: b.Total, arch: b.ArchivedCount, counts: b.Counts}
 	}
 	for _, p := range paths {
 		b := snap.Boards[p]
 		b.Done, b.Total, b.ArchivedSubtree = 0, 0, 0
 		b.Counts = make(map[string]int)
 		for _, q := range paths {
-			if within(q, p) {
-				b.Done += local[q][0]
-				b.Total += local[q][1]
-				b.ArchivedSubtree += localArch[q]
-				for st, n := range localCounts[q] {
-					b.Counts[st] += n
-				}
+			if !within(q, p) {
+				continue
+			}
+			lq := locals[q]
+			b.Done += lq.done
+			b.Total += lq.total
+			b.ArchivedSubtree += lq.arch
+			for st, n := range lq.counts {
+				b.Counts[st] += n
 			}
 		}
 		b.Parent = parentOf(snap, p)

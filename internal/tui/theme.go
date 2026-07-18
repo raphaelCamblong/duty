@@ -136,12 +136,7 @@ func validColor(s string) error {
 // its raw palette hue, on light it shifts to an AA-readable tone; blocked is
 // red, backlog and an unknown status dim grey.
 func (t Theme) statusStyle(status string) lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(t.statusInk(status))
-}
-
-// statusInk is a status word's resolved foreground.
-func (t Theme) statusInk(status string) color.Color {
-	return t.resolve(t.statusSlot(status))
+	return lipgloss.NewStyle().Foreground(t.resolve(t.statusSlot(status)))
 }
 
 // statusSlot is the palette slot inking a status word.

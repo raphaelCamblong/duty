@@ -2,6 +2,7 @@ package tui
 
 import (
 	"os/exec"
+	"path"
 	"strings"
 	"time"
 
@@ -57,7 +58,6 @@ type Model struct {
 	root    string
 	editor  string
 	theme   Theme
-	mode    string
 	keys    keyMap
 	help    help.Model
 	zones   *zone.Manager
@@ -112,7 +112,6 @@ func New(f fsys.FS, root string, cfg config.Config) (Model, error) {
 		root:       root,
 		editor:     cfg.Editor,
 		theme:      theme,
-		mode:       cfg.TUI.Theme,
 		keys:       defaultKeys(),
 		help:       help.New(),
 		zones:      zone.New(),
@@ -637,8 +636,8 @@ func (m Model) selectNth(n int) Model {
 // rebuildList reloads the left panel's entries and column widths from the
 // snapshot; the returned command re-runs an active filter.
 func (m Model) rebuildList() (Model, tea.Cmd) {
+	m = m.reskinList()
 	b, ok := m.board()
-	m.list.SetDelegate(newDelegate(m.theme, m.zones, b, m.showAge, m.showGates, m.showArchive, time.Now(), m.spinnerGlyph()))
 	if !ok {
 		return m, m.list.SetItems(nil)
 	}
@@ -659,7 +658,7 @@ func (m Model) withSnap(msg snapMsg) (tea.Model, tea.Cmd) {
 		if _, ok := m.snap.Boards[m.path]; ok {
 			break
 		}
-		m.path = textualParent(m.path)
+		m.path = path.Dir(m.path)
 	}
 	m, cmd := m.rebuildList()
 	return m.fixSelection().renderPreview(false).arm(cmd)
@@ -720,25 +719,7 @@ func editCmd(editor, path string) tea.Cmd {
 	return tea.ExecProcess(c, func(err error) tea.Msg { return editedMsg{err: err} })
 }
 
-// textualParent trims the last path segment: "a/b" → "a", "a" → ".".
-func textualParent(p string) string {
-	i := strings.LastIndex(p, "/")
-	if i < 0 {
-		return "."
-	}
-	return p[:i]
-}
-
 // clamp bounds v to [lo, hi]; hi below lo collapses to lo.
 func clamp(v, lo, hi int) int {
-	if hi < lo {
-		hi = lo
-	}
-	if v < lo {
-		return lo
-	}
-	if v > hi {
-		return hi
-	}
-	return v
+	return max(lo, min(v, hi))
 }

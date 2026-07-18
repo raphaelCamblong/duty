@@ -353,7 +353,7 @@ func (m Model) previewContent() (Model, string) {
 func (m Model) taskMarkdown(content []byte) (Model, string) {
 	wrap := max(m.preview.Width()-2, 20)
 	if m.renderer == nil || m.rendererWidth != wrap {
-		r, err := newRenderer(wrap, m.mode)
+		r, err := newRenderer(wrap, m.theme.dark)
 		if err != nil {
 			return m, string(task.Body(content))
 		}
@@ -554,9 +554,9 @@ func (m Model) crumbChain() []string {
 // newRenderer builds the single glamour renderer used program-wide, at a
 // fixed word-wrap and a concrete style. The theme is resolved to dark/light
 // before the program starts (run.go), so no terminal query fires here.
-func newRenderer(wrap int, theme string) (*glamour.TermRenderer, error) {
+func newRenderer(wrap int, dark bool) (*glamour.TermRenderer, error) {
 	style := "dark"
-	if theme == "light" {
+	if !dark {
 		style = "light"
 	}
 	return glamour.NewTermRenderer(
