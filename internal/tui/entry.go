@@ -97,19 +97,12 @@ func boardEntries(b Board, statusSort, showArchive bool) []list.Item {
 func visibleSubs(subs []Sub, showArchive bool) []int {
 	var out []int
 	for i := range subs {
-		if archivedOut(subs[i], showArchive) {
+		if !showArchive && emptiedByArchiving(subs[i]) {
 			continue
 		}
 		out = append(out, i)
 	}
 	return out
-}
-
-// archivedOut reports whether a track is hidden by the archive-off rule: its
-// subtree holds no open tasks but at least one archived one. A track that
-// never held a task (zero archived) stays visible as an intentional container.
-func archivedOut(s Sub, showArchive bool) bool {
-	return !showArchive && emptiedByArchiving(s)
 }
 
 // emptiedByArchiving reports whether a track's subtree holds no open tasks but

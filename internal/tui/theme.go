@@ -129,16 +129,14 @@ func (t Theme) statusInk(status string) lipgloss.AdaptiveColor {
 		return t.Blocked
 	case task.StatusDone:
 		return t.Done
-	case task.StatusBacklog:
-		return t.Dim
 	}
 	return t.Dim
 }
 
 // statusColor is a status's distribution-bar fill: the status ink's .Dark hue
 // for the three flat palette statuses (peach, bronze, olive on both themes),
-// the full adaptive slot for blocked, the dim grey for backlog, and dim for an
-// unknown status.
+// the full adaptive slot for blocked, and dim grey for backlog or an unknown
+// status.
 func (t Theme) statusColor(status string) lipgloss.TerminalColor {
 	switch status {
 	case task.StatusInProgress:
@@ -149,8 +147,6 @@ func (t Theme) statusColor(status string) lipgloss.TerminalColor {
 		return lipgloss.Color(t.Done.Dark)
 	case task.StatusBlocked:
 		return t.Blocked
-	case task.StatusBacklog:
-		return t.Dim
 	}
 	return t.Dim
 }
