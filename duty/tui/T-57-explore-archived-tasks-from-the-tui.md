@@ -55,3 +55,18 @@ searching across archives; pagination (revisit if archives grow huge).
 ### 2026-07-18 02:23 — done
 
 The archive is no longer invisible. `a` toggles it in place (magit-style, session-only, listed in `?`). Off, a track emptied by archiving drops out while a never-used one keeps its dim "empty" row. On, each board grows a dim "Archived (N)" section — id, title, age — archived-out tracks reappear with their counts, and enter opens the normal read-only preview. Archived file *contents* are read only while the toggle is on; off costs nothing (proven with a counting FS). Docs and tests updated.
+
+### 2026-07-18 02:32
+
+Applied backlog-archive simplify findings (commit 28e79fe).
+
+Applied (behavior-preserving):
+- tui/theme.go: dropped redundant StatusBacklog switch arms in statusInk + statusColor; the default t.Dim already yields the same value. Collapsed the stale comment.
+- tui/entry.go: inlined single-caller archivedOut into visibleSubs (now '!showArchive && emptiedByArchiving'); emptiedByArchiving kept, still used by trackLine.
+
+Skipped:
+- trackInfo backlog counting (app/get.go): a behavior change to 'get tracks' output plus TrackInfo struct + test edits, not behavior-preserving. Latent bug worth a separate task.
+- scanArchive -> tree.TaskFileNames and archivedID -> tree reuse: cross-layer refactors with divergent missing-dir semantics / new tree API; not clean behavior-preserving simplifications.
+- taskLine/archivedLine and ArchivedCount/ArchivedSubtree dedup: confirmed not copy-paste / cemented by a test.
+
+just check green, build ok.
