@@ -74,6 +74,12 @@ layer — it goes through the port.
   explanation, extract a named function instead.
 - Functions taking more than ~4 parameters are a smell: bundle related ones into a
   parameter struct (or two) instead of growing the list further.
+- A comment explaining how to call a function — magic zero-values, nil-means-a-mode,
+  parameter dualities, ordering requirements — is a design bug, not documentation.
+  Refactor until the comment is unnecessary: name the concept as a type, put default
+  semantics on the struct fields (documented once), make modes explicit data. Only
+  irreducible domain contracts (byte-format guarantees, cross-function invariants)
+  earn prose, and they earn one line.
 - Small functions, guard clauses, early return, no `else` after `return`.
 - No package-level mutable state, no `init()`. Dependencies enter through constructors
   (`New…`) or parameters.
