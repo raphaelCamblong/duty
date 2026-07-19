@@ -65,10 +65,15 @@ layer — it goes through the port.
   lowercase line, no trailing period — `main` prints to stderr and exits 1 (spec: exit
   codes are the API).
 - Quiet on success. Stdout is output, stderr is errors — never mix.
-- Naming: no package stutter (`task.Task` yes, `task.TaskFile` no), short receivers,
-  every exported symbol has a godoc comment starting with its name — exactly one terse
-  line. NO narrating inline comments: if a block needs explanation, extract a named
-  function; comment only a constraint the code cannot express.
+- Naming: no package stutter (`task.Task` yes, `task.TaskFile` no), short receivers.
+  Comments are the exception, not the default: write one only when it states
+  something the name and signature don't already show — a non-obvious constraint, a
+  gotcha, a why. Delete a comment that just paraphrases the code below it (that's
+  most of them). When one is warranted, exactly one terse line, starting with the
+  symbol's name if it's exported. NO narrating inline comments: if a block needs
+  explanation, extract a named function instead.
+- Functions taking more than ~4 parameters are a smell: bundle related ones into a
+  parameter struct (or two) instead of growing the list further.
 - Small functions, guard clauses, early return, no `else` after `return`.
 - No package-level mutable state, no `init()`. Dependencies enter through constructors
   (`New…`) or parameters.
