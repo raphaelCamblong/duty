@@ -19,16 +19,16 @@ const (
 	createTrackExample = `  duty create track backend --title "Backend work"`
 )
 
-func newCreateCmd(a app.App, cwd string, stdin io.Reader, stdout io.Writer) *cobra.Command {
+func newCreateCmd(svc app.App, cwd string, stdin io.Reader, stdout io.Writer) *cobra.Command {
 	cmd := newGroupCmd("create", "create a task or a track", createUsage, createExample)
 	cmd.AddCommand(
-		newCreateTaskCmd(a, cwd, stdin, stdout),
-		newCreateTrackCmd(a, cwd, stdout),
+		newCreateTaskCmd(svc, cwd, stdin, stdout),
+		newCreateTrackCmd(svc, cwd, stdout),
 	)
 	return cmd
 }
 
-func newCreateTaskCmd(a app.App, cwd string, stdin io.Reader, stdout io.Writer) *cobra.Command {
+func newCreateTaskCmd(svc app.App, cwd string, stdin io.Reader, stdout io.Writer) *cobra.Command {
 	var (
 		slug      string
 		section   string
@@ -49,7 +49,7 @@ func newCreateTaskCmd(a app.App, cwd string, stdin io.Reader, stdout io.Writer) 
 				return err
 			}
 			spec := app.TaskSpec{Title: args[0], Slug: slug, Section: section, BlockedBy: blockedBy, Body: bodyBytes}
-			id, path, err := a.CreateTask(app.Scope{Cwd: cwd, In: in}, spec)
+			id, path, err := svc.CreateTask(app.Scope{Cwd: cwd, In: in}, spec)
 			if err != nil {
 				return err
 			}
@@ -70,14 +70,14 @@ func readBody(stdin io.Reader, body bool) ([]byte, error) {
 	if !body {
 		return nil, nil
 	}
-	b, err := io.ReadAll(stdin)
+	data, err := io.ReadAll(stdin)
 	if err != nil {
 		return nil, fmt.Errorf("read stdin: %w", err)
 	}
-	return b, nil
+	return data, nil
 }
 
-func newCreateTrackCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
+func newCreateTrackCmd(svc app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var (
 		title string
 		in    string
@@ -90,7 +90,7 @@ func newCreateTrackCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 			if len(args) != 1 {
 				return errors.New(createTrackUsage)
 			}
-			path, err := a.CreateTrack(app.Scope{Cwd: cwd, In: in}, args[0], title)
+			path, err := svc.CreateTrack(app.Scope{Cwd: cwd, In: in}, args[0], title)
 			if err != nil {
 				return err
 			}

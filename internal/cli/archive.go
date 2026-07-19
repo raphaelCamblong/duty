@@ -13,7 +13,7 @@ const (
 	archiveExample = `  duty archive`
 )
 
-func newArchiveCmd(a app.App, cwd string) *cobra.Command {
+func newArchiveCmd(svc app.App, cwd string) *cobra.Command {
 	var in string
 	cmd := &cobra.Command{
 		Use:     "archive",
@@ -23,7 +23,7 @@ func newArchiveCmd(a app.App, cwd string) *cobra.Command {
 			if len(args) != 0 {
 				return errors.New(archiveUsage)
 			}
-			return a.Archive(app.Scope{Cwd: cwd, In: in})
+			return svc.Archive(app.Scope{Cwd: cwd, In: in})
 		},
 	}
 	addInFlag(cmd, &in)

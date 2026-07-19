@@ -66,15 +66,15 @@ var (
 )
 
 func Parse(content []byte) (Task, error) {
-	m := frontmatterRE.FindSubmatch(content)
-	if m == nil {
+	match := frontmatterRE.FindSubmatch(content)
+	if match == nil {
 		return Task{}, errors.New("missing frontmatter")
 	}
-	var t Task
-	if err := yaml.Unmarshal(m[1], &t); err != nil {
+	var task Task
+	if err := yaml.Unmarshal(match[1], &task); err != nil {
 		return Task{}, fmt.Errorf("parse frontmatter: %w", err)
 	}
-	return t, nil
+	return task, nil
 }
 
 // Body returns the markdown below the frontmatter block; content without
@@ -98,9 +98,9 @@ var skeletonTmpl = template.Must(template.New("task").Funcs(template.FuncMap{
 // full section skeleton from the spec. Gates starts as an empty checklist,
 // so a fresh task counts 0/0 gates.
 func Render(id, title string, blockedBy []string) []byte {
-	var b bytes.Buffer
-	_ = skeletonTmpl.Execute(&b, Task{ID: id, Title: title, Status: StatusTodo, BlockedBy: blockedBy})
-	return b.Bytes()
+	var buf bytes.Buffer
+	_ = skeletonTmpl.Execute(&buf, Task{ID: id, Title: title, Status: StatusTodo, BlockedBy: blockedBy})
+	return buf.Bytes()
 }
 
 // RenderWithBody produces a brand-new task file from a caller-supplied body:
@@ -112,10 +112,10 @@ func Render(id, title string, blockedBy []string) []byte {
 func RenderWithBody(id, title string, blockedBy []string, body []byte) []byte {
 	head := Render(id, title, blockedBy)
 	head = head[:nextHeadingFrom(head, 0)]
-	var b bytes.Buffer
-	b.Write(head)
-	writeEndingNL(&b, bytes.TrimLeft(body, " \t\r\n"))
-	return b.Bytes()
+	var buf bytes.Buffer
+	buf.Write(head)
+	writeEndingNL(&buf, bytes.TrimLeft(body, " \t\r\n"))
+	return buf.Bytes()
 }
 
 // SetStatus rewrites the first `status:` line to the given status and leaves
@@ -197,32 +197,32 @@ func ReportBlock(at time.Time, status string, text []byte) []byte {
 // at the end of the file when missing. Reports accumulate: existing content is
 // never rewritten, each call appends one blank-line-separated block.
 func AppendReport(content, text []byte) []byte {
-	var b bytes.Buffer
-	writeEndingNL(&b, content)
+	var buf bytes.Buffer
+	writeEndingNL(&buf, content)
 	if _, ok := headingIndex(content, reportHeading); !ok {
-		ensureBlankLine(&b)
-		b.WriteString("## Report\n")
+		ensureBlankLine(&buf)
+		buf.WriteString("## Report\n")
 	}
-	ensureBlankLine(&b)
-	writeEndingNL(&b, text)
-	return b.Bytes()
+	ensureBlankLine(&buf)
+	writeEndingNL(&buf, text)
+	return buf.Bytes()
 }
 
-func writeEndingNL(b *bytes.Buffer, p []byte) {
-	b.Write(p)
-	if n := len(p); n > 0 && p[n-1] != '\n' {
-		b.WriteByte('\n')
-	}
-}
-
-func ensureBlankLine(b *bytes.Buffer) {
-	if b.Len() > 0 && !endsBlank(b.Bytes()) {
-		b.WriteByte('\n')
+func writeEndingNL(buf *bytes.Buffer, data []byte) {
+	buf.Write(data)
+	if length := len(data); length > 0 && data[length-1] != '\n' {
+		buf.WriteByte('\n')
 	}
 }
 
-func endsBlank(b []byte) bool {
-	return len(b) >= 2 && b[len(b)-1] == '\n' && b[len(b)-2] == '\n'
+func ensureBlankLine(buf *bytes.Buffer) {
+	if buf.Len() > 0 && !endsBlank(buf.Bytes()) {
+		buf.WriteByte('\n')
+	}
+}
+
+func endsBlank(data []byte) bool {
+	return len(data) >= 2 && data[len(data)-1] == '\n' && data[len(data)-2] == '\n'
 }
 
 func CountGates(content []byte) (done, total int) {
@@ -250,82 +250,82 @@ func CountGates(content []byte) (done, total int) {
 // longer than 40 characters breaks at the last word boundary that fits,
 // falling back to a hard cut only when the first word alone exceeds 40.
 func Slugify(title string) string {
-	var b strings.Builder
+	var builder strings.Builder
 	pending := false
-	for _, r := range strings.ToLower(title) {
-		alnum := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+	for _, char := range strings.ToLower(title) {
+		alnum := (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9')
 		if !alnum {
-			pending = b.Len() > 0
+			pending = builder.Len() > 0
 			continue
 		}
 		if pending {
-			b.WriteByte('-')
+			builder.WriteByte('-')
 			pending = false
 		}
-		b.WriteRune(r)
+		builder.WriteRune(char)
 	}
-	s := b.String()
-	if len(s) > 40 {
-		s = truncateSlug(s)
+	slug := builder.String()
+	if len(slug) > 40 {
+		slug = truncateSlug(slug)
 	}
-	return s
+	return slug
 }
 
-func truncateSlug(s string) string {
-	cut := s[:40]
-	if i := strings.LastIndexByte(cut, '-'); i > 0 {
-		return cut[:i]
+func truncateSlug(slug string) string {
+	cut := slug[:40]
+	if dashIdx := strings.LastIndexByte(cut, '-'); dashIdx > 0 {
+		return cut[:dashIdx]
 	}
 	return strings.TrimRight(cut, "-")
 }
 
-// ValidSlug reports whether s is a slug of the shape Slugify produces: a
+// ValidSlug reports whether slug is of the shape Slugify produces: a
 // non-empty run of at most 40 lowercase letters, digits, and hyphens, with no
 // leading or trailing hyphen.
-func ValidSlug(s string) bool {
-	if s == "" || len(s) > 40 || s[0] == '-' || s[len(s)-1] == '-' {
+func ValidSlug(slug string) bool {
+	if slug == "" || len(slug) > 40 || slug[0] == '-' || slug[len(slug)-1] == '-' {
 		return false
 	}
-	for _, r := range s {
-		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
+	for _, char := range slug {
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' {
 			return false
 		}
 	}
 	return true
 }
 
-func ValidStatus(s string) bool {
-	switch s {
+func ValidStatus(status string) bool {
+	switch status {
 	case StatusTodo, StatusInProgress, StatusDone, StatusBlocked, StatusBacklog:
 		return true
 	}
 	return false
 }
 
-// yamlScalar renders s as a one-line YAML scalar: plain when unambiguous,
+// yamlScalar renders value as a one-line YAML scalar: plain when unambiguous,
 // double-quoted otherwise. It only ever generates fresh frontmatter —
 // existing frontmatter is never re-serialized.
-func yamlScalar(s string) string {
-	if plainSafe(s) {
-		return s
+func yamlScalar(value string) string {
+	if plainSafe(value) {
+		return value
 	}
-	return strconv.Quote(s)
+	return strconv.Quote(value)
 }
 
-// plainSafe reports whether s survives verbatim as a YAML plain scalar in a
-// block-mapping value position. The check is conservative: quoting a plain
+// plainSafe reports whether value survives verbatim as a YAML plain scalar in
+// a block-mapping value position. The check is conservative: quoting a plain
 // string is always safe, the reverse is not.
-func plainSafe(s string) bool {
-	if s == "" || s != strings.TrimSpace(s) {
+func plainSafe(value string) bool {
+	if value == "" || value != strings.TrimSpace(value) {
 		return false
 	}
-	if strings.ContainsAny(s, "\n\r\t") {
+	if strings.ContainsAny(value, "\n\r\t") {
 		return false
 	}
-	if strings.ContainsAny(s[:1], "-?:,[]{}#&*!|>'\"%@`") {
+	if strings.ContainsAny(value[:1], "-?:,[]{}#&*!|>'\"%@`") {
 		return false
 	}
-	if strings.Contains(s, ": ") || strings.HasSuffix(s, ":") || strings.Contains(s, " #") {
+	if strings.Contains(value, ": ") || strings.HasSuffix(value, ":") || strings.Contains(value, " #") {
 		return false
 	}
 	return true

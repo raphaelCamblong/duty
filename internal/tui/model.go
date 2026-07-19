@@ -95,17 +95,17 @@ type Model struct {
 // New scans the tree under root and returns a model opened on the root track,
 // styled per cfg: the color palette overlaid from [tui.palette] (a malformed
 // color errors) and the dark/light mode from [tui].theme.
-func New(f fsys.FS, root string, cfg config.Config) (Model, error) {
+func New(filesystem fsys.FS, root string, cfg config.Config) (Model, error) {
 	theme, err := themeFromConfig(cfg.TUI.Palette, cfg.TUI.Theme != "light")
 	if err != nil {
 		return Model{}, err
 	}
-	snap, err := Scan(f, root, false)
+	snap, err := Scan(filesystem, root, false)
 	if err != nil {
 		return Model{}, err
 	}
-	m := Model{
-		fsys:       f,
+	model := Model{
+		fsys:       filesystem,
 		root:       root,
 		editor:     cfg.Editor,
 		theme:      theme,
@@ -123,26 +123,26 @@ func New(f fsys.FS, root string, cfg config.Config) (Model, error) {
 		spring:     harmonica.NewSpring(harmonica.FPS(scrollFPS), scrollFreq, 1.0),
 		lastClick:  -1,
 	}
-	m, _ = m.rebuildList()
-	return m.fixSelection().layout(), nil
+	model, _ = model.rebuildList()
+	return model.fixSelection().layout(), nil
 }
 
 func newList(theme Theme) list.Model {
-	l := list.New(nil, compactDelegate{theme: theme}, 0, 0)
-	l.SetShowTitle(false)
-	l.SetShowStatusBar(false)
-	l.SetShowHelp(false)
-	l.SetFilteringEnabled(true)
-	l.SetStatusBarItemName("match", "matches")
-	l.DisableQuitKeybindings()
-	l.FilterInput.Prompt = "/ "
-	fs := l.FilterInput.Styles()
+	listModel := list.New(nil, compactDelegate{theme: theme}, 0, 0)
+	listModel.SetShowTitle(false)
+	listModel.SetShowStatusBar(false)
+	listModel.SetShowHelp(false)
+	listModel.SetFilteringEnabled(true)
+	listModel.SetStatusBarItemName("match", "matches")
+	listModel.DisableQuitKeybindings()
+	listModel.FilterInput.Prompt = "/ "
+	fs := listModel.FilterInput.Styles()
 	fs.Focused.Prompt = theme.accent()
 	fs.Blurred.Prompt = theme.accent()
-	l.FilterInput.SetStyles(fs)
-	l.Styles.TitleBar = lipgloss.NewStyle()
-	l.Styles.NoItems = theme.dim().Padding(1, 2)
-	return l
+	listModel.FilterInput.SetStyles(fs)
+	listModel.Styles.TitleBar = lipgloss.NewStyle()
+	listModel.Styles.NoItems = theme.dim().Padding(1, 2)
+	return listModel
 }
 
 // newSpinner returns the one shared in-progress spinner: a one-cell MiniDot
@@ -184,24 +184,24 @@ func (m Model) ShowArchive() bool { return m.showArchive }
 func (m Model) Cursor() int {
 	items := m.list.VisibleItems()
 	idx := m.list.Index()
-	c := 0
+	count := 0
 	for i := 0; i < idx && i < len(items); i++ {
-		if e, ok := items[i].(entry); ok && e.selectable() {
-			c++
+		if item, ok := items[i].(entry); ok && item.selectable() {
+			count++
 		}
 	}
-	return c
+	return count
 }
 
 func (m Model) SelectedID() string {
-	e, ok := m.selectedEntry()
+	item, ok := m.selectedEntry()
 	switch {
 	case !ok:
 		return ""
-	case e.track != nil:
-		return e.track.Path
+	case item.track != nil:
+		return item.track.Path
 	default:
-		return e.task.ID
+		return item.task.ID
 	}
 }
 
@@ -358,8 +358,8 @@ func (m Model) toggleArchive() (tea.Model, tea.Cmd, bool) {
 	return model.fixSelection().layout(), tea.Batch(cmd, scan), true
 }
 
-func (m Model) resizeGates(w int) Model {
-	if show := w >= narrowCols; show != m.showGates {
+func (m Model) resizeGates(width int) Model {
+	if show := width >= narrowCols; show != m.showGates {
 		m.showGates = show
 		return m.reskinList()
 	}
@@ -369,16 +369,16 @@ func (m Model) resizeGates(w int) Model {
 // reskinList swaps in a fresh list delegate reflecting the current age and gate
 // visibility, leaving items, selection, and any filter untouched.
 func (m Model) reskinList() Model {
-	b, _ := m.board()
-	m.list.SetDelegate(newDelegate(m.theme, m.zones, b, viewOpts{showAge: m.showAge, showGates: m.showGates, showArchive: m.showArchive, now: time.Now(), glyph: m.spinnerGlyph()}))
+	board, _ := m.board()
+	m.list.SetDelegate(newDelegate(m.theme, m.zones, board, viewOpts{showAge: m.showAge, showGates: m.showGates, showArchive: m.showArchive, now: time.Now(), glyph: m.spinnerGlyph()}))
 	return m
 }
 
 func (m Model) handleActionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	switch {
 	case key.Matches(msg, m.keys.Edit):
-		if e, ok := m.selectedEntry(); ok && e.task != nil && !e.archived {
-			return m, editCmd(m.editor, e.task.Path), true
+		if item, ok := m.selectedEntry(); ok && item.task != nil && !item.archived {
+			return m, editCmd(m.editor, item.task.Path), true
 		}
 		return m, nil, true
 	case key.Matches(msg, m.keys.Back):
@@ -404,8 +404,8 @@ func (m Model) scrollPreview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m.settleAt(m.preview.YOffset()), cmd
 }
 
-func otherFocus(f focusArea) focusArea {
-	if f == focusList {
+func otherFocus(focus focusArea) focusArea {
+	if focus == focusList {
 		return focusPreview
 	}
 	return focusList
@@ -418,22 +418,22 @@ func (m Model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) selectedEntry() (entry, bool) {
-	e, ok := m.list.SelectedItem().(entry)
-	if !ok || !e.selectable() {
+	item, ok := m.list.SelectedItem().(entry)
+	if !ok || !item.selectable() {
 		return entry{}, false
 	}
-	return e, true
+	return item, true
 }
 
 func (m Model) board() (Board, bool) {
-	b, ok := m.snap.Boards[m.path]
-	return b, ok
+	board, ok := m.snap.Boards[m.path]
+	return board, ok
 }
 
 func (m Model) moveSelection(delta int) Model {
 	items := m.list.VisibleItems()
 	for i := m.list.Index() + delta; i >= 0 && i < len(items); i += delta {
-		if e, ok := items[i].(entry); ok && e.selectable() {
+		if item, ok := items[i].(entry); ok && item.selectable() {
 			m.list.Select(i)
 			break
 		}
@@ -454,12 +454,12 @@ func (m Model) fixSelection() Model {
 		idx = clamp(idx, 0, len(items)-1)
 		m.list.Select(idx)
 	}
-	if e, ok := items[idx].(entry); ok && e.selectable() {
+	if item, ok := items[idx].(entry); ok && item.selectable() {
 		return m
 	}
 	for _, delta := range []int{1, -1} {
 		for i := idx + delta; i >= 0 && i < len(items); i += delta {
-			if e, ok := items[i].(entry); ok && e.selectable() {
+			if item, ok := items[i].(entry); ok && item.selectable() {
 				m.list.Select(i)
 				return m
 			}
@@ -472,17 +472,17 @@ func (m Model) fixSelection() Model {
 // opens its summary card only when the preview is already open, otherwise it
 // descends into the track (§8).
 func (m Model) open() Model {
-	e, ok := m.selectedEntry()
+	item, ok := m.selectedEntry()
 	if !ok {
 		return m
 	}
-	if e.track != nil {
+	if item.track != nil {
 		if m.previewOpen {
-			return m.showPreview(previewTrack, e.track.Path)
+			return m.showPreview(previewTrack, item.track.Path)
 		}
-		return m.enterBoard(e.track.Path)
+		return m.enterBoard(item.track.Path)
 	}
-	return m.showPreview(previewTask, e.task.ID)
+	return m.showPreview(previewTask, item.task.ID)
 }
 
 func (m Model) showPreview(kind, arg string) Model {
@@ -516,17 +516,17 @@ func (m Model) renderPreview(reset bool) Model {
 // by the preview header for the row's track title. Archived rows are searched
 // too, so an archived task opens the same read-only preview.
 func (m Model) findRowBoard(id string) (Row, Board, bool) {
-	for _, b := range m.snap.Boards {
-		for _, s := range b.Sections {
-			for _, r := range s.Rows {
-				if r.ID == id {
-					return r, b, true
+	for _, board := range m.snap.Boards {
+		for _, section := range board.Sections {
+			for _, row := range section.Rows {
+				if row.ID == id {
+					return row, board, true
 				}
 			}
 		}
-		for _, r := range b.Archived {
-			if r.ID == id {
-				return r, b, true
+		for _, row := range board.Archived {
+			if row.ID == id {
+				return row, board, true
 			}
 		}
 	}
@@ -534,10 +534,10 @@ func (m Model) findRowBoard(id string) (Row, Board, bool) {
 }
 
 func (m Model) findSub(path string) (Sub, bool) {
-	for _, b := range m.snap.Boards {
-		for _, s := range b.Subs {
-			if s.Path == path {
-				return s, true
+	for _, board := range m.snap.Boards {
+		for _, sub := range board.Subs {
+			if sub.Path == path {
+				return sub, true
 			}
 		}
 	}
@@ -557,8 +557,8 @@ func (m Model) back() (tea.Model, tea.Cmd) {
 		m.list.ResetFilter()
 		return m.fixSelection(), nil
 	}
-	if b, ok := m.board(); ok && b.Parent != "" {
-		return m.enterBoard(b.Parent), nil
+	if board, ok := m.board(); ok && board.Parent != "" {
+		return m.enterBoard(board.Parent), nil
 	}
 	return m, nil
 }
@@ -574,18 +574,18 @@ func (m Model) enterBoard(path string) Model {
 	return m.layout()
 }
 
-func (m Model) selectNth(n int) Model {
-	c := 0
+func (m Model) selectNth(target int) Model {
+	count := 0
 	for i, it := range m.list.VisibleItems() {
-		e, ok := it.(entry)
-		if !ok || !e.selectable() {
+		item, ok := it.(entry)
+		if !ok || !item.selectable() {
 			continue
 		}
-		if c == n {
+		if count == target {
 			m.list.Select(i)
 			return m
 		}
-		c++
+		count++
 	}
 	return m
 }
@@ -594,11 +594,11 @@ func (m Model) selectNth(n int) Model {
 // snapshot; the returned command re-runs an active filter.
 func (m Model) rebuildList() (Model, tea.Cmd) {
 	m = m.reskinList()
-	b, ok := m.board()
+	board, ok := m.board()
 	if !ok {
 		return m, m.list.SetItems(nil)
 	}
-	return m, m.list.SetItems(boardEntries(b, m.statusSort, m.showArchive))
+	return m, m.list.SetItems(boardEntries(board, m.statusSort, m.showArchive))
 }
 
 // withSnap applies a re-scan: on error the last good snapshot stays on
@@ -621,7 +621,7 @@ func (m Model) withSnap(msg snapMsg) (tea.Model, tea.Cmd) {
 	return m.fixSelection().renderPreview(false).arm(cmd)
 }
 
-func (m Model) dims() (w, h int) {
+func (m Model) dims() (width, height int) {
 	if m.width <= 0 || m.height <= 0 {
 		return 80, 24
 	}
@@ -629,8 +629,8 @@ func (m Model) dims() (w, h int) {
 }
 
 func (m Model) wide() bool {
-	w, _ := m.dims()
-	return w >= twoPanelMinWidth
+	width, _ := m.dims()
+	return width >= twoPanelMinWidth
 }
 
 func (m Model) split() bool {
@@ -639,9 +639,9 @@ func (m Model) split() bool {
 
 // waitRefresh blocks on the watcher channel and turns one notification into
 // a refreshMsg; a closed channel ends the wait silently.
-func waitRefresh(c <-chan struct{}) tea.Cmd {
+func waitRefresh(refresh <-chan struct{}) tea.Cmd {
 	return func() tea.Msg {
-		if _, ok := <-c; !ok {
+		if _, ok := <-refresh; !ok {
 			return nil
 		}
 		return refreshMsg{}
@@ -650,9 +650,9 @@ func waitRefresh(c <-chan struct{}) tea.Cmd {
 
 // scanCmd re-reads the whole tree off the update loop, including archived rows
 // only when includeArchive is set.
-func scanCmd(f fsys.FS, root string, includeArchive bool) tea.Cmd {
+func scanCmd(filesystem fsys.FS, root string, includeArchive bool) tea.Cmd {
 	return func() tea.Msg {
-		snap, err := Scan(f, root, includeArchive)
+		snap, err := Scan(filesystem, root, includeArchive)
 		return snapMsg{snap: snap, err: err}
 	}
 }
@@ -667,11 +667,11 @@ func editCmd(editor, path string) tea.Cmd {
 	if len(parts) == 0 {
 		parts = []string{"vi"}
 	}
-	c := exec.Command(parts[0], append(parts[1:], path)...)
-	return tea.ExecProcess(c, func(err error) tea.Msg { return editedMsg{err: err} })
+	command := exec.Command(parts[0], append(parts[1:], path)...)
+	return tea.ExecProcess(command, func(err error) tea.Msg { return editedMsg{err: err} })
 }
 
 // clamp bounds v to [lo, hi]; hi below lo collapses to lo.
-func clamp(v, lo, hi int) int {
-	return max(lo, min(v, hi))
+func clamp(value, lo, hi int) int {
+	return max(lo, min(value, hi))
 }

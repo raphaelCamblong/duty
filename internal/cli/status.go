@@ -13,7 +13,7 @@ const (
 	statusExample = `  duty status T-07 in-progress`
 )
 
-func newStatusCmd(a app.App, cwd string) *cobra.Command {
+func newStatusCmd(svc app.App, cwd string) *cobra.Command {
 	var (
 		force bool
 		as    string
@@ -26,7 +26,7 @@ func newStatusCmd(a app.App, cwd string) *cobra.Command {
 			if len(args) != 2 || args[0] == "" || args[1] == "" {
 				return errors.New(statusUsage)
 			}
-			return a.SetStatus(cwd, app.StatusChange{ID: args[0], Status: args[1], Force: force, As: claimer(as)})
+			return svc.SetStatus(cwd, app.StatusChange{ID: args[0], Status: args[1], Force: force, As: claimer(as)})
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "take over a task already in-progress")

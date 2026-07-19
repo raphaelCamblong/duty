@@ -27,27 +27,27 @@ func (a App) Section(cwd, id, name string) (string, error) {
 }
 
 // SetSection replaces the named section's body on the task id resolves to with
-// r's text (blank refused, a missing section created); r is read after the id resolves.
-func (a App) SetSection(cwd, id, name string, r io.Reader) error {
-	return a.editSection(cwd, id, "section", r, func(content, payload []byte) ([]byte, error) {
+// reader's text (blank refused, a missing section created); reader is read after the id resolves.
+func (a App) SetSection(cwd, id, name string, reader io.Reader) error {
+	return a.editSection(cwd, id, "section", reader, func(content, payload []byte) ([]byte, error) {
 		return task.ReplaceSection(content, name, payload)
 	})
 }
 
-// SetSections replaces every "## " block read from r on the task id resolves to
-// in one write; blank or non-"## "-opening input is refused, r read after the id.
-func (a App) SetSections(cwd, id string, r io.Reader) error {
-	return a.editSection(cwd, id, "sections", r, task.ReplaceSections)
+// SetSections replaces every "## " block read from reader on the task id resolves to
+// in one write; blank or non-"## "-opening input is refused, reader read after the id.
+func (a App) SetSections(cwd, id string, reader io.Reader) error {
+	return a.editSection(cwd, id, "sections", reader, task.ReplaceSections)
 }
 
 // editSection is the shared read/lock/write spine of SetSection and
 // SetSections.
-func (a App) editSection(cwd, id, kind string, r io.Reader, edit func(content, payload []byte) ([]byte, error)) error {
+func (a App) editSection(cwd, id, kind string, reader io.Reader, edit func(content, payload []byte) ([]byte, error)) error {
 	root, path, err := a.resolveOpenWithRoot(cwd, id)
 	if err != nil {
 		return err
 	}
-	payload, err := readNonBlank(r, kind)
+	payload, err := readNonBlank(reader, kind)
 	if err != nil {
 		return err
 	}

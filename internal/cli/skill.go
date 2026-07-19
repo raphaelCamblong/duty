@@ -37,9 +37,9 @@ func newSkillCmd(sc skillCtx) *cobra.Command {
 		Use:     "skill",
 		Short:   "print the duty agent skill, or install it into a harness",
 		Example: skillExample,
-		RunE: func(c *cobra.Command, args []string) error {
+		RunE: func(command *cobra.Command, args []string) error {
 			if len(args) != 0 {
-				return unknownCommand(c, args[0])
+				return unknownCommand(command, args[0])
 			}
 			_, err := sc.out.Write(sc.app.Skill(sc.fetcher, skillURL, offline))
 			return err
@@ -59,8 +59,8 @@ func newSkillInstallCmd(sc skillCtx, offline *bool) *cobra.Command {
 		Use:     "install [claude|codex|gemini]",
 		Short:   "install the duty skill into an agent harness",
 		Example: "  duty skill install claude",
-		RunE: func(c *cobra.Command, args []string) error {
-			target, err := resolveTarget(c, args)
+		RunE: func(command *cobra.Command, args []string) error {
+			target, err := resolveTarget(command, args)
 			if err != nil {
 				return err
 			}
@@ -115,7 +115,7 @@ func interactive(cmd *cobra.Command) bool {
 	return isTTY(cmd.InOrStdin()) && isTTY(cmd.OutOrStdout())
 }
 
-func isTTY(v any) bool {
-	f, ok := v.(*os.File)
-	return ok && term.IsTerminal(int(f.Fd()))
+func isTTY(value any) bool {
+	file, ok := value.(*os.File)
+	return ok && term.IsTerminal(int(file.Fd()))
 }

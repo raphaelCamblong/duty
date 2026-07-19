@@ -23,18 +23,18 @@ type TaskSpec struct {
 }
 
 // CreateTask creates spec's task (status todo) in scope's board, returning its new id and path.
-func (a App) CreateTask(s Scope, spec TaskSpec) (id, path string, err error) {
+func (a App) CreateTask(scope Scope, spec TaskSpec) (id, path string, err error) {
 	if spec.Slug != "" && !task.ValidSlug(spec.Slug) {
 		return "", "", fmt.Errorf("invalid slug %q: want 1-40 chars of [a-z0-9-], no leading or trailing hyphen", spec.Slug)
 	}
 	if err := validateBody(spec.Body); err != nil {
 		return "", "", err
 	}
-	boardDir, err := a.contextBoard(s)
+	boardDir, err := a.contextBoard(scope)
 	if err != nil {
 		return "", "", err
 	}
-	root, err := tree.FindRoot(a.fs, s.Cwd)
+	root, err := tree.FindRoot(a.fs, scope.Cwd)
 	if err != nil {
 		return "", "", err
 	}

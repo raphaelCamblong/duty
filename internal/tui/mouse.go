@@ -25,16 +25,16 @@ func scrollTickCmd() tea.Cmd {
 // second press on the same entry opening it. Bubble Tea v2 encodes the action
 // in the message type, so the routing switches on that rather than a field.
 func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	switch e := msg.(type) {
+	switch event := msg.(type) {
 	case tea.MouseWheelMsg:
-		switch e.Button {
+		switch event.Button {
 		case tea.MouseWheelUp:
 			return m.wheel(msg, -1)
 		case tea.MouseWheelDown:
 			return m.wheel(msg, 1)
 		}
 	case tea.MouseClickMsg:
-		if e.Button == tea.MouseLeft {
+		if event.Button == tea.MouseLeft {
 			return m.click(msg)
 		}
 	}
@@ -66,9 +66,9 @@ func (m Model) overPreview(msg tea.MouseMsg) bool {
 // track, the open preview takes focus, otherwise the entry under the pointer
 // is selected (a second press on it opens it).
 func (m Model) click(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	for _, p := range m.crumbChain() {
-		if m.zones.Get(crumbZone(p)).InBounds(msg) {
-			return m.enterBoard(p), nil
+	for _, path := range m.crumbChain() {
+		if m.zones.Get(crumbZone(path)).InBounds(msg) {
+			return m.enterBoard(path), nil
 		}
 	}
 	if m.split() && m.zones.Get(zonePreview).InBounds(msg) {

@@ -86,7 +86,7 @@ func (a App) moveTrack(root, id, taskPath string, dest Dest) (string, error) {
 	if filepath.Dir(taskPath) == target {
 		return taskPath, a.moveRowInBoard(taskPath, dest.Section)
 	}
-	t, _, err := a.readTask(taskPath)
+	parsed, _, err := a.readTask(taskPath)
 	if err != nil {
 		return "", err
 	}
@@ -96,7 +96,7 @@ func (a App) moveTrack(root, id, taskPath string, dest Dest) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := a.moveAcross(across{id: id, taskPath: taskPath, target: target, section: dest.Section, pruned: pruned, task: t}); err != nil {
+	if err := a.moveAcross(across{id: id, taskPath: taskPath, target: target, section: dest.Section, pruned: pruned, task: parsed}); err != nil {
 		return "", err
 	}
 	return filepath.Join(target, filename), nil
@@ -128,22 +128,22 @@ type across struct {
 
 // moveAcross computes the target row before renaming the file, so a failure
 // leaves the tree untouched.
-func (a App) moveAcross(x across) error {
-	filename := filepath.Base(x.taskPath)
-	srcPath := boardBeside(x.taskPath)
-	dstPath := boardIndexPath(x.target)
+func (a App) moveAcross(move across) error {
+	filename := filepath.Base(move.taskPath)
+	srcPath := boardBeside(move.taskPath)
+	dstPath := boardIndexPath(move.target)
 	dst, err := a.fs.ReadFile(dstPath)
 	if err != nil {
 		return err
 	}
-	withRow, err := board.AddRow(dst, x.section, board.Row{ID: x.task.ID, File: filename, Title: x.task.Title, Status: x.task.Status})
+	withRow, err := board.AddRow(dst, move.section, board.Row{ID: move.task.ID, File: filename, Title: move.task.Title, Status: move.task.Status})
 	if err != nil {
 		return err
 	}
-	if err := a.fs.Rename(x.taskPath, filepath.Join(x.target, filename)); err != nil {
-		return fmt.Errorf("move %s: %w", x.id, err)
+	if err := a.fs.Rename(move.taskPath, filepath.Join(move.target, filename)); err != nil {
+		return fmt.Errorf("move %s: %w", move.id, err)
 	}
-	if err := a.fs.WriteFile(srcPath, x.pruned); err != nil {
+	if err := a.fs.WriteFile(srcPath, move.pruned); err != nil {
 		return err
 	}
 	return a.fs.WriteFile(dstPath, withRow)

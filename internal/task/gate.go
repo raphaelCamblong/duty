@@ -24,8 +24,8 @@ func Gates(content []byte) []Gate {
 	}
 	var gates []Gate
 	for _, raw := range strings.Split(string(body), "\n") {
-		if g, ok := parseGate(raw); ok {
-			gates = append(gates, g)
+		if gate, ok := parseGate(raw); ok {
+			gates = append(gates, gate)
 		}
 	}
 	return gates
@@ -59,16 +59,16 @@ func AddGate(content []byte, text string) []byte {
 	return splice(content, at, at, []byte(ins))
 }
 
-// SetGate sets the ticked state of the n-th gate (1-based) under "## Gates",
-// flipping only that line's checkbox character. It errors when n is out of
-// range for the gates present.
-func SetGate(content []byte, n int, done bool) ([]byte, error) {
+// SetGate sets the ticked state of gate number (1-based) under "## Gates",
+// flipping only that line's checkbox character. It errors when number is out
+// of range for the gates present.
+func SetGate(content []byte, number int, done bool) ([]byte, error) {
 	start, end, _ := sectionBounds(content, gatesHeading)
 	positions := gatePositions(content, start, end)
-	if n < 1 || n > len(positions) {
-		return nil, fmt.Errorf("no gate %d: task has %d", n, len(positions))
+	if number < 1 || number > len(positions) {
+		return nil, fmt.Errorf("no gate %d: task has %d", number, len(positions))
 	}
-	return flipBox(content, positions[n-1]+boxIndex, done), nil
+	return flipBox(content, positions[number-1]+boxIndex, done), nil
 }
 
 // SetAllGates ticks or unticks every gate under "## Gates", flipping only each

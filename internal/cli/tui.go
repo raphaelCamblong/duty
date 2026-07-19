@@ -14,7 +14,7 @@ const (
 	tuiExample = `  duty tui`
 )
 
-func newTUICmd(f fsys.FS, cwd string) *cobra.Command {
+func newTUICmd(fs fsys.FS, cwd string) *cobra.Command {
 	return &cobra.Command{
 		Use:     "tui",
 		Short:   "launch the live board viewer",
@@ -23,7 +23,7 @@ func newTUICmd(f fsys.FS, cwd string) *cobra.Command {
 			if len(args) != 0 {
 				return errors.New(tuiUsage)
 			}
-			return tui.Run(f, cwd)
+			return tui.Run(fs, cwd)
 		},
 	}
 }

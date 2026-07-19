@@ -32,25 +32,25 @@ const (
 	skillBlockEnd   = "<!-- duty:skill end -->"
 )
 
-func unknownTargetErr(s string) error {
-	return fmt.Errorf("unknown target %q: want claude, codex or gemini", s)
+func unknownTargetErr(raw string) error {
+	return fmt.Errorf("unknown target %q: want claude, codex or gemini", raw)
 }
 
-func ParseTarget(s string) (Target, error) {
-	switch Target(s) {
+func ParseTarget(raw string) (Target, error) {
+	switch Target(raw) {
 	case Claude, Codex, Gemini:
-		return Target(s), nil
+		return Target(raw), nil
 	}
-	return "", unknownTargetErr(s)
+	return "", unknownTargetErr(raw)
 }
 
 // Skill returns the agent skill text fetched from url, or the embedded fallback
 // when offline, the fetcher is nil, or the fetch fails or is empty.
-func (a App) Skill(f fetch.Fetcher, url string, offline bool) []byte {
-	if offline || f == nil {
+func (a App) Skill(fetcher fetch.Fetcher, url string, offline bool) []byte {
+	if offline || fetcher == nil {
 		return skillText
 	}
-	body, err := f.Fetch(url)
+	body, err := fetcher.Fetch(url)
 	if err != nil || len(bytes.TrimSpace(body)) == 0 {
 		return skillText
 	}
@@ -138,30 +138,30 @@ func skillBlock(skill []byte) string {
 // appended below a blank line when existing carries no block.
 func mergeSkillBlock(existing, skill []byte) []byte {
 	block := skillBlock(skill)
-	s := string(existing)
-	start := strings.Index(s, skillBlockStart)
+	text := string(existing)
+	start := strings.Index(text, skillBlockStart)
 	if start < 0 {
-		return []byte(separate(s) + block)
+		return []byte(separate(text) + block)
 	}
 	after := ""
-	if e := strings.Index(s[start:], skillBlockEnd); e >= 0 {
-		after = strings.TrimPrefix(s[start+e+len(skillBlockEnd):], "\n")
+	if end := strings.Index(text[start:], skillBlockEnd); end >= 0 {
+		after = strings.TrimPrefix(text[start+end+len(skillBlockEnd):], "\n")
 	}
-	return []byte(s[:start] + block + after)
+	return []byte(text[:start] + block + after)
 }
 
-// separate ends s with a blank-line separator so an appended block is set off,
+// separate ends text with a blank-line separator so an appended block is set off,
 // leaving an empty file empty.
-func separate(s string) string {
+func separate(text string) string {
 	switch {
-	case s == "":
+	case text == "":
 		return ""
-	case strings.HasSuffix(s, "\n\n"):
-		return s
-	case strings.HasSuffix(s, "\n"):
-		return s + "\n"
+	case strings.HasSuffix(text, "\n\n"):
+		return text
+	case strings.HasSuffix(text, "\n"):
+		return text + "\n"
 	default:
-		return s + "\n\n"
+		return text + "\n\n"
 	}
 }
 
@@ -169,14 +169,14 @@ func separate(s string) string {
 // marker-delimited harnesses embed the prose without the Claude header.
 func skillBody(skill []byte) []byte {
 	const fence = "---\n"
-	s := string(skill)
-	if !strings.HasPrefix(s, fence) {
+	text := string(skill)
+	if !strings.HasPrefix(text, fence) {
 		return skill
 	}
-	i := strings.Index(s[len(fence):], "\n---")
-	if i < 0 {
+	idx := strings.Index(text[len(fence):], "\n---")
+	if idx < 0 {
 		return skill
 	}
-	rest := s[len(fence)+i+len("\n---"):]
+	rest := text[len(fence)+idx+len("\n---"):]
 	return []byte(strings.TrimLeft(rest, "\n"))
 }

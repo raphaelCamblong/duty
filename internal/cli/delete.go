@@ -13,13 +13,13 @@ const (
 	deleteTaskExample = `  duty delete task T-07 --force`
 )
 
-func newDeleteCmd(a app.App, cwd string) *cobra.Command {
+func newDeleteCmd(svc app.App, cwd string) *cobra.Command {
 	cmd := newGroupCmd("delete", "remove a task", deleteTaskUsage, deleteTaskExample)
-	cmd.AddCommand(newDeleteTaskCmd(a, cwd))
+	cmd.AddCommand(newDeleteTaskCmd(svc, cwd))
 	return cmd
 }
 
-func newDeleteTaskCmd(a app.App, cwd string) *cobra.Command {
+func newDeleteTaskCmd(svc app.App, cwd string) *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
 		Use:     "task <id>",
@@ -29,7 +29,7 @@ func newDeleteTaskCmd(a app.App, cwd string) *cobra.Command {
 			if len(args) != 1 || args[0] == "" {
 				return errors.New(deleteTaskUsage)
 			}
-			return a.Delete(cwd, args[0], force)
+			return svc.Delete(cwd, args[0], force)
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "allow deleting a done task")

@@ -12,33 +12,33 @@ import (
 
 // Archive moves every done task in scope and below into its board's archive/
 // (row dropped, footer rewritten); a board with nothing to archive is untouched.
-func (a App) Archive(s Scope) error {
-	unlock, err := a.lockTree(s.Cwd)
+func (a App) Archive(scope Scope) error {
+	unlock, err := a.lockTree(scope.Cwd)
 	if err != nil {
 		return err
 	}
 	defer unlock()
-	_, boards, err := a.walkBoards(s)
+	_, boards, err := a.walkBoards(scope)
 	if err != nil {
 		return err
 	}
-	for _, b := range boards {
-		if err := a.archiveBoard(b); err != nil {
+	for _, boardDir := range boards {
+		if err := a.archiveBoard(boardDir); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (a App) archiveBoard(b string) error {
-	done, err := a.doneTasks(b)
+func (a App) archiveBoard(boardDir string) error {
+	done, err := a.doneTasks(boardDir)
 	if err != nil {
 		return err
 	}
 	if len(done) == 0 {
 		return nil
 	}
-	boardPath := boardIndexPath(b)
+	boardPath := boardIndexPath(boardDir)
 	index, err := a.fs.ReadFile(boardPath)
 	if err != nil {
 		return err
@@ -47,7 +47,7 @@ func (a App) archiveBoard(b string) error {
 	if err != nil {
 		return err
 	}
-	count, err := a.moveToArchive(b, done)
+	count, err := a.moveToArchive(boardDir, done)
 	if err != nil {
 		return err
 	}
@@ -68,13 +68,13 @@ func dropRows(index []byte, filenames []string) ([]byte, error) {
 	return board.PruneEmptySections(index), nil
 }
 
-func (a App) moveToArchive(b string, filenames []string) (int, error) {
-	archiveDir := filepath.Join(b, names.ArchiveDir)
+func (a App) moveToArchive(boardDir string, filenames []string) (int, error) {
+	archiveDir := filepath.Join(boardDir, names.ArchiveDir)
 	if err := a.fs.MkdirAll(archiveDir); err != nil {
-		return 0, fmt.Errorf("archive %s: %w", b, err)
+		return 0, fmt.Errorf("archive %s: %w", boardDir, err)
 	}
 	for _, name := range filenames {
-		if err := a.fs.Rename(filepath.Join(b, name), filepath.Join(archiveDir, name)); err != nil {
+		if err := a.fs.Rename(filepath.Join(boardDir, name), filepath.Join(archiveDir, name)); err != nil {
 			return 0, fmt.Errorf("archive %s: %w", name, err)
 		}
 	}
@@ -87,8 +87,8 @@ func (a App) doneTasks(dir string) ([]string, error) {
 		return nil, err
 	}
 	var done []string
-	for i, t := range tasks {
-		if t.Status == task.StatusDone {
+	for i, parsed := range tasks {
+		if parsed.Status == task.StatusDone {
 			done = append(done, files[i])
 		}
 	}

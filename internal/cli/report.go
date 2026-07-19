@@ -14,7 +14,7 @@ const (
 	reportExample = "  duty report T-07 --status done < report.txt\n  duty report T-07 < report.txt"
 )
 
-func newReportCmd(a app.App, cwd string, stdin io.Reader) *cobra.Command {
+func newReportCmd(svc app.App, cwd string, stdin io.Reader) *cobra.Command {
 	var (
 		status string
 		force  bool
@@ -28,7 +28,7 @@ func newReportCmd(a app.App, cwd string, stdin io.Reader) *cobra.Command {
 			if len(args) != 1 || args[0] == "" {
 				return errors.New(reportUsage)
 			}
-			return a.Report(cwd, app.StatusChange{ID: args[0], Status: status, Force: force, As: claimer(as)}, stdin)
+			return svc.Report(cwd, app.StatusChange{ID: args[0], Status: status, Force: force, As: claimer(as)}, stdin)
 		},
 	}
 	cmd.Flags().StringVar(&status, "status", "", "also set the task's status (file + board) in one write")

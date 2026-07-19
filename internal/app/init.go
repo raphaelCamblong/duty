@@ -20,9 +20,9 @@ var readmeTmplText string
 var readmeTmpl = template.Must(template.New("readme").Parse(readmeTmplText))
 
 func renderReadme() []byte {
-	var b bytes.Buffer
-	_ = readmeTmpl.Execute(&b, struct{ Board string }{Board: names.BoardFile})
-	return b.Bytes()
+	var buf bytes.Buffer
+	_ = readmeTmpl.Execute(&buf, struct{ Board string }{Board: names.BoardFile})
+	return buf.Bytes()
 }
 
 // Init bootstraps a duty tree in cwd — duty/ with a skeleton board index, the

@@ -43,11 +43,11 @@ func (m *Mem) ReadFile(name string) ([]byte, error) {
 }
 
 func (m *Mem) WriteFile(name string, data []byte) error {
-	c := filepath.Clean(name)
-	if !m.dirs[filepath.Dir(c)] {
+	clean := filepath.Clean(name)
+	if !m.dirs[filepath.Dir(clean)] {
 		return notExist("open", name)
 	}
-	m.files[c] = append([]byte(nil), data...)
+	m.files[clean] = append([]byte(nil), data...)
 	return nil
 }
 
@@ -67,43 +67,43 @@ func (m *Mem) Rename(oldpath, newpath string) error {
 }
 
 func (m *Mem) Remove(name string) error {
-	c := filepath.Clean(name)
-	if _, ok := m.files[c]; ok {
-		delete(m.files, c)
+	clean := filepath.Clean(name)
+	if _, ok := m.files[clean]; ok {
+		delete(m.files, clean)
 		return nil
 	}
-	if m.dirs[c] {
-		delete(m.dirs, c)
+	if m.dirs[clean] {
+		delete(m.dirs, clean)
 		return nil
 	}
 	return notExist("remove", name)
 }
 
 func (m *Mem) MkdirAll(path string) error {
-	for d := filepath.Clean(path); ; {
-		m.dirs[d] = true
-		parent := filepath.Dir(d)
-		if parent == d {
+	for dir := filepath.Clean(path); ; {
+		m.dirs[dir] = true
+		parent := filepath.Dir(dir)
+		if parent == dir {
 			return nil
 		}
-		d = parent
+		dir = parent
 	}
 }
 
 func (m *Mem) ReadDir(name string) ([]fs.DirEntry, error) {
-	c := filepath.Clean(name)
-	if !m.dirs[c] {
+	clean := filepath.Clean(name)
+	if !m.dirs[clean] {
 		return nil, notExist("open", name)
 	}
 	var entries []fs.DirEntry
-	for f := range m.files {
-		if filepath.Dir(f) == c {
-			entries = append(entries, fs.FileInfoToDirEntry(m.info(f)))
+	for file := range m.files {
+		if filepath.Dir(file) == clean {
+			entries = append(entries, fs.FileInfoToDirEntry(m.info(file)))
 		}
 	}
-	for d := range m.dirs {
-		if d != c && filepath.Dir(d) == c {
-			entries = append(entries, fs.FileInfoToDirEntry(m.info(d)))
+	for dir := range m.dirs {
+		if dir != clean && filepath.Dir(dir) == clean {
+			entries = append(entries, fs.FileInfoToDirEntry(m.info(dir)))
 		}
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
@@ -111,22 +111,22 @@ func (m *Mem) ReadDir(name string) ([]fs.DirEntry, error) {
 }
 
 func (m *Mem) Stat(name string) (fs.FileInfo, error) {
-	c := filepath.Clean(name)
-	if !m.exists(c) {
+	clean := filepath.Clean(name)
+	if !m.exists(clean) {
 		return nil, notExist("stat", name)
 	}
-	return m.info(c), nil
+	return m.info(clean), nil
 }
 
 // WalkDir walks the tree rooted at root in lexical order, honouring fs.SkipDir
 // and fs.SkipAll exactly as filepath.WalkDir does.
 func (m *Mem) WalkDir(root string, fn fs.WalkDirFunc) error {
-	c := filepath.Clean(root)
+	clean := filepath.Clean(root)
 	var err error
-	if !m.exists(c) {
+	if !m.exists(clean) {
 		err = fn(root, nil, notExist("lstat", root))
 	} else {
-		err = m.walkDir(root, fs.FileInfoToDirEntry(m.info(c)), fn)
+		err = m.walkDir(root, fs.FileInfoToDirEntry(m.info(clean)), fn)
 	}
 	if err == fs.SkipDir || err == fs.SkipAll {
 		return nil
@@ -135,9 +135,9 @@ func (m *Mem) WalkDir(root string, fn fs.WalkDirFunc) error {
 }
 
 // walkDir recurses one node, mirroring the standard library's control flow.
-func (m *Mem) walkDir(path string, d fs.DirEntry, fn fs.WalkDirFunc) error {
-	if err := fn(path, d, nil); err != nil || !d.IsDir() {
-		if err == fs.SkipDir && d.IsDir() {
+func (m *Mem) walkDir(path string, entry fs.DirEntry, fn fs.WalkDirFunc) error {
+	if err := fn(path, entry, nil); err != nil || !entry.IsDir() {
+		if err == fs.SkipDir && entry.IsDir() {
 			return nil
 		}
 		return err
@@ -146,8 +146,8 @@ func (m *Mem) walkDir(path string, d fs.DirEntry, fn fs.WalkDirFunc) error {
 	if err != nil {
 		return err
 	}
-	for _, e := range entries {
-		if err := m.walkDir(filepath.Join(path, e.Name()), e, fn); err != nil {
+	for _, child := range entries {
+		if err := m.walkDir(filepath.Join(path, child.Name()), child, fn); err != nil {
 			if err == fs.SkipDir {
 				break
 			}
@@ -178,26 +178,26 @@ func (m *Mem) Lock(path string) (func(), error) {
 func (m *Mem) lockChan(path string) chan struct{} {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	c := filepath.Clean(path)
-	ch, ok := m.locks[c]
+	clean := filepath.Clean(path)
+	ch, ok := m.locks[clean]
 	if !ok {
 		ch = make(chan struct{}, 1)
-		m.locks[c] = ch
+		m.locks[clean] = ch
 	}
 	return ch
 }
 
-func (m *Mem) exists(c string) bool {
-	_, ok := m.files[c]
-	return ok || m.dirs[c]
+func (m *Mem) exists(clean string) bool {
+	_, ok := m.files[clean]
+	return ok || m.dirs[clean]
 }
 
 // info returns the FileInfo for an existing clean path.
-func (m *Mem) info(c string) memInfo {
-	if data, ok := m.files[c]; ok {
-		return memInfo{name: filepath.Base(c), size: int64(len(data))}
+func (m *Mem) info(clean string) memInfo {
+	if data, ok := m.files[clean]; ok {
+		return memInfo{name: filepath.Base(clean), size: int64(len(data))}
 	}
-	return memInfo{name: filepath.Base(c), dir: true}
+	return memInfo{name: filepath.Base(clean), dir: true}
 }
 
 // notExist builds a PathError that satisfies errors.Is(err, fs.ErrNotExist).

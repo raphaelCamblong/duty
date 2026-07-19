@@ -10,15 +10,15 @@ import (
 
 // CreateTrack creates the track name/ under scope's board (skeleton index,
 // archive/, a parent Boards bullet) and returns its path, refusing an existing folder.
-func (a App) CreateTrack(s Scope, name, title string) (string, error) {
+func (a App) CreateTrack(scope Scope, name, title string) (string, error) {
 	if !nameRE.MatchString(name) {
 		return "", fmt.Errorf("invalid track name %q: must match [a-z0-9-]+", name)
 	}
-	parentDir, err := a.contextBoard(s)
+	parentDir, err := a.contextBoard(scope)
 	if err != nil {
 		return "", err
 	}
-	unlock, err := a.lockTree(s.Cwd)
+	unlock, err := a.lockTree(scope.Cwd)
 	if err != nil {
 		return "", err
 	}

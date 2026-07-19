@@ -40,8 +40,8 @@ var skeletonTmpl = template.Must(template.New("board").Parse(skeletonTmplText))
 // Render returns a skeleton board index: H1 = title, the convention line, an
 // empty "## Open tasks" table, and the zero-count archive footer.
 func Render(title string) []byte {
-	var b bytes.Buffer
-	_ = skeletonTmpl.Execute(&b, struct {
+	var buf bytes.Buffer
+	_ = skeletonTmpl.Execute(&buf, struct {
 		Title, Readme, Section, Header, Separator, Archive string
 	}{
 		Title:     title,
@@ -51,7 +51,7 @@ func Render(title string) []byte {
 		Separator: tableSeparator,
 		Archive:   names.ArchiveDir,
 	})
-	return b.Bytes()
+	return buf.Bytes()
 }
 
 func Title(content []byte) string {
@@ -64,25 +64,25 @@ func Title(content []byte) string {
 }
 
 func TitleOr(content []byte, fallback string) string {
-	if t := Title(content); t != "" {
-		return t
+	if title := Title(content); title != "" {
+		return title
 	}
 	return fallback
 }
 
 func FindRow(content []byte, filename string) (string, bool) {
 	lines := splitLines(content)
-	i := rowIndex(lines, filename)
-	if i < 0 {
+	idx := rowIndex(lines, filename)
+	if idx < 0 {
 		return "", false
 	}
-	return lines[i], true
+	return lines[idx], true
 }
 
-// AddRow appends r as a row "| [id](file) | title | status |" to the named
-// section's table, creating the section above the footer when absent.
-func AddRow(content []byte, section string, r Row) ([]byte, error) {
-	row := "| [" + r.ID + "](" + r.File + ") | " + r.Title + " | " + r.Status + " |"
+// AddRow appends newRow as a row "| [id](file) | title | status |" to the
+// named section's table, creating the section above the footer when absent.
+func AddRow(content []byte, section string, newRow Row) ([]byte, error) {
+	row := "| [" + newRow.ID + "](" + newRow.File + ") | " + newRow.Title + " | " + newRow.Status + " |"
 	lines, err := insertRow(splitLines(content), section, row)
 	if err != nil {
 		return nil, err
@@ -92,24 +92,24 @@ func AddRow(content []byte, section string, r Row) ([]byte, error) {
 
 func locateRow(content []byte, filename string) ([]string, int, error) {
 	lines := splitLines(content)
-	i := rowIndex(lines, filename)
-	if i < 0 {
+	idx := rowIndex(lines, filename)
+	if idx < 0 {
 		return nil, 0, fmt.Errorf("no board row for %s", filename)
 	}
-	return lines, i, nil
+	return lines, idx, nil
 }
 
 func SetRowStatus(content []byte, filename, status string) ([]byte, error) {
-	lines, i, err := locateRow(content, filename)
+	lines, idx, err := locateRow(content, filename)
 	if err != nil {
 		return nil, err
 	}
-	cells := strings.Split(lines[i], "|")
+	cells := strings.Split(lines[idx], "|")
 	if len(cells) < 3 {
 		return nil, fmt.Errorf("malformed board row for %s", filename)
 	}
 	cells[len(cells)-2] = " " + status + " "
-	lines[i] = strings.Join(cells, "|")
+	lines[idx] = strings.Join(cells, "|")
 	return joinLines(lines), nil
 }
 
@@ -126,12 +126,12 @@ func RowStatus(row string) (string, bool) {
 // line moves byte-identical. A section left empty is not removed here; callers
 // compose with PruneEmptySections.
 func MoveRow(content []byte, filename, section string) ([]byte, error) {
-	lines, i, err := locateRow(content, filename)
+	lines, idx, err := locateRow(content, filename)
 	if err != nil {
 		return nil, err
 	}
-	row := lines[i]
-	lines, err = insertRow(append(lines[:i], lines[i+1:]...), section, row)
+	row := lines[idx]
+	lines, err = insertRow(append(lines[:idx], lines[idx+1:]...), section, row)
 	if err != nil {
 		return nil, err
 	}
@@ -142,11 +142,11 @@ func MoveRow(content []byte, filename, section string) ([]byte, error) {
 // above the section's first task row — preserving the row's bytes exactly. A
 // row already at the top is left byte-identical.
 func ReorderTop(content []byte, filename string) ([]byte, error) {
-	lines, i, err := locateRow(content, filename)
+	lines, idx, err := locateRow(content, filename)
 	if err != nil {
 		return nil, err
 	}
-	return joinLines(relocateRow(lines, i, sectionTop(lines, i))), nil
+	return joinLines(relocateRow(lines, idx, sectionTop(lines, idx))), nil
 }
 
 // ReorderBefore relocates the row targeting filename to sit immediately above
@@ -166,23 +166,23 @@ func ReorderAfter(content []byte, filename, ref string) ([]byte, error) {
 // reorderAdjacent relocates filename's row to ref's row index plus offset (0
 // above ref, 1 below), preserving the moved row's bytes.
 func reorderAdjacent(content []byte, filename, ref string, offset int) ([]byte, error) {
-	lines, i, err := locateRow(content, filename)
+	lines, idx, err := locateRow(content, filename)
 	if err != nil {
 		return nil, err
 	}
-	r := rowIndex(lines, ref)
-	if r < 0 {
+	refIdx := rowIndex(lines, ref)
+	if refIdx < 0 {
 		return nil, fmt.Errorf("no board row for %s", ref)
 	}
-	return joinLines(relocateRow(lines, i, r+offset)), nil
+	return joinLines(relocateRow(lines, idx, refIdx+offset)), nil
 }
 
 func DropRow(content []byte, filename string) ([]byte, error) {
-	lines, i, err := locateRow(content, filename)
+	lines, idx, err := locateRow(content, filename)
 	if err != nil {
 		return nil, err
 	}
-	return joinLines(append(lines[:i], lines[i+1:]...)), nil
+	return joinLines(append(lines[:idx], lines[idx+1:]...)), nil
 }
 
 // PruneEmptySections removes every section whose body holds nothing but blank
@@ -191,32 +191,32 @@ func DropRow(content []byte, filename string) ([]byte, error) {
 // prose, bullet, or row are kept untouched.
 func PruneEmptySections(content []byte) []byte {
 	lines := splitLines(content)
-	for i := len(lines) - 1; i >= 0; i-- {
-		if !isHeading(lines[i]) {
+	for idx := len(lines) - 1; idx >= 0; idx-- {
+		if !isHeading(lines[idx]) {
 			continue
 		}
-		if strings.TrimSpace(lines[i][len("## "):]) == DefaultSection {
+		if strings.TrimSpace(lines[idx][len("## "):]) == DefaultSection {
 			continue
 		}
-		end := sectionEnd(lines, i)
-		if !sectionEmpty(lines, i, end) {
+		end := sectionEnd(lines, idx)
+		if !sectionEmpty(lines, idx, end) {
 			continue
 		}
-		lines = append(lines[:i], lines[end:]...)
+		lines = append(lines[:idx], lines[end:]...)
 	}
 	return joinLines(lines)
 }
 
 // SetArchivedCount rewrites the number in the footer line
 // "Completed tasks (N) archived: [archive/](archive/).".
-func SetArchivedCount(content []byte, n int) ([]byte, error) {
+func SetArchivedCount(content []byte, count int) ([]byte, error) {
 	lines := splitLines(content)
-	f := footerIndex(lines)
-	if f < 0 {
+	footerIdx := footerIndex(lines)
+	if footerIdx < 0 {
 		return nil, fmt.Errorf("board footer not found")
 	}
-	m := footerRe.FindStringSubmatchIndex(lines[f])
-	lines[f] = lines[f][:m[2]] + strconv.Itoa(n) + lines[f][m[3]:]
+	loc := footerRe.FindStringSubmatchIndex(lines[footerIdx])
+	lines[footerIdx] = lines[footerIdx][:loc[2]] + strconv.Itoa(count) + lines[footerIdx][loc[3]:]
 	return joinLines(lines), nil
 }
 
@@ -259,15 +259,15 @@ func insertRow(lines []string, section, row string) ([]string, error) {
 }
 
 func createSection(lines []string, section, row string) ([]string, error) {
-	f := footerIndex(lines)
-	if f < 0 {
+	footerIdx := footerIndex(lines)
+	if footerIdx < 0 {
 		return nil, fmt.Errorf("cannot create section %q: board footer not found", section)
 	}
 	block := []string{"## " + section, "", tableHeader, tableSeparator, row, ""}
-	if f > 0 && lines[f-1] != "" {
+	if footerIdx > 0 && lines[footerIdx-1] != "" {
 		block = append([]string{""}, block...)
 	}
-	return insertAt(lines, f, block...), nil
+	return insertAt(lines, footerIdx, block...), nil
 }
 
 func createBoardsSection(lines []string, bullet string) ([]byte, error) {
@@ -339,9 +339,9 @@ func relocateRow(lines []string, from, at int) []string {
 }
 
 // sectionTop returns the index of the first task row in the section containing
-// line i — the insertion point that makes a row the section's first.
-func sectionTop(lines []string, i int) int {
-	start := sectionStart(lines, i)
+// line lineIdx — the insertion point that makes a row the section's first.
+func sectionTop(lines []string, lineIdx int) int {
+	start := sectionStart(lines, lineIdx)
 	end := sectionEnd(lines, start)
 	for j := start + 1; j < end; j++ {
 		if rowLinkRe.MatchString(lines[j]) {
@@ -351,8 +351,8 @@ func sectionTop(lines []string, i int) int {
 	return end
 }
 
-func sectionStart(lines []string, i int) int {
-	for j := i; j >= 0; j-- {
+func sectionStart(lines []string, lineIdx int) int {
+	for j := lineIdx; j >= 0; j-- {
 		if isHeading(lines[j]) {
 			return j
 		}
@@ -387,11 +387,11 @@ func footerIndex(lines []string) int {
 	return -1
 }
 
-func insertAt(lines []string, i int, insert ...string) []string {
+func insertAt(lines []string, at int, insert ...string) []string {
 	out := make([]string, 0, len(lines)+len(insert))
-	out = append(out, lines[:i]...)
+	out = append(out, lines[:at]...)
 	out = append(out, insert...)
-	out = append(out, lines[i:]...)
+	out = append(out, lines[at:]...)
 	return out
 }
 

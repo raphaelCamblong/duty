@@ -48,8 +48,8 @@ type Color struct {
 
 // UnmarshalTOML reads a Color from a bare string (both channels) or an inline
 // table with light and dark keys.
-func (c *Color) UnmarshalTOML(v any) error {
-	switch val := v.(type) {
+func (c *Color) UnmarshalTOML(value any) error {
+	switch val := value.(type) {
 	case string:
 		c.Light, c.Dark = val, val
 		return nil
@@ -58,7 +58,7 @@ func (c *Color) UnmarshalTOML(v any) error {
 		c.Dark, _ = val["dark"].(string)
 		return nil
 	default:
-		return fmt.Errorf("theme color must be a string or { light, dark } table, got %T", v)
+		return fmt.Errorf("theme color must be a string or { light, dark } table, got %T", value)
 	}
 }
 
@@ -66,12 +66,12 @@ func (c *Color) UnmarshalTOML(v any) error {
 // the built-in defaults, key by key: project overrides user overrides
 // defaults. An empty path or a missing file is skipped; a malformed file is
 // an error.
-func Load(f fsys.FS, userPath, projectPath string) (Config, error) {
+func Load(filesystem fsys.FS, userPath, projectPath string) (Config, error) {
 	cfg := defaults()
-	if err := mergeFile(f, &cfg, userPath); err != nil {
+	if err := mergeFile(filesystem, &cfg, userPath); err != nil {
 		return Config{}, err
 	}
-	if err := mergeFile(f, &cfg, projectPath); err != nil {
+	if err := mergeFile(filesystem, &cfg, projectPath); err != nil {
 		return Config{}, err
 	}
 	return cfg, nil
@@ -95,11 +95,11 @@ func defaults() Config {
 }
 
 // mergeFile decodes the TOML file at path into cfg, overwriting only the keys the file sets.
-func mergeFile(f fsys.FS, cfg *Config, path string) error {
+func mergeFile(filesystem fsys.FS, cfg *Config, path string) error {
 	if path == "" {
 		return nil
 	}
-	data, err := f.ReadFile(path)
+	data, err := filesystem.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}

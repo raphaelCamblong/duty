@@ -23,11 +23,11 @@ func (a App) Delete(cwd, id string, force bool) error {
 }
 
 func (a App) deleteLocked(id, taskPath string, force bool) error {
-	t, _, err := a.readTask(taskPath)
+	parsed, _, err := a.readTask(taskPath)
 	if err != nil {
 		return err
 	}
-	if t.Status == task.StatusDone && !force {
+	if parsed.Status == task.StatusDone && !force {
 		return fmt.Errorf("%s is done: pass --force to delete, or use archive", id)
 	}
 	boardPath := boardBeside(taskPath)

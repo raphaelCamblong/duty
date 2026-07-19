@@ -8,7 +8,7 @@ import (
 	"github.com/raphaelCamblong/duty/internal/task"
 )
 
-// Report appends the text read from r under the task's "## Report" heading,
+// Report appends the text read from reader under the task's "## Report" heading,
 // opened by a dated "### 2006-01-02 15:04" line (plus " — status" when ch.Status
 // is given) stamped from a.now, creating the heading once at the end of the
 // file. Reports accumulate — nothing already in the file is rewritten. When
@@ -17,8 +17,8 @@ import (
 // computed before either file is written, so any error leaves neither the
 // report nor the status applied. Moving to in-progress records ch.As as the
 // claimer; every other status clears the claim. Empty (or blank) input is
-// refused; r is read only after the id resolves.
-func (a App) Report(cwd string, ch StatusChange, r io.Reader) error {
+// refused; reader is read only after the id resolves.
+func (a App) Report(cwd string, ch StatusChange, reader io.Reader) error {
 	if ch.Status != "" && !task.ValidStatus(ch.Status) {
 		return unknownStatusErr(ch.Status)
 	}
@@ -26,7 +26,7 @@ func (a App) Report(cwd string, ch StatusChange, r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	text, err := readNonBlank(r, "report")
+	text, err := readNonBlank(reader, "report")
 	if err != nil {
 		return err
 	}
@@ -43,15 +43,15 @@ func (a App) Report(cwd string, ch StatusChange, r io.Reader) error {
 	if ch.Status == "" {
 		return a.fs.WriteFile(taskPath, withReport)
 	}
-	t, err := parseTask(taskPath, content)
+	parsed, err := parseTask(taskPath, content)
 	if err != nil {
 		return err
 	}
-	return a.statusWrite(taskPath, ch, withReport, t)
+	return a.statusWrite(taskPath, ch, withReport, parsed)
 }
 
-func readNonBlank(r io.Reader, kind string) ([]byte, error) {
-	text, err := io.ReadAll(r)
+func readNonBlank(reader io.Reader, kind string) ([]byte, error) {
+	text, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, fmt.Errorf("read stdin: %w", err)
 	}

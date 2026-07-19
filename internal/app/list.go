@@ -25,50 +25,51 @@ type Row struct {
 
 // List returns one Row per open task in scope's board and below, read from the
 // files (never the board index); a non-empty status keeps only that status.
-func (a App) List(s Scope, status string) ([]Row, error) {
+func (a App) List(scope Scope, status string) ([]Row, error) {
 	if status != "" && !task.ValidStatus(status) {
 		return nil, unknownStatusErr(status)
 	}
 
-	root, err := tree.FindRoot(a.fs, s.Cwd)
+	root, err := tree.FindRoot(a.fs, scope.Cwd)
 	if err != nil {
 		return nil, err
 	}
-	boardDir, boards, err := a.walkBoards(s)
+	boardDir, boards, err := a.walkBoards(scope)
 	if err != nil {
 		return nil, err
 	}
 	var rows []Row
-	for _, b := range boards {
-		boardRows, err := a.boardRows(root, boardDir, b)
+	for _, dir := range boards {
+		boardRows, err := a.boardRows(root, boardDir, dir)
 		if err != nil {
 			return nil, err
 		}
-		for _, r := range boardRows {
-			if status != "" && r.Status != status {
+		for _, row := range boardRows {
+			if status != "" && row.Status != status {
 				continue
 			}
-			rows = append(rows, r)
+			rows = append(rows, row)
 		}
 	}
 	return rows, nil
 }
 
-// boardRows returns one Row per task file in board b, in board order mirroring
-// nextInBoard (drift files appended), tagged with b's path relative to listDir.
-func (a App) boardRows(treeRoot, listDir, b string) ([]Row, error) {
-	boardPath := relBoard(listDir, b)
-	index, err := a.fs.ReadFile(boardIndexPath(b))
+// boardRows returns one Row per task file in board boardDir, in board order
+// mirroring nextInBoard (drift files appended), tagged with boardDir's path
+// relative to listDir.
+func (a App) boardRows(treeRoot, listDir, boardDir string) ([]Row, error) {
+	boardPath := relBoard(listDir, boardDir)
+	index, err := a.fs.ReadFile(boardIndexPath(boardDir))
 	if err != nil {
 		return nil, err
 	}
-	files, err := tree.TaskFileNames(a.fs, b)
+	files, err := tree.TaskFileNames(a.fs, boardDir)
 	if err != nil {
 		return nil, err
 	}
 	rows := make([]Row, 0, len(files))
 	for _, name := range boardOrder(index, files) {
-		row, err := a.taskRow(treeRoot, index, b, name, boardPath)
+		row, err := a.taskRow(treeRoot, index, boardDir, name, boardPath)
 		if err != nil {
 			return nil, err
 		}
@@ -86,12 +87,12 @@ func boardOrder(index []byte, files []string) []string {
 	}
 	ordered := make([]string, 0, len(files))
 	for _, sec := range board.Sections(index) {
-		for _, r := range sec.Rows {
-			if done, ok := added[r.File]; !ok || done {
+		for _, row := range sec.Rows {
+			if done, ok := added[row.File]; !ok || done {
 				continue
 			}
-			added[r.File] = true
-			ordered = append(ordered, r.File)
+			added[row.File] = true
+			ordered = append(ordered, row.File)
 		}
 	}
 	for _, name := range files {
@@ -106,20 +107,20 @@ func boardOrder(index []byte, files []string) []string {
 // against its row in the board index and its wait state against treeRoot.
 func (a App) taskRow(treeRoot string, index []byte, dir, filename, boardPath string) (Row, error) {
 	path := filepath.Join(dir, filename)
-	t, _, err := a.readTask(path)
+	parsed, _, err := a.readTask(path)
 	if err != nil {
 		return Row{}, err
 	}
-	waits, err := a.unmetDeps(treeRoot, t.BlockedBy)
+	waits, err := a.unmetDeps(treeRoot, parsed.BlockedBy)
 	if err != nil {
 		return Row{}, err
 	}
-	missing, rowStatus := drift(index, filename, t.Status)
+	missing, rowStatus := drift(index, filename, parsed.Status)
 	return Row{
-		ID: t.ID, Title: t.Title, Status: t.Status,
+		ID: parsed.ID, Title: parsed.Title, Status: parsed.Status,
 		Board: boardPath, RowMissing: missing, RowStatus: rowStatus,
 		Waits:     waits,
-		UpdatedAt: a.mtime(path), ClaimedBy: t.ClaimedBy,
+		UpdatedAt: a.mtime(path), ClaimedBy: parsed.ClaimedBy,
 	}, nil
 }
 
@@ -130,9 +131,9 @@ func drift(index []byte, filename, fileStatus string) (missing bool, rowStatus s
 	if !ok {
 		return true, ""
 	}
-	s, ok := board.RowStatus(row)
-	if !ok || s == fileStatus {
+	status, ok := board.RowStatus(row)
+	if !ok || status == fileStatus {
 		return false, ""
 	}
-	return false, s
+	return false, status
 }

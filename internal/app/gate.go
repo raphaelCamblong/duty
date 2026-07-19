@@ -27,9 +27,9 @@ func (a App) AddGates(cwd, id string, texts []string) error {
 }
 
 // SetGate sets the n-th (1-based) gate's ticked state.
-func (a App) SetGate(cwd, id string, n int, done bool) error {
+func (a App) SetGate(cwd, id string, num int, done bool) error {
 	return a.editGates(cwd, id, func(content []byte) ([]byte, error) {
-		return task.SetGate(content, n, done)
+		return task.SetGate(content, num, done)
 	})
 }
 

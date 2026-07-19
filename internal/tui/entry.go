@@ -38,7 +38,7 @@ func (e entry) selectable() bool {
 
 func anySelectable(items []list.Item) bool {
 	for _, it := range items {
-		if e, ok := it.(entry); ok && e.selectable() {
+		if item, ok := it.(entry); ok && item.selectable() {
 			return true
 		}
 	}
@@ -52,18 +52,18 @@ const tracksSection = "Tracks"
 // and — when showArchive is on — a dim "Archived (N)" section of the board's
 // archived tasks. With statusSort on the rows within each section are
 // status-grouped for display (§8); off, they keep the board's file order.
-func boardEntries(b Board, statusSort, showArchive bool) []list.Item {
+func boardEntries(board Board, statusSort, showArchive bool) []list.Item {
 	var items []list.Item
-	subs := visibleSubs(b.Subs, showArchive)
+	subs := visibleSubs(board.Subs, showArchive)
 	if len(subs) > 0 {
 		items = append(items, entry{section: tracksSection})
 	}
 	for _, i := range subs {
-		items = append(items, entry{track: &b.Subs[i]})
+		items = append(items, entry{track: &board.Subs[i]})
 	}
-	for si := range b.Sections {
-		items = append(items, entry{section: b.Sections[si].Name})
-		rows := b.Sections[si].Rows
+	for si := range board.Sections {
+		items = append(items, entry{section: board.Sections[si].Name})
+		rows := board.Sections[si].Rows
 		if statusSort {
 			rows = sortedRows(rows)
 		}
@@ -71,10 +71,10 @@ func boardEntries(b Board, statusSort, showArchive bool) []list.Item {
 			items = append(items, entry{task: &rows[ri]})
 		}
 	}
-	if showArchive && len(b.Archived) > 0 {
-		items = append(items, entry{section: fmt.Sprintf("Archived (%d)", len(b.Archived))})
-		for ri := range b.Archived {
-			items = append(items, entry{task: &b.Archived[ri], archived: true})
+	if showArchive && len(board.Archived) > 0 {
+		items = append(items, entry{section: fmt.Sprintf("Archived (%d)", len(board.Archived))})
+		for ri := range board.Archived {
+			items = append(items, entry{task: &board.Archived[ri], archived: true})
 		}
 	}
 	return items
@@ -91,8 +91,8 @@ func visibleSubs(subs []Sub, showArchive bool) []int {
 	return out
 }
 
-func emptiedByArchiving(s Sub) bool {
-	return s.Total == 0 && s.Archived > 0
+func emptiedByArchiving(sub Sub) bool {
+	return sub.Total == 0 && sub.Archived > 0
 }
 
 // sortedRows groups a section's rows by status for display: stable by
@@ -142,14 +142,14 @@ type viewOpts struct {
 	glyph       string
 }
 
-func newDelegate(theme Theme, z *zone.Manager, b Board, opts viewOpts) compactDelegate {
-	d := compactDelegate{
+func newDelegate(theme Theme, zones *zone.Manager, board Board, opts viewOpts) compactDelegate {
+	delegate := compactDelegate{
 		theme:       theme,
-		zones:       z,
-		nameW:       maxSubNameWidth(b.Subs),
-		countW:      maxSubCountWidth(b.Subs),
-		idW:         maxIDWidth(b.Sections),
-		driftW:      maxDriftWidth(b.Sections),
+		zones:       zones,
+		nameW:       maxSubNameWidth(board.Subs),
+		countW:      maxSubCountWidth(board.Subs),
+		idW:         maxIDWidth(board.Sections),
+		driftW:      maxDriftWidth(board.Sections),
 		showAge:     opts.showAge,
 		showGates:   opts.showGates,
 		showArchive: opts.showArchive,
@@ -157,17 +157,17 @@ func newDelegate(theme Theme, z *zone.Manager, b Board, opts viewOpts) compactDe
 		glyph:       opts.glyph,
 	}
 	if opts.showAge {
-		d.ageW = maxAgeWidth(b.Sections, opts.now)
+		delegate.ageW = maxAgeWidth(board.Sections, opts.now)
 	}
 	if opts.showArchive {
-		for _, r := range b.Archived {
-			d.idW = max(d.idW, lipgloss.Width(r.ID))
+		for _, row := range board.Archived {
+			delegate.idW = max(delegate.idW, lipgloss.Width(row.ID))
 			if opts.showAge {
-				d.ageW = max(d.ageW, lipgloss.Width(ageCell(r, opts.now)))
+				delegate.ageW = max(delegate.ageW, lipgloss.Width(ageCell(row, opts.now)))
 			}
 		}
 	}
-	return d
+	return delegate
 }
 
 // Height is one line per entry, satisfying list.ItemDelegate.
@@ -180,26 +180,26 @@ func (d compactDelegate) Spacing() int { return 0 }
 func (d compactDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
 
 // Render writes one entry's line, underlining fuzzy-filter matches.
-func (d compactDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
-	e, ok := item.(entry)
+func (d compactDelegate) Render(writer io.Writer, listModel list.Model, index int, item list.Item) {
+	current, ok := item.(entry)
 	if !ok {
 		return
 	}
-	if e.section != "" {
-		fmt.Fprint(w, " "+d.theme.section().Render(e.section))
+	if current.section != "" {
+		fmt.Fprint(writer, " "+d.theme.section().Render(current.section))
 		return
 	}
-	sel := index == m.Index()
+	sel := index == listModel.Index()
 	var line string
 	switch {
-	case e.track != nil:
-		line = d.trackLine(*e.track, sel, m.Width(), splitMatches(m.MatchesForItem(index), len(e.track.Name)))
-	case e.archived:
-		line = d.archivedLine(*e.task, sel, m.Width(), splitMatches(m.MatchesForItem(index), len(e.task.ID)))
+	case current.track != nil:
+		line = d.trackLine(*current.track, sel, listModel.Width(), splitMatches(listModel.MatchesForItem(index), len(current.track.Name)))
+	case current.archived:
+		line = d.archivedLine(*current.task, sel, listModel.Width(), splitMatches(listModel.MatchesForItem(index), len(current.task.ID)))
 	default:
-		line = d.taskLine(*e.task, sel, m.Width(), splitMatches(m.MatchesForItem(index), len(e.task.ID)))
+		line = d.taskLine(*current.task, sel, listModel.Width(), splitMatches(listModel.MatchesForItem(index), len(current.task.ID)))
 	}
-	fmt.Fprint(w, d.zones.Mark(itemZone(index), line))
+	fmt.Fprint(writer, d.zones.Mark(itemZone(index), line))
 }
 
 func itemZone(index int) string {
@@ -216,24 +216,24 @@ type matches struct {
 // splitMatches splits filter-match rune indices around a head of headLen
 // runes followed by one separator, re-basing the tail indices.
 func splitMatches(all []int, headLen int) matches {
-	var m matches
-	for _, i := range all {
-		if i < headLen {
-			m.head = append(m.head, i)
+	var result matches
+	for _, index := range all {
+		if index < headLen {
+			result.head = append(result.head, index)
 			continue
 		}
-		if i > headLen {
-			m.tail = append(m.tail, i-headLen-1)
+		if index > headLen {
+			result.tail = append(result.tail, index-headLen-1)
 		}
 	}
-	return m
+	return result
 }
 
-func styleMatches(s string, matches []int, base lipgloss.Style) string {
+func styleMatches(text string, matches []int, base lipgloss.Style) string {
 	if len(matches) == 0 {
-		return base.Render(s)
+		return base.Render(text)
 	}
-	return lipgloss.StyleRunes(s, matches, base.Underline(true), base)
+	return lipgloss.StyleRunes(text, matches, base.Underline(true), base)
 }
 
 // trackLine renders one sub-track: name and title left, a flexible gap, then a
@@ -241,38 +241,38 @@ func styleMatches(s string, matches []int, base lipgloss.Style) string {
 // total count flush at the line end (dim "empty" when the subtree holds no
 // tasks). The bar column starts at the same x on every track row — mirroring
 // taskLine's right columns — and the title ellipsis-truncates first when narrow.
-func (d compactDelegate) trackLine(s Sub, selected bool, w int, m matches) string {
+func (d compactDelegate) trackLine(sub Sub, selected bool, width int, match matches) string {
 	rightW := trackRightWidth(d.countW)
 	fixed := 2 + d.nameW + 2 + 2 + rightW
 	nameStyle := boldWhen(d.theme.accent(), selected)
-	rightCell := d.theme.trackBarCell(s.Counts, d.countW)
-	if d.showArchive && emptiedByArchiving(s) {
+	rightCell := d.theme.trackBarCell(sub.Counts, d.countW)
+	if d.showArchive && emptiedByArchiving(sub) {
 		nameStyle = boldWhen(d.theme.dim(), selected)
-		rightCell = pad(d.theme.dim().Render(fmt.Sprintf("%d archived", s.Archived)), rightW)
+		rightCell = pad(d.theme.dim().Render(fmt.Sprintf("%d archived", sub.Archived)), rightW)
 	}
 	line := d.theme.cursorMark(selected) +
-		pad(styleMatches(s.Name, m.head, nameStyle), d.nameW) + "  " +
-		pad(styleMatches(s.Title, m.tail, boldWhen(lipgloss.NewStyle(), selected)), max(w-fixed, minTitleWidth)) + "  " +
+		pad(styleMatches(sub.Name, match.head, nameStyle), d.nameW) + "  " +
+		pad(styleMatches(sub.Title, match.tail, boldWhen(lipgloss.NewStyle(), selected)), max(width-fixed, minTitleWidth)) + "  " +
 		rightCell
-	return ansi.Truncate(line, w, "…")
+	return ansi.Truncate(line, width, "…")
 }
 
 // archivedLine renders one archived task row: dim id, title, and relative age
 // only — no status or gate columns, since an archived task is done by
 // convention. The row stays selectable so enter opens its read-only preview.
-func (d compactDelegate) archivedLine(r Row, selected bool, w int, m matches) string {
+func (d compactDelegate) archivedLine(row Row, selected bool, width int, match matches) string {
 	fixed := 2 + d.idW + 2
 	if d.showAge {
 		fixed += 2 + d.ageW
 	}
 	dim := boldWhen(d.theme.dim(), selected)
 	line := d.theme.cursorMark(selected) +
-		pad(styleMatches(r.ID, m.head, dim), d.idW) + "  " +
-		pad(styleMatches(r.Title, m.tail, dim), max(w-fixed, minTitleWidth))
+		pad(styleMatches(row.ID, match.head, dim), d.idW) + "  " +
+		pad(styleMatches(row.Title, match.tail, dim), max(width-fixed, minTitleWidth))
 	if d.showAge {
-		line += "  " + dim.Render(pad(ageCell(r, d.now), d.ageW))
+		line += "  " + dim.Render(pad(ageCell(row, d.now), d.ageW))
 	}
-	return ansi.Truncate(line, w, "…")
+	return ansi.Truncate(line, width, "…")
 }
 
 func boldWhen(base lipgloss.Style, selected bool) lipgloss.Style {
@@ -285,7 +285,7 @@ func boldWhen(base lipgloss.Style, selected bool) lipgloss.Style {
 // taskLine renders one task: id, title, colored status, gate progress, drift
 // badge. The board's widest badge yields title room so badges stay aligned; a
 // narrow terminal drops the gate column so the always-on age column keeps room.
-func (d compactDelegate) taskLine(r Row, selected bool, w int, m matches) string {
+func (d compactDelegate) taskLine(row Row, selected bool, width int, match matches) string {
 	fixed := 2 + d.idW + 2 + 2 + statusColWidth
 	if d.showGates {
 		fixed += 2 + gatesColWidth
@@ -298,48 +298,48 @@ func (d compactDelegate) taskLine(r Row, selected bool, w int, m matches) string
 	}
 	dim := boldWhen(d.theme.dim(), selected)
 	line := d.theme.cursorMark(selected) +
-		pad(styleMatches(r.ID, m.head, boldWhen(d.theme.accent(), selected)), d.idW) + "  " +
-		pad(styleMatches(r.Title, m.tail, boldWhen(lipgloss.NewStyle(), selected)), max(w-fixed, minTitleWidth)) + "  " +
-		d.statusCell(r, selected)
-	if who := claimerTag(r); who != "" {
+		pad(styleMatches(row.ID, match.head, boldWhen(d.theme.accent(), selected)), d.idW) + "  " +
+		pad(styleMatches(row.Title, match.tail, boldWhen(lipgloss.NewStyle(), selected)), max(width-fixed, minTitleWidth)) + "  " +
+		d.statusCell(row, selected)
+	if who := claimerTag(row); who != "" {
 		line += dim.Render(" · " + who)
 	}
-	if wait := waitsTag(r); wait != "" {
+	if wait := waitsTag(row); wait != "" {
 		line += "  " + dim.Render(wait)
 	}
 	if d.showGates {
-		line += "  " + dim.Render(pad(gatesCell(r), gatesColWidth))
+		line += "  " + dim.Render(pad(gatesCell(row), gatesColWidth))
 	}
 	if d.showAge {
-		line += "  " + dim.Render(pad(ageCell(r, d.now), d.ageW))
+		line += "  " + dim.Render(pad(ageCell(row, d.now), d.ageW))
 	}
-	if r.Drift != "" {
-		line += "  " + boldWhen(d.theme.alert(), selected).Render(pad("⚠ "+r.Drift, d.driftW))
+	if row.Drift != "" {
+		line += "  " + boldWhen(d.theme.alert(), selected).Render(pad("⚠ "+row.Drift, d.driftW))
 	}
-	return ansi.Truncate(line, w, "…")
+	return ansi.Truncate(line, width, "…")
 }
 
-func (d compactDelegate) statusCell(r Row, selected bool) string {
-	cell := boldWhen(d.theme.statusStyle(r.Status), selected).Render(pad(r.Status, statusColWidth))
-	if inProgress(r) && d.glyph != "" {
+func (d compactDelegate) statusCell(row Row, selected bool) string {
+	cell := boldWhen(d.theme.statusStyle(row.Status), selected).Render(pad(row.Status, statusColWidth))
+	if inProgress(row) && d.glyph != "" {
 		cell += " " + d.glyph
 	}
 	return cell
 }
 
-func ageCell(r Row, now time.Time) string {
-	if r.UpdatedAt.IsZero() {
+func ageCell(row Row, now time.Time) string {
+	if row.UpdatedAt.IsZero() {
 		return ""
 	}
-	return humanize.RelTime(r.UpdatedAt, now)
+	return humanize.RelTime(row.UpdatedAt, now)
 }
 
 func maxAgeWidth(sections []Section, now time.Time) int {
-	w := 0
-	for _, s := range sections {
-		for _, r := range s.Rows {
-			w = max(w, lipgloss.Width(ageCell(r, now)))
+	width := 0
+	for _, section := range sections {
+		for _, row := range section.Rows {
+			width = max(width, lipgloss.Width(ageCell(row, now)))
 		}
 	}
-	return w
+	return width
 }

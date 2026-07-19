@@ -38,11 +38,11 @@ func (a App) SetStatus(cwd string, ch StatusChange) error {
 
 // setStatusLocked computes both new file contents before writing either.
 func (a App) setStatusLocked(taskPath string, ch StatusChange) error {
-	t, content, err := a.readTask(taskPath)
+	parsed, content, err := a.readTask(taskPath)
 	if err != nil {
 		return err
 	}
-	return a.statusWrite(taskPath, ch, content, t)
+	return a.statusWrite(taskPath, ch, content, parsed)
 }
 
 // statusWrite applies ch onto already-read content (possibly pre-edited by

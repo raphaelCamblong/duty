@@ -48,45 +48,45 @@ func crumbZone(path string) string { return crumbZonePrefix + path }
 // The returned view carries the alt-screen and cell-motion mouse modes that
 // were program options under Bubble Tea v1.
 func (m Model) View() tea.View {
-	w, _ := m.dims()
+	width, _ := m.dims()
 	var body string
 	switch {
 	case m.split():
 		body = lipgloss.JoinHorizontal(lipgloss.Top, m.leftPanel(), m.rightPanel())
 	case m.previewOpen:
-		title := ansi.Truncate(" "+m.previewTitleText, max(w-1, 1), "…")
+		title := ansi.Truncate(" "+m.previewTitleText, max(width-1, 1), "…")
 		body = lipgloss.JoinVertical(lipgloss.Left, title, m.preview.View())
 	default:
 		body = m.leftPanel()
 	}
-	frame := lipgloss.JoinVertical(lipgloss.Left, m.headerView(w), body, m.footerView(w))
-	v := tea.NewView(m.zones.Scan(frame))
-	v.AltScreen = true
-	v.MouseMode = tea.MouseModeCellMotion
-	return v
+	frame := lipgloss.JoinVertical(lipgloss.Left, m.headerView(width), body, m.footerView(width))
+	view := tea.NewView(m.zones.Scan(frame))
+	view.AltScreen = true
+	view.MouseMode = tea.MouseModeCellMotion
+	return view
 }
 
 func (m Model) layout() Model {
-	w, h := m.dims()
-	bodyH := max(h-lipgloss.Height(m.headerView(w))-lipgloss.Height(m.footerView(w)), 3)
+	width, height := m.dims()
+	bodyH := max(height-lipgloss.Height(m.headerView(width))-lipgloss.Height(m.footerView(width)), 3)
 	switch {
 	case m.split():
-		lw := leftWidth(w)
+		lw := leftWidth(width)
 		m.list.SetSize(lw-4, bodyH-2)
-		m.preview.SetWidth(max(w-lw-4, 1))
+		m.preview.SetWidth(max(width-lw-4, 1))
 		m.preview.SetHeight(max(bodyH-3, 1))
 	case m.previewOpen:
-		m.list.SetSize(w-4, bodyH-2)
-		m.preview.SetWidth(max(w-2, 1))
+		m.list.SetSize(width-4, bodyH-2)
+		m.preview.SetWidth(max(width-2, 1))
 		m.preview.SetHeight(max(bodyH-1, 1))
 	default:
-		m.list.SetSize(w-4, bodyH-2)
+		m.list.SetSize(width-4, bodyH-2)
 	}
 	return m.renderPreview(false)
 }
 
-func leftWidth(w int) int {
-	return max(w*38/100, minLeftWidth)
+func leftWidth(width int) int {
+	return max(width*38/100, minLeftWidth)
 }
 
 // leftPanel is the entry list in its focus-colored border, a full-panel
@@ -108,7 +108,7 @@ func (m Model) leftPanel() string {
 }
 
 func (m Model) emptyHint() string {
-	if b, ok := m.snap.Boards[m.path]; ok && b.ArchivedSubtree > 0 {
+	if board, ok := m.snap.Boards[m.path]; ok && board.ArchivedSubtree > 0 {
 		return m.theme.dim().Render("all work archived — press a to browse the record")
 	}
 	if m.path == "." {
@@ -125,33 +125,33 @@ func (m Model) rightPanel() string {
 	return m.zones.Mark(zonePreview, box.Render(content))
 }
 
-func (m Model) headerView(w int) string {
-	inner := max(w-4, 1)
-	b, _ := m.board()
+func (m Model) headerView(width int) string {
+	inner := max(width-4, 1)
+	board, _ := m.board()
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		ansi.Truncate(m.breadcrumb(), inner, "…"),
-		m.theme.stateLine(b, inner),
+		m.theme.stateLine(board, inner),
 	)
 	box := m.theme.focusBox()
 	return box.Width(inner + box.GetHorizontalFrameSize()).Render(content)
 }
 
-func (t Theme) stateLine(b Board, w int) string {
-	rollup := t.rollupOrEmpty(b.Counts)
-	barW := w - lipgloss.Width(rollup) - 2
+func (t Theme) stateLine(board Board, width int) string {
+	rollup := t.rollupOrEmpty(board.Counts)
+	barW := width - lipgloss.Width(rollup) - 2
 	if barW < minBarWidth {
-		return ansi.Truncate(rollup, w, "…")
+		return ansi.Truncate(rollup, width, "…")
 	}
-	return rollup + "  " + t.statusBar(b.Counts, barW)
+	return rollup + "  " + t.statusBar(board.Counts, barW)
 }
 
-func (t Theme) statusBar(counts map[string]int, w int) string {
+func (t Theme) statusBar(counts map[string]int, width int) string {
 	if totalCount(counts) == 0 {
-		return t.dim().Render(strings.Repeat("╌", w))
+		return t.dim().Render(strings.Repeat("╌", width))
 	}
 	bar := barchart.New(
-		w, 1,
+		width, 1,
 		barchart.WithHorizontalBars(),
 		barchart.WithNoAxis(),
 		barchart.WithBarWidth(1),
@@ -164,32 +164,32 @@ func (t Theme) statusBar(counts map[string]int, w int) string {
 func (t Theme) barData(counts map[string]int) barchart.BarData {
 	values := make([]barchart.BarValue, 0, len(rollupOrder))
 	for _, status := range rollupOrder {
-		c := t.statusColor(status)
+		color := t.statusColor(status)
 		values = append(values, barchart.BarValue{
 			Name:  status,
 			Value: float64(counts[status]),
-			Style: lipgloss.NewStyle().Foreground(c).Background(c),
+			Style: lipgloss.NewStyle().Foreground(color).Background(color),
 		})
 	}
 	return barchart.BarData{Values: values}
 }
 
-func (m Model) footerView(w int) string {
+func (m Model) footerView(width int) string {
 	if m.scanErr == "" {
-		return m.helpView(w)
+		return m.helpView(width)
 	}
-	err := " " + m.theme.alert().Render(ansi.Truncate(m.scanErr, max(w-2, 1), "…"))
-	return lipgloss.JoinVertical(lipgloss.Left, err, m.helpView(w))
+	err := " " + m.theme.alert().Render(ansi.Truncate(m.scanErr, max(width-2, 1), "…"))
+	return lipgloss.JoinVertical(lipgloss.Left, err, m.helpView(width))
 }
 
 // helpView renders the bubbles/help hint bar (short, or the full grid after
 // "?"), truncated per line so a hint set wider than the terminal degrades to
 // an ellipsis instead of overflowing the frame.
-func (m Model) helpView(w int) string {
-	inner := max(w-1, 1)
-	h := m.help
-	h.SetWidth(inner)
-	lines := strings.Split(h.View(m.keys), "\n")
+func (m Model) helpView(width int) string {
+	inner := max(width-1, 1)
+	help := m.help
+	help.SetWidth(inner)
+	lines := strings.Split(help.View(m.keys), "\n")
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], inner, "…")
 	}
@@ -199,22 +199,22 @@ func (m Model) helpView(w int) string {
 func (m Model) previewTitle() string {
 	switch m.previewKind {
 	case previewTrack:
-		if s, ok := m.findSub(m.previewArg); ok {
-			return m.theme.accent().Render(s.Name) + "  " + lipgloss.NewStyle().Bold(true).Render(s.Title)
+		if sub, ok := m.findSub(m.previewArg); ok {
+			return m.theme.accent().Render(sub.Name) + "  " + lipgloss.NewStyle().Bold(true).Render(sub.Title)
 		}
 	case previewTask:
-		if r, b, ok := m.findRowBoard(m.previewArg); ok {
-			return m.theme.taskHeader(r, b.Title, m.headerAge(r), m.spinnerGlyph())
+		if row, board, ok := m.findRowBoard(m.previewArg); ok {
+			return m.theme.taskHeader(row, board.Title, m.headerAge(row), m.spinnerGlyph())
 		}
 	}
 	return m.theme.dim().Render("gone")
 }
 
-func (m Model) headerAge(r Row) string {
+func (m Model) headerAge(row Row) string {
 	if !m.showAge {
 		return ""
 	}
-	return ageCell(r, time.Now())
+	return ageCell(row, time.Now())
 }
 
 // taskHeader joins a task's identity into the preview's pinned line: id ·
@@ -222,27 +222,27 @@ func (m Model) headerAge(r Row) string {
 // through), any drift badge, and the relative age trailing dim. age trails last
 // so a narrow header truncates it before the blocked-by link; age is "" when
 // the age column is hidden.
-func (t Theme) taskHeader(r Row, track, age, glyph string) string {
-	status := t.statusStyle(r.Status).Render(r.Status)
-	if inProgress(r) && glyph != "" {
+func (t Theme) taskHeader(row Row, track, age, glyph string) string {
+	status := t.statusStyle(row.Status).Render(row.Status)
+	if inProgress(row) && glyph != "" {
 		status += " " + glyph
 	}
-	parts := []string{t.accent().Render(r.ID), status}
-	if who := claimerTag(r); who != "" {
+	parts := []string{t.accent().Render(row.ID), status}
+	if who := claimerTag(row); who != "" {
 		parts = append(parts, t.dim().Render(who))
 	}
-	if g := gatesCell(r); g != "" {
-		parts = append(parts, t.dim().Render(g))
+	if gates := gatesCell(row); gates != "" {
+		parts = append(parts, t.dim().Render(gates))
 	}
 	if track != "" {
 		parts = append(parts, t.dim().Render(track))
 	}
 	line := strings.Join(parts, t.dim().Render(" · "))
-	if len(r.BlockedBy) > 0 {
-		line += "  " + t.blockedByCell(r)
+	if len(row.BlockedBy) > 0 {
+		line += "  " + t.blockedByCell(row)
 	}
-	if r.Drift != "" {
-		line += "  " + t.alert().Render("⚠ "+r.Drift)
+	if row.Drift != "" {
+		line += "  " + t.alert().Render("⚠ "+row.Drift)
 	}
 	if age != "" {
 		line += "  " + t.dim().Render(age)
@@ -255,14 +255,14 @@ func (t Theme) taskHeader(r Row, track, age, glyph string) string {
 // ids still block the task. r.Waits (from the scan) names the unmet ones; the
 // label and first-listed unmet id stay contiguous, base-styled, so the segment
 // reads plainly when nothing is met yet.
-func (t Theme) blockedByCell(r Row) string {
+func (t Theme) blockedByCell(row Row) string {
 	label := "blocked-by "
-	s := label + strings.Join(r.BlockedBy, ", ")
-	met := metRunes(len(label), r.BlockedBy, r.Waits)
+	text := label + strings.Join(row.BlockedBy, ", ")
+	met := metRunes(len(label), row.BlockedBy, row.Waits)
 	if len(met) == 0 {
-		return t.dim().Render(s)
+		return t.dim().Render(text)
 	}
-	return lipgloss.StyleRunes(s, met, t.dim().Strikethrough(true), t.dim())
+	return lipgloss.StyleRunes(text, met, t.dim().Strikethrough(true), t.dim())
 }
 
 // metRunes lists, within a "blocked-by <ids>" string, the rune indices of the
@@ -280,8 +280,8 @@ func metRunes(labelLen int, ids, waits []string) []int {
 			pos += len(", ")
 		}
 		if !unmet[id] {
-			for k := 0; k < len(id); k++ {
-				runes = append(runes, pos+k)
+			for offset := 0; offset < len(id); offset++ {
+				runes = append(runes, pos+offset)
 			}
 		}
 		pos += len(id)
@@ -293,22 +293,22 @@ func metRunes(labelLen int, ids, waits []string) []int {
 // markdown through the shared renderer, or a track's summary card. It returns
 // the possibly-updated model because building the renderer mutates it.
 func (m Model) previewContent() (Model, string) {
-	w := max(m.preview.Width(), 1)
+	width := max(m.preview.Width(), 1)
 	switch m.previewKind {
 	case previewTrack:
-		if s, ok := m.findSub(m.previewArg); ok {
-			return m, m.trackCard(s, w)
+		if sub, ok := m.findSub(m.previewArg); ok {
+			return m, m.trackCard(sub, width)
 		}
 		return m, m.theme.dim().Render("track gone")
 	case previewTask:
-		r, _, ok := m.findRowBoard(m.previewArg)
+		row, _, ok := m.findRowBoard(m.previewArg)
 		switch {
 		case !ok:
 			return m, m.theme.dim().Render("task gone")
-		case r.Path == "":
+		case row.Path == "":
 			return m, m.theme.dim().Render("no file — the board row points nowhere")
 		default:
-			return m.taskMarkdown(r.Content)
+			return m.taskMarkdown(row.Content)
 		}
 	}
 	return m, ""
@@ -320,11 +320,11 @@ func (m Model) previewContent() (Model, string) {
 func (m Model) taskMarkdown(content []byte) (Model, string) {
 	wrap := max(m.preview.Width()-2, 20)
 	if m.renderer == nil || m.rendererWidth != wrap {
-		r, err := newRenderer(wrap, m.theme.dark)
+		renderer, err := newRenderer(wrap, m.theme.dark)
 		if err != nil {
 			return m, string(task.Body(content))
 		}
-		m.renderer, m.rendererWidth = r, wrap
+		m.renderer, m.rendererWidth = renderer, wrap
 	}
 	out, err := m.renderer.Render(string(task.Body(content)))
 	if err != nil {
@@ -333,45 +333,45 @@ func (m Model) taskMarkdown(content []byte) (Model, string) {
 	return m, out
 }
 
-func (m Model) trackCard(s Sub, w int) string {
+func (m Model) trackCard(sub Sub, width int) string {
 	lines := []string{
-		m.theme.dim().Render(fmt.Sprintf("%d tasks · %d done", s.Total, s.Done)),
-		m.theme.rollupOrEmpty(s.Counts),
+		m.theme.dim().Render(fmt.Sprintf("%d tasks · %d done", sub.Total, sub.Done)),
+		m.theme.rollupOrEmpty(sub.Counts),
 		"",
-		m.theme.statusBar(s.Counts, min(w, 40)),
+		m.theme.statusBar(sub.Counts, min(width, 40)),
 		"",
 	}
-	if b, ok := m.snap.Boards[s.Path]; ok && len(b.Sections) > 0 {
+	if board, ok := m.snap.Boards[sub.Path]; ok && len(board.Sections) > 0 {
 		lines = append(lines, m.theme.section().Render("Sections"))
-		for _, sec := range b.Sections {
+		for _, sec := range board.Sections {
 			lines = append(lines, " "+sec.Name+"  "+m.theme.dim().Render(strconv.Itoa(len(sec.Rows))))
 		}
 		lines = append(lines, "")
 	}
-	if n := m.subtreeDrift(s.Path); n > 0 {
-		lines = append(lines, m.theme.alert().Render(fmt.Sprintf("⚠ %d drift", n)))
+	if drift := m.subtreeDrift(sub.Path); drift > 0 {
+		lines = append(lines, m.theme.alert().Render(fmt.Sprintf("⚠ %d drift", drift)))
 	} else {
 		lines = append(lines, m.theme.dim().Render("no drift"))
 	}
 	for i := range lines {
-		lines[i] = ansi.Truncate(lines[i], w, "…")
+		lines[i] = ansi.Truncate(lines[i], width, "…")
 	}
 	return strings.Join(lines, "\n")
 }
 
 func (m Model) subtreeDrift(path string) int {
-	n := 0
-	for p, b := range m.snap.Boards {
-		if within(p, path) {
-			n += driftCount(b)
+	count := 0
+	for boardPath, board := range m.snap.Boards {
+		if within(boardPath, path) {
+			count += driftCount(board)
 		}
 	}
-	return n
+	return count
 }
 
 func (t Theme) rollupOrEmpty(counts map[string]int) string {
-	if r := t.statusRollup(counts); r != "" {
-		return r
+	if rollup := t.statusRollup(counts); rollup != "" {
+		return rollup
 	}
 	return t.dim().Render("empty")
 }
@@ -379,19 +379,19 @@ func (t Theme) rollupOrEmpty(counts map[string]int) string {
 func (t Theme) statusRollup(counts map[string]int) string {
 	var parts []string
 	for _, st := range rollupOrder {
-		if n := counts[st]; n > 0 {
-			parts = append(parts, t.statusStyle(st).Render(fmt.Sprintf("%d %s", n, st)))
+		if count := counts[st]; count > 0 {
+			parts = append(parts, t.statusStyle(st).Render(fmt.Sprintf("%d %s", count, st)))
 		}
 	}
 	return strings.Join(parts, t.dim().Render(" · "))
 }
 
 func totalCount(counts map[string]int) int {
-	n := 0
+	total := 0
 	for _, st := range rollupOrder {
-		n += counts[st]
+		total += counts[st]
 	}
-	return n
+	return total
 }
 
 // BarCells splits width cells across the non-zero statuses in counts,
@@ -415,10 +415,10 @@ func BarCells(counts map[string]int, width int) map[string]int {
 	sum := 0
 	for _, st := range active {
 		exact := float64(counts[st]) / float64(total) * float64(spare)
-		c := 1 + int(exact)
-		cells[st] = c
+		count := 1 + int(exact)
+		cells[st] = count
 		rem[st] = exact - float64(int(exact))
-		sum += c
+		sum += count
 	}
 	for sum < width {
 		st := maxRemainder(active, rem)
@@ -444,13 +444,13 @@ func (t Theme) trackBar(counts map[string]int, width int) string {
 	if cells == nil {
 		return ""
 	}
-	var b strings.Builder
+	var builder strings.Builder
 	for _, st := range rollupOrder {
-		if c := cells[st]; c > 0 {
-			b.WriteString(lipgloss.NewStyle().Foreground(t.statusColor(st)).Render(strings.Repeat("█", c)))
+		if count := cells[st]; count > 0 {
+			builder.WriteString(lipgloss.NewStyle().Foreground(t.statusColor(st)).Render(strings.Repeat("█", count)))
 		}
 	}
-	return b.String()
+	return builder.String()
 }
 
 // trackRightWidth is the fixed cell width of a track row's trailing state
@@ -474,9 +474,9 @@ func (m Model) breadcrumb() string {
 		return m.path
 	}
 	parts := make([]string, len(chain))
-	for i, p := range chain {
-		seg := m.theme.crumb().Render(m.snap.Boards[p].Title)
-		parts[i] = m.zones.Mark(crumbZone(p), seg)
+	for i, path := range chain {
+		seg := m.theme.crumb().Render(m.snap.Boards[path].Title)
+		parts[i] = m.zones.Mark(crumbZone(path), seg)
 	}
 	return strings.Join(parts, m.theme.dim().Render(" › "))
 }
@@ -485,17 +485,17 @@ func (m Model) breadcrumb() string {
 // the order the breadcrumb reads left to right.
 func (m Model) crumbChain() []string {
 	var chain []string
-	p := m.path
+	path := m.path
 	for {
-		b, ok := m.snap.Boards[p]
+		board, ok := m.snap.Boards[path]
 		if !ok {
 			break
 		}
-		chain = append([]string{p}, chain...)
-		if b.Parent == "" {
+		chain = append([]string{path}, chain...)
+		if board.Parent == "" {
 			break
 		}
-		p = b.Parent
+		path = board.Parent
 	}
 	return chain
 }
@@ -514,87 +514,87 @@ func newRenderer(wrap int, dark bool) (*glamour.TermRenderer, error) {
 	)
 }
 
-func gatesCell(r Row) string {
-	if r.GatesTotal == 0 {
+func gatesCell(row Row) string {
+	if row.GatesTotal == 0 {
 		return ""
 	}
-	return fmt.Sprintf("%d/%d", r.GatesDone, r.GatesTotal)
+	return fmt.Sprintf("%d/%d", row.GatesDone, row.GatesTotal)
 }
 
-func inProgress(r Row) bool { return r.Status == task.StatusInProgress }
+func inProgress(row Row) bool { return row.Status == task.StatusInProgress }
 
-func claimerTag(r Row) string {
-	if inProgress(r) {
-		return r.ClaimedBy
+func claimerTag(row Row) string {
+	if inProgress(row) {
+		return row.ClaimedBy
 	}
 	return ""
 }
 
-func waitsTag(r Row) string {
-	if len(r.Waits) == 0 {
+func waitsTag(row Row) string {
+	if len(row.Waits) == 0 {
 		return ""
 	}
-	return "waits " + strings.Join(r.Waits, ",")
+	return "waits " + strings.Join(row.Waits, ",")
 }
 
-func pad(s string, w int) string {
-	s = ansi.Truncate(s, w, "…")
-	if gap := w - lipgloss.Width(s); gap > 0 {
-		s += strings.Repeat(" ", gap)
+func pad(text string, width int) string {
+	text = ansi.Truncate(text, width, "…")
+	if gap := width - lipgloss.Width(text); gap > 0 {
+		text += strings.Repeat(" ", gap)
 	}
-	return s
+	return text
 }
 
-func driftCount(b Board) int {
-	n := 0
-	for _, s := range b.Sections {
-		for _, r := range s.Rows {
-			if r.Drift != "" {
-				n++
+func driftCount(board Board) int {
+	count := 0
+	for _, section := range board.Sections {
+		for _, row := range section.Rows {
+			if row.Drift != "" {
+				count++
 			}
 		}
 	}
-	return n
+	return count
 }
 
 func maxSubNameWidth(subs []Sub) int {
-	w := 0
-	for _, s := range subs {
-		w = max(w, lipgloss.Width(s.Name))
+	width := 0
+	for _, sub := range subs {
+		width = max(width, lipgloss.Width(sub.Name))
 	}
-	return w
+	return width
 }
 
 // maxSubCountWidth sizes the track rows' dim total-count column, measured over
 // the non-empty subtrees (an empty subtree shows "empty", carries no count).
 func maxSubCountWidth(subs []Sub) int {
-	w := 0
-	for _, s := range subs {
-		if n := totalCount(s.Counts); n > 0 {
-			w = max(w, len(strconv.Itoa(n)))
+	width := 0
+	for _, sub := range subs {
+		if count := totalCount(sub.Counts); count > 0 {
+			width = max(width, len(strconv.Itoa(count)))
 		}
 	}
-	return w
+	return width
 }
 
 func maxIDWidth(sections []Section) int {
-	w := 0
-	for _, s := range sections {
-		for _, r := range s.Rows {
-			w = max(w, lipgloss.Width(r.ID))
+	width := 0
+	for _, section := range sections {
+		for _, row := range section.Rows {
+			width = max(width, lipgloss.Width(row.ID))
 		}
 	}
-	return w
+	return width
 }
 
 func maxDriftWidth(sections []Section) int {
-	w := 0
-	for _, s := range sections {
-		for _, r := range s.Rows {
-			if r.Drift != "" {
-				w = max(w, lipgloss.Width("⚠ "+r.Drift))
+	width := 0
+	for _, section := range sections {
+		for _, row := range section.Rows {
+			if row.Drift != "" {
+				width = max(width, lipgloss.Width("⚠ "+row.Drift))
 			}
 		}
 	}
-	return w
+	return width
 }

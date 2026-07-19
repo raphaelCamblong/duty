@@ -40,40 +40,41 @@ type Event struct {
 
 // Snapshot reads every open task in scope and below, keyed by id — the state
 // duty watch diffs; unparsable files are skipped.
-func (a App) Snapshot(s Scope) (map[string]TaskState, error) {
-	boardDir, boards, err := a.walkBoards(s)
+func (a App) Snapshot(scope Scope) (map[string]TaskState, error) {
+	boardDir, boards, err := a.walkBoards(scope)
 	if err != nil {
 		return nil, err
 	}
 	states := make(map[string]TaskState)
-	for _, b := range boards {
-		if err := a.boardStates(boardDir, b, states); err != nil {
+	for _, dir := range boards {
+		if err := a.boardStates(boardDir, dir, states); err != nil {
 			return nil, err
 		}
 	}
 	return states, nil
 }
 
-// boardStates reads every task file directly in b into states, keyed by id and
-// tagged with b's path relative to listDir — the board the snapshot started from.
-func (a App) boardStates(listDir, b string, states map[string]TaskState) error {
-	boardPath := relBoard(listDir, b)
-	files, err := tree.TaskFileNames(a.fs, b)
+// boardStates reads every task file directly in boardDir into states, keyed by
+// id and tagged with boardDir's path relative to listDir — the board the
+// snapshot started from.
+func (a App) boardStates(listDir, boardDir string, states map[string]TaskState) error {
+	boardPath := relBoard(listDir, boardDir)
+	files, err := tree.TaskFileNames(a.fs, boardDir)
 	if err != nil {
 		return err
 	}
 	for _, name := range files {
-		content, err := a.fs.ReadFile(filepath.Join(b, name))
+		content, err := a.fs.ReadFile(filepath.Join(boardDir, name))
 		if err != nil {
 			return err
 		}
-		t, err := task.Parse(content)
+		parsed, err := task.Parse(content)
 		if err != nil {
 			continue
 		}
 		gd, gt := task.CountGates(content)
-		states[t.ID] = TaskState{
-			Status: t.Status, ClaimedBy: t.ClaimedBy, Board: boardPath,
+		states[parsed.ID] = TaskState{
+			Status: parsed.Status, ClaimedBy: parsed.ClaimedBy, Board: boardPath,
 			GatesDone: gd, GatesTotal: gt,
 		}
 	}
@@ -118,8 +119,8 @@ func changedFields(id string, prev, cur TaskState) []Event {
 	return events
 }
 
-func gatePair(s TaskState) string {
-	return fmt.Sprintf("%d/%d", s.GatesDone, s.GatesTotal)
+func gatePair(state TaskState) string {
+	return fmt.Sprintf("%d/%d", state.GatesDone, state.GatesTotal)
 }
 
 func sortedIDs(before, after map[string]TaskState) []string {

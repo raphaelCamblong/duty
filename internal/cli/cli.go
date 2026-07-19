@@ -132,8 +132,8 @@ func dispatchOnly(cmd *cobra.Command, missing error) {
 }
 
 func addCommands(root *cobra.Command, cwd string, stdin io.Reader, stdout io.Writer) {
-	var f fsys.FS = fsys.OS{}
-	a := app.New(f)
+	var fs fsys.FS = fsys.OS{}
+	svc := app.New(fs)
 	home, _ := os.UserHomeDir()
 	root.SetCompletionCommandGroupID(groupInterface)
 	root.AddGroup(
@@ -143,20 +143,20 @@ func addCommands(root *cobra.Command, cwd string, stdin io.Reader, stdout io.Wri
 		&cobra.Group{ID: groupInterface, Title: "Interface Commands:"},
 	)
 	root.AddCommand(
-		grouped(newInitCmd(a, cwd, stdout), groupAuthor),
-		grouped(newCreateCmd(a, cwd, stdin, stdout), groupAuthor),
-		grouped(newSetCmd(a, cwd, stdin), groupAuthor),
-		grouped(newGetCmd(a, cwd, stdout), groupRead),
-		newListCmd(a, cwd, stdout),
-		grouped(newStatusCmd(a, cwd), groupWork),
-		grouped(newReportCmd(a, cwd, stdin), groupWork),
-		grouped(newGatesCmd(a, cwd, stdout), groupWork),
-		grouped(newMoveCmd(a, cwd), groupWork),
-		grouped(newArchiveCmd(a, cwd), groupWork),
-		grouped(newDeleteCmd(a, cwd), groupWork),
-		grouped(newTUICmd(f, cwd), groupInterface),
-		grouped(newWatchCmd(a, f, cwd, stdout), groupInterface),
-		grouped(newSkillCmd(skillCtx{app: a, fetcher: fetch.HTTP{}, cwd: cwd, home: home, out: stdout}), groupInterface),
+		grouped(newInitCmd(svc, cwd, stdout), groupAuthor),
+		grouped(newCreateCmd(svc, cwd, stdin, stdout), groupAuthor),
+		grouped(newSetCmd(svc, cwd, stdin), groupAuthor),
+		grouped(newGetCmd(svc, cwd, stdout), groupRead),
+		newListCmd(svc, cwd, stdout),
+		grouped(newStatusCmd(svc, cwd), groupWork),
+		grouped(newReportCmd(svc, cwd, stdin), groupWork),
+		grouped(newGatesCmd(svc, cwd, stdout), groupWork),
+		grouped(newMoveCmd(svc, cwd), groupWork),
+		grouped(newArchiveCmd(svc, cwd), groupWork),
+		grouped(newDeleteCmd(svc, cwd), groupWork),
+		grouped(newTUICmd(fs, cwd), groupInterface),
+		grouped(newWatchCmd(svc, fs, cwd, stdout), groupInterface),
+		grouped(newSkillCmd(skillCtx{app: svc, fetcher: fetch.HTTP{}, cwd: cwd, home: home, out: stdout}), groupInterface),
 	)
 }
 
@@ -199,10 +199,10 @@ type stringList []string
 
 func (l *stringList) String() string { return strings.Join(*l, ",") }
 
-func (l *stringList) Set(v string) error {
-	for _, s := range strings.Split(v, ",") {
-		if s = strings.TrimSpace(s); s != "" {
-			*l = append(*l, s)
+func (l *stringList) Set(value string) error {
+	for _, item := range strings.Split(value, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			*l = append(*l, item)
 		}
 	}
 	return nil

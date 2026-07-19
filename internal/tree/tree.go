@@ -30,17 +30,17 @@ var taskNN = regexp.MustCompile(`^` + regexp.QuoteMeta(task.IDPrefix) + `(\d+)-.
 // parent also holds one; a directory holding the config file marks the root
 // explicitly and stops the ascent. Outside a tree it falls back to ./duty/
 // if that directory exists.
-func FindRoot(f fsys.FS, cwd string) (string, error) {
-	root, err := CurrentBoard(f, cwd)
+func FindRoot(filesystem fsys.FS, cwd string) (string, error) {
+	root, err := CurrentBoard(filesystem, cwd)
 	if err != nil {
 		return "", err
 	}
 	for {
-		if hasFile(f, root, names.ConfigFile) {
+		if hasFile(filesystem, root, names.ConfigFile) {
 			return root, nil
 		}
 		parent := filepath.Dir(root)
-		if parent == root || !hasFile(f, parent, names.BoardFile) {
+		if parent == root || !hasFile(filesystem, parent, names.BoardFile) {
 			return root, nil
 		}
 		root = parent
@@ -50,36 +50,36 @@ func FindRoot(f fsys.FS, cwd string) (string, error) {
 // CurrentBoard returns the nearest ancestor of cwd (including cwd itself)
 // holding a board index. Outside a tree it falls back to ./duty/ if that
 // directory exists.
-func CurrentBoard(f fsys.FS, cwd string) (string, error) {
+func CurrentBoard(filesystem fsys.FS, cwd string) (string, error) {
 	abs, err := filepath.Abs(cwd)
 	if err != nil {
 		return "", fmt.Errorf("current board: %w", err)
 	}
-	if board, ok := nearestBoard(f, abs); ok {
+	if board, ok := nearestBoard(filesystem, abs); ok {
 		return board, nil
 	}
-	return fallbackTree(f, abs)
+	return fallbackTree(filesystem, abs)
 }
 
 // Boards walks the tree under root and returns every directory holding a board
 // index, in lexical order, skipping archive/ directories. A config file
 // anywhere below root is an error: it would declare a second root.
-func Boards(f fsys.FS, root string) ([]string, error) {
+func Boards(filesystem fsys.FS, root string) ([]string, error) {
 	var boards []string
-	err := f.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	err := filesystem.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("scan boards: %w", err)
 		}
-		if !d.IsDir() {
+		if !entry.IsDir() {
 			return nil
 		}
-		if d.Name() == names.ArchiveDir && path != root {
+		if entry.Name() == names.ArchiveDir && path != root {
 			return fs.SkipDir
 		}
-		if path != root && hasFile(f, path, names.ConfigFile) {
+		if path != root && hasFile(filesystem, path, names.ConfigFile) {
 			return fmt.Errorf("second %s found in %s: only the tree root may hold one", names.ConfigFile, path)
 		}
-		if hasFile(f, path, names.BoardFile) {
+		if hasFile(filesystem, path, names.BoardFile) {
 			boards = append(boards, path)
 		}
 		return nil
@@ -93,17 +93,17 @@ func Boards(f fsys.FS, root string) ([]string, error) {
 // ResolveTask walks the tree under root for the task file named <id>-*.md
 // and returns its path. A match inside an archive/ directory is an error
 // wrapping ErrArchived: archived tasks are read-only.
-func ResolveTask(f fsys.FS, root, id string) (string, error) {
+func ResolveTask(filesystem fsys.FS, root, id string) (string, error) {
 	prefix := id + "-"
 	var found string
-	err := f.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	err := filesystem.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("resolve %s: %w", id, err)
 		}
-		if d.IsDir() {
+		if entry.IsDir() {
 			return nil
 		}
-		name := d.Name()
+		name := entry.Name()
 		if !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, ".md") {
 			return nil
 		}
@@ -125,10 +125,10 @@ func ResolveTask(f fsys.FS, root, id string) (string, error) {
 // ResolveTrack resolves track — a slash path relative to root, "." naming the
 // root board — to an existing board directory inside the tree. An absolute or
 // escaping path, or a path naming no board, is the one failure: unknown track %q.
-func ResolveTrack(f fsys.FS, root, track string) (string, error) {
+func ResolveTrack(filesystem fsys.FS, root, track string) (string, error) {
 	dir := filepath.Join(root, filepath.FromSlash(track))
 	rel, err := filepath.Rel(root, dir)
-	if err != nil || !filepath.IsLocal(rel) || !hasFile(f, dir, names.BoardFile) {
+	if err != nil || !filepath.IsLocal(rel) || !hasFile(filesystem, dir, names.BoardFile) {
 		return "", fmt.Errorf("unknown track %q", track)
 	}
 	return dir, nil
@@ -139,17 +139,17 @@ func IsTaskFile(name string) bool {
 	return taskNN.MatchString(name)
 }
 
-func TaskFileNames(f fsys.FS, dir string) ([]string, error) {
-	entries, err := f.ReadDir(dir)
+func TaskFileNames(filesystem fsys.FS, dir string) ([]string, error) {
+	entries, err := filesystem.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("read dir %s: %w", dir, err)
 	}
 	var out []string
-	for _, e := range entries {
-		if e.IsDir() || !IsTaskFile(e.Name()) {
+	for _, entry := range entries {
+		if entry.IsDir() || !IsTaskFile(entry.Name()) {
 			continue
 		}
-		out = append(out, e.Name())
+		out = append(out, entry.Name())
 	}
 	return out, nil
 }
@@ -157,25 +157,25 @@ func TaskFileNames(f fsys.FS, dir string) ([]string, error) {
 // NextNN walks every task filename under root — open and archived, every
 // board — and returns the next task number, zero-padded to two digits
 // minimum.
-func NextNN(f fsys.FS, root string) (string, error) {
+func NextNN(filesystem fsys.FS, root string) (string, error) {
 	highest := 0
-	err := f.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	err := filesystem.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("scan task numbers: %w", err)
 		}
-		if d.IsDir() {
+		if entry.IsDir() {
 			return nil
 		}
-		m := taskNN.FindStringSubmatch(d.Name())
-		if m == nil {
+		match := taskNN.FindStringSubmatch(entry.Name())
+		if match == nil {
 			return nil
 		}
-		n, err := strconv.Atoi(m[1])
+		number, err := strconv.Atoi(match[1])
 		if err != nil {
 			return nil
 		}
-		if n > highest {
-			highest = n
+		if number > highest {
+			highest = number
 		}
 		return nil
 	})
@@ -185,9 +185,9 @@ func NextNN(f fsys.FS, root string) (string, error) {
 	return fmt.Sprintf("%02d", highest+1), nil
 }
 
-func nearestBoard(f fsys.FS, dir string) (string, bool) {
+func nearestBoard(filesystem fsys.FS, dir string) (string, bool) {
 	for {
-		if hasFile(f, dir, names.BoardFile) {
+		if hasFile(filesystem, dir, names.BoardFile) {
 			return dir, true
 		}
 		parent := filepath.Dir(dir)
@@ -198,9 +198,9 @@ func nearestBoard(f fsys.FS, dir string) (string, bool) {
 	}
 }
 
-func fallbackTree(f fsys.FS, cwd string) (string, error) {
+func fallbackTree(filesystem fsys.FS, cwd string) (string, error) {
 	fallback := filepath.Join(cwd, names.TreeDir)
-	info, err := f.Stat(fallback)
+	info, err := filesystem.Stat(fallback)
 	if err == nil && info.IsDir() {
 		return fallback, nil
 	}
@@ -208,8 +208,8 @@ func fallbackTree(f fsys.FS, cwd string) (string, error) {
 }
 
 // hasFile reports whether dir contains a non-directory entry named name.
-func hasFile(f fsys.FS, dir, name string) bool {
-	info, err := f.Stat(filepath.Join(dir, name))
+func hasFile(filesystem fsys.FS, dir, name string) bool {
+	info, err := filesystem.Stat(filepath.Join(dir, name))
 	return err == nil && !info.IsDir()
 }
 

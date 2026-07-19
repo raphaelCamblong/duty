@@ -30,8 +30,8 @@ type watchCmd struct {
 	out io.Writer
 }
 
-func newWatchCmd(a app.App, f fsys.FS, cwd string, stdout io.Writer) *cobra.Command {
-	wc := watchCmd{app: a, fs: f, cwd: cwd, out: stdout}
+func newWatchCmd(svc app.App, fs fsys.FS, cwd string, stdout io.Writer) *cobra.Command {
+	wc := watchCmd{app: svc, fs: fs, cwd: cwd, out: stdout}
 	var (
 		agent bool
 		in    string
@@ -63,11 +63,11 @@ func runWatch(wc watchCmd, in string, agent bool) error {
 	if err != nil {
 		return err
 	}
-	w, err := watch.NewWatcher(wc.fs, root)
+	watcher, err := watch.NewWatcher(wc.fs, root)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = w.Close() }()
+	defer func() { _ = watcher.Close() }()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -76,7 +76,7 @@ func runWatch(wc watchCmd, in string, agent bool) error {
 		select {
 		case <-ctx.Done():
 			return nil
-		case _, ok := <-w.C:
+		case _, ok := <-watcher.C:
 			if !ok {
 				return nil
 			}
@@ -91,40 +91,40 @@ func runWatch(wc watchCmd, in string, agent bool) error {
 }
 
 // emit gives every event in a burst the same timestamp (capture time, not per-event).
-func emit(w io.Writer, events []app.Event, agent bool) {
+func emit(out io.Writer, events []app.Event, agent bool) {
 	now := time.Now()
-	for _, e := range events {
+	for _, event := range events {
 		if agent {
-			fmt.Fprintln(w, watchTSV(now, e))
+			fmt.Fprintln(out, watchTSV(now, event))
 			continue
 		}
-		fmt.Fprintln(w, watchHuman(now, e))
+		fmt.Fprintln(out, watchHuman(now, event))
 	}
 }
 
 // watchTSV's column order (time, event, id, field, old, new) is a wire contract.
-func watchTSV(now time.Time, e app.Event) string {
-	return tsv(now.Format(time.RFC3339), e.Kind, e.ID, e.Field, e.Old, e.New)
+func watchTSV(now time.Time, event app.Event) string {
+	return tsv(now.Format(time.RFC3339), event.Kind, event.ID, event.Field, event.Old, event.New)
 }
 
-func watchHuman(now time.Time, e app.Event) string {
-	return now.Format("15:04:05") + "  " + humanChange(e)
+func watchHuman(now time.Time, event app.Event) string {
+	return now.Format("15:04:05") + "  " + humanChange(event)
 }
 
-func humanChange(e app.Event) string {
-	switch e.Kind {
+func humanChange(event app.Event) string {
+	switch event.Kind {
 	case app.EventCreated:
-		return fmt.Sprintf("%s created · %s", e.ID, e.New)
+		return fmt.Sprintf("%s created · %s", event.ID, event.New)
 	case app.EventDeleted:
-		return fmt.Sprintf("%s deleted", e.ID)
+		return fmt.Sprintf("%s deleted", event.ID)
 	default:
-		return fmt.Sprintf("%s %s %s → %s", e.ID, e.Kind, orDash(e.Old), orDash(e.New))
+		return fmt.Sprintf("%s %s %s → %s", event.ID, event.Kind, orDash(event.Old), orDash(event.New))
 	}
 }
 
-func orDash(s string) string {
-	if s == "" {
+func orDash(text string) string {
+	if text == "" {
 		return "—"
 	}
-	return s
+	return text
 }

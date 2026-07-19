@@ -86,14 +86,14 @@ func createSection(content []byte, heading string, body []byte) []byte {
 }
 
 func appendSection(content []byte, heading string, body []byte) []byte {
-	var b bytes.Buffer
-	writeEndingNL(&b, content)
-	ensureBlankLine(&b)
-	b.WriteString("## ")
-	b.WriteString(heading)
-	b.WriteByte('\n')
-	b.Write(sectionRegion(body, false))
-	return b.Bytes()
+	var buf bytes.Buffer
+	writeEndingNL(&buf, content)
+	ensureBlankLine(&buf)
+	buf.WriteString("## ")
+	buf.WriteString(heading)
+	buf.WriteByte('\n')
+	buf.Write(sectionRegion(body, false))
+	return buf.Bytes()
 }
 
 // sectionRegion renders a section body region — the bytes between a heading
@@ -101,15 +101,15 @@ func appendSection(content []byte, heading string, body []byte) []byte {
 // text, and a blank separator line when a heading follows. Empty text yields
 // just that separator, matching the skeleton's blank sections.
 func sectionRegion(text []byte, followed bool) []byte {
-	var b bytes.Buffer
+	var buf bytes.Buffer
 	if trimmed := bytes.TrimSpace(text); len(trimmed) > 0 {
-		b.Write(trimmed)
-		b.WriteByte('\n')
+		buf.Write(trimmed)
+		buf.WriteByte('\n')
 	}
 	if followed {
-		b.WriteByte('\n')
+		buf.WriteByte('\n')
 	}
-	return b.Bytes()
+	return buf.Bytes()
 }
 
 func sectionBounds(content []byte, heading string) (start, end int, found bool) {
@@ -159,8 +159,8 @@ func isSectionHeading(line []byte) bool {
 }
 
 func lineAt(content []byte, pos int) (line []byte, next int) {
-	if i := bytes.IndexByte(content[pos:], '\n'); i >= 0 {
-		return content[pos : pos+i], pos + i + 1
+	if nl := bytes.IndexByte(content[pos:], '\n'); nl >= 0 {
+		return content[pos : pos+nl], pos + nl + 1
 	}
 	return content[pos:], len(content)
 }

@@ -82,14 +82,14 @@ func (a App) Body(cwd, id string) (string, error) {
 
 // GetTracks returns one TrackInfo per board in scope and below (that board as
 // "."), each counting its own directly-filed tasks by status.
-func (a App) GetTracks(s Scope) ([]TrackInfo, error) {
-	boardDir, boards, err := a.walkBoards(s)
+func (a App) GetTracks(scope Scope) ([]TrackInfo, error) {
+	boardDir, boards, err := a.walkBoards(scope)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]TrackInfo, 0, len(boards))
-	for _, b := range boards {
-		info, err := a.trackInfo(boardDir, b)
+	for _, dir := range boards {
+		info, err := a.trackInfo(boardDir, dir)
 		if err != nil {
 			return nil, err
 		}
@@ -100,17 +100,17 @@ func (a App) GetTracks(s Scope) ([]TrackInfo, error) {
 
 // GetNext returns the first actionable task in scope and below, or nil; with
 // claim it atomically marks that task in-progress as as before returning it.
-func (a App) GetNext(s Scope, claim bool, as string) (*TaskInfo, error) {
-	root, err := tree.FindRoot(a.fs, s.Cwd)
+func (a App) GetNext(scope Scope, claim bool, as string) (*TaskInfo, error) {
+	root, err := tree.FindRoot(a.fs, scope.Cwd)
 	if err != nil {
 		return nil, err
 	}
-	info, err := a.nextActionable(root, s)
+	info, err := a.nextActionable(root, scope)
 	if err != nil || info == nil {
 		return info, err
 	}
 	if claim {
-		info, err = a.claim(root, s, as)
+		info, err = a.claim(root, scope, as)
 		if err != nil || info == nil {
 			return info, err
 		}
@@ -123,13 +123,13 @@ func (a App) GetNext(s Scope, claim bool, as string) (*TaskInfo, error) {
 
 // claim re-scans under the tree lock — the authoritative pass that makes
 // parallel claims each pick a distinct task — and marks that task in-progress.
-func (a App) claim(root string, s Scope, as string) (*TaskInfo, error) {
+func (a App) claim(root string, scope Scope, as string) (*TaskInfo, error) {
 	unlock, err := a.lock(root)
 	if err != nil {
 		return nil, err
 	}
 	defer unlock()
-	info, err := a.nextActionable(root, s)
+	info, err := a.nextActionable(root, scope)
 	if err != nil || info == nil {
 		return info, err
 	}
@@ -141,13 +141,13 @@ func (a App) claim(root string, s Scope, as string) (*TaskInfo, error) {
 	return info, nil
 }
 
-func (a App) nextActionable(root string, s Scope) (*TaskInfo, error) {
-	_, boards, err := a.walkBoards(s)
+func (a App) nextActionable(root string, scope Scope) (*TaskInfo, error) {
+	_, boards, err := a.walkBoards(scope)
 	if err != nil {
 		return nil, err
 	}
-	for _, b := range boards {
-		info, err := a.nextInBoard(root, b)
+	for _, boardDir := range boards {
+		info, err := a.nextInBoard(root, boardDir)
 		if err != nil {
 			return nil, err
 		}
@@ -159,26 +159,26 @@ func (a App) nextActionable(root string, s Scope) (*TaskInfo, error) {
 }
 
 func (a App) taskInfo(root, path string) (TaskInfo, error) {
-	t, content, err := a.readTask(path)
+	parsed, content, err := a.readTask(path)
 	if err != nil {
 		return TaskInfo{}, err
 	}
-	return buildTaskInfo(root, path, content, t, a.mtime(path)), nil
+	return buildTaskInfo(root, path, content, parsed, a.mtime(path)), nil
 }
 
-func buildTaskInfo(root, path string, content []byte, t task.Task, updated time.Time) TaskInfo {
+func buildTaskInfo(root, path string, content []byte, parsed task.Task, updated time.Time) TaskInfo {
 	done, total := task.CountGates(content)
 	return TaskInfo{
-		ID:         t.ID,
-		Title:      t.Title,
-		Status:     t.Status,
+		ID:         parsed.ID,
+		Title:      parsed.Title,
+		Status:     parsed.Status,
 		Track:      relBoard(root, filepath.Dir(path)),
-		BlockedBy:  t.BlockedBy,
+		BlockedBy:  parsed.BlockedBy,
 		GatesDone:  done,
 		GatesTotal: total,
 		Path:       path,
 		UpdatedAt:  updated,
-		ClaimedBy:  t.ClaimedBy,
+		ClaimedBy:  parsed.ClaimedBy,
 	}
 }
 
@@ -194,18 +194,18 @@ func (a App) mtime(path string) time.Time {
 
 // trackInfo assembles one board's TrackInfo, its path taken relative to
 // listDir — the board the tracks listing started from.
-func (a App) trackInfo(listDir, b string) (TrackInfo, error) {
-	index, err := a.fs.ReadFile(boardIndexPath(b))
+func (a App) trackInfo(listDir, boardDir string) (TrackInfo, error) {
+	index, err := a.fs.ReadFile(boardIndexPath(boardDir))
 	if err != nil {
 		return TrackInfo{}, err
 	}
-	info := TrackInfo{Path: relBoard(listDir, b), Title: board.TitleOr(index, filepath.Base(b))}
-	statuses, err := a.taskStatuses(b)
+	info := TrackInfo{Path: relBoard(listDir, boardDir), Title: board.TitleOr(index, filepath.Base(boardDir))}
+	statuses, err := a.taskStatuses(boardDir)
 	if err != nil {
 		return TrackInfo{}, err
 	}
-	for _, s := range statuses {
-		switch s {
+	for _, status := range statuses {
+		switch status {
 		case task.StatusTodo:
 			info.Todo++
 		case task.StatusInProgress:
@@ -216,21 +216,21 @@ func (a App) trackInfo(listDir, b string) (TrackInfo, error) {
 			info.Blocked++
 		}
 	}
-	info.Archived, err = a.archivedCount(filepath.Join(b, names.ArchiveDir))
+	info.Archived, err = a.archivedCount(filepath.Join(boardDir, names.ArchiveDir))
 	if err != nil {
 		return TrackInfo{}, err
 	}
 	return info, nil
 }
 
-func (a App) nextInBoard(root, b string) (*TaskInfo, error) {
-	index, err := a.fs.ReadFile(boardIndexPath(b))
+func (a App) nextInBoard(root, boardDir string) (*TaskInfo, error) {
+	index, err := a.fs.ReadFile(boardIndexPath(boardDir))
 	if err != nil {
 		return nil, err
 	}
 	for _, sec := range board.Sections(index) {
-		for _, r := range sec.Rows {
-			info, err := a.actionable(root, b, r.File)
+		for _, row := range sec.Rows {
+			info, err := a.actionable(root, boardDir, row.File)
 			if err != nil {
 				return nil, err
 			}
@@ -244,26 +244,26 @@ func (a App) nextInBoard(root, b string) (*TaskInfo, error) {
 
 // actionable returns filename's TaskInfo when it's a todo with every blocked-by
 // done, else nil; a missing file is skipped (the board can drift ahead), not an error.
-func (a App) actionable(root, b, filename string) (*TaskInfo, error) {
-	path := filepath.Join(b, filename)
-	t, content, err := a.readTask(path)
+func (a App) actionable(root, boardDir, filename string) (*TaskInfo, error) {
+	path := filepath.Join(boardDir, filename)
+	parsed, content, err := a.readTask(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	if t.Status != task.StatusTodo {
+	if parsed.Status != task.StatusTodo {
 		return nil, nil
 	}
-	waits, err := a.unmetDeps(root, t.BlockedBy)
+	waits, err := a.unmetDeps(root, parsed.BlockedBy)
 	if err != nil {
 		return nil, err
 	}
 	if len(waits) > 0 {
 		return nil, nil
 	}
-	info := buildTaskInfo(root, path, content, t, a.mtime(path))
+	info := buildTaskInfo(root, path, content, parsed, a.mtime(path))
 	return &info, nil
 }
 
@@ -280,11 +280,11 @@ const (
 func UnmetDeps(deps []string, statusOf func(id string) (string, error)) ([]string, error) {
 	var unmet []string
 	for _, id := range deps {
-		s, err := statusOf(id)
+		status, err := statusOf(id)
 		if err != nil {
 			return nil, err
 		}
-		if !depMet(s) {
+		if !depMet(status) {
 			unmet = append(unmet, id)
 		}
 	}
@@ -304,11 +304,11 @@ func (a App) unmetDeps(root string, deps []string) ([]string, error) {
 func (a App) fillDeps(root string, info *TaskInfo) error {
 	info.Deps = make([]Dep, 0, len(info.BlockedBy))
 	for _, id := range info.BlockedBy {
-		s, err := a.depStatus(root, id)
+		status, err := a.depStatus(root, id)
 		if err != nil {
 			return err
 		}
-		info.Deps = append(info.Deps, Dep{ID: id, Status: s})
+		info.Deps = append(info.Deps, Dep{ID: id, Status: status})
 	}
 	return nil
 }
@@ -323,11 +323,11 @@ func (a App) depStatus(root, id string) (string, error) {
 		}
 		return statusMissing, nil
 	}
-	t, _, err := a.readTask(path)
+	parsed, _, err := a.readTask(path)
 	if err != nil {
 		return "", err
 	}
-	return t.Status, nil
+	return parsed.Status, nil
 }
 
 func (a App) taskStatuses(dir string) ([]string, error) {
@@ -336,8 +336,8 @@ func (a App) taskStatuses(dir string) ([]string, error) {
 		return nil, err
 	}
 	out := make([]string, 0, len(tasks))
-	for _, t := range tasks {
-		out = append(out, t.Status)
+	for _, parsed := range tasks {
+		out = append(out, parsed.Status)
 	}
 	return out, nil
 }

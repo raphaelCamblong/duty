@@ -58,8 +58,8 @@ func Sections(content []byte) []Section {
 }
 
 func parseRow(line string) (Row, bool) {
-	m := rowLinkRe.FindStringSubmatch(line)
-	if m == nil {
+	match := rowLinkRe.FindStringSubmatch(line)
+	if match == nil {
 		return Row{}, false
 	}
 	cells := strings.Split(line, "|")
@@ -67,8 +67,8 @@ func parseRow(line string) (Row, bool) {
 		return Row{}, false
 	}
 	return Row{
-		ID:     m[1],
-		File:   m[2],
+		ID:     match[1],
+		File:   match[2],
 		Title:  strings.TrimSpace(cells[2]),
 		Status: strings.TrimSpace(cells[len(cells)-2]),
 	}, true

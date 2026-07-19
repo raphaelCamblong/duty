@@ -113,8 +113,8 @@ type Row struct {
 // task count is always tallied from a cheap archive/ listing; the archived
 // rows themselves are read only when includeArchive is set (the TUI's archive
 // toggle), so the default path never reads an archived file's bytes.
-func Scan(f fsys.FS, root string, includeArchive bool) (Snapshot, error) {
-	dirs, err := tree.Boards(f, root)
+func Scan(filesystem fsys.FS, root string, includeArchive bool) (Snapshot, error) {
+	dirs, err := tree.Boards(filesystem, root)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -126,11 +126,11 @@ func Scan(f fsys.FS, root string, includeArchive bool) (Snapshot, error) {
 			return Snapshot{}, fmt.Errorf("scan %s: %w", dir, err)
 		}
 		path := filepath.ToSlash(rel)
-		b, err := scanBoard(f, dir, path, includeArchive)
+		scanned, err := scanBoard(filesystem, dir, path, includeArchive)
 		if err != nil {
 			return Snapshot{}, err
 		}
-		snap.Boards[path] = b
+		snap.Boards[path] = scanned
 		paths = append(paths, path)
 	}
 	link(snap, paths)
@@ -146,26 +146,26 @@ func Scan(f fsys.FS, root string, includeArchive bool) (Snapshot, error) {
 // files and flags a truly-missing id); the common archived case matches.
 func annotateWaits(snap Snapshot) {
 	status := make(map[string]string)
-	for _, b := range snap.Boards {
-		for _, s := range b.Sections {
-			for _, r := range s.Rows {
-				if r.ID != "" {
-					status[r.ID] = r.Status
+	for _, current := range snap.Boards {
+		for _, section := range current.Sections {
+			for _, row := range section.Rows {
+				if row.ID != "" {
+					status[row.ID] = row.Status
 				}
 			}
 		}
 	}
 	statusOf := func(id string) (string, error) {
-		if s, ok := status[id]; ok {
-			return s, nil
+		if value, ok := status[id]; ok {
+			return value, nil
 		}
 		return task.StatusDone, nil
 	}
-	for _, b := range snap.Boards {
-		for si := range b.Sections {
-			for ri := range b.Sections[si].Rows {
-				r := &b.Sections[si].Rows[ri]
-				r.Waits, _ = app.UnmetDeps(r.BlockedBy, statusOf)
+	for _, current := range snap.Boards {
+		for si := range current.Sections {
+			for ri := range current.Sections[si].Rows {
+				row := &current.Sections[si].Rows[ri]
+				row.Waits, _ = app.UnmetDeps(row.BlockedBy, statusOf)
 			}
 		}
 	}
@@ -174,8 +174,8 @@ func annotateWaits(snap Snapshot) {
 // scanBoard reads one board directory: its index for title and row order,
 // its task files for truth, and its archive/ for the archived tally (rows too
 // when includeArchive). Done/Total are local here; link aggregates.
-func scanBoard(f fsys.FS, dir, path string, includeArchive bool) (Board, error) {
-	index, err := f.ReadFile(filepath.Join(dir, names.BoardFile))
+func scanBoard(filesystem fsys.FS, dir, path string, includeArchive bool) (Board, error) {
+	index, err := filesystem.ReadFile(filepath.Join(dir, names.BoardFile))
 	if err != nil {
 		return Board{}, err
 	}
@@ -183,39 +183,39 @@ func scanBoard(f fsys.FS, dir, path string, includeArchive bool) (Board, error) 
 	if title == "" {
 		title = filepath.Base(dir)
 	}
-	files, bad, err := readTasks(f, dir)
+	files, bad, err := readTasks(filesystem, dir)
 	if err != nil {
 		return Board{}, err
 	}
 
-	b := Board{Path: path, Title: title}
+	result := Board{Path: path, Title: title}
 	bf := boardFiles{files: files, bad: bad, used: make(map[string]bool)}
 	for _, sec := range board.Sections(index) {
-		s := Section{Name: sec.Name}
-		for _, r := range sec.Rows {
-			s.Rows = append(s.Rows, joinRow(dir, r, bf))
+		section := Section{Name: sec.Name}
+		for _, boardRow := range sec.Rows {
+			section.Rows = append(section.Rows, joinRow(dir, boardRow, bf))
 		}
-		b.Sections = append(b.Sections, s)
+		result.Sections = append(result.Sections, section)
 	}
-	appendOrphans(&b, bf)
-	tallyOpen(&b, files)
-	b.ArchivedCount, b.Archived, err = scanArchive(f, filepath.Join(dir, names.ArchiveDir), includeArchive)
+	appendOrphans(&result, bf)
+	tallyOpen(&result, files)
+	result.ArchivedCount, result.Archived, err = scanArchive(filesystem, filepath.Join(dir, names.ArchiveDir), includeArchive)
 	if err != nil {
 		return Board{}, err
 	}
-	return b, nil
+	return result, nil
 }
 
 // tallyOpen fills a board's local Done, Total, and per-status Counts from its
 // open task files (file truth); link rolls these up into subtree totals.
-func tallyOpen(b *Board, files map[string]Row) {
-	b.Counts = make(map[string]int)
-	for _, f := range files {
-		if f.Status == task.StatusDone {
-			b.Done++
+func tallyOpen(target *Board, files map[string]Row) {
+	target.Counts = make(map[string]int)
+	for _, file := range files {
+		if file.Status == task.StatusDone {
+			target.Done++
 		}
-		b.Total++
-		b.Counts[f.Status]++
+		target.Total++
+		target.Counts[file.Status]++
 	}
 }
 
@@ -223,8 +223,8 @@ func tallyOpen(b *Board, files map[string]Row) {
 // number of archived task files (a cheap listing), while rows are read from
 // those files only when includeContent is set, so the toggle-off path never
 // reads an archived file's bytes. A missing archive/ is simply no archive.
-func scanArchive(f fsys.FS, archiveDir string, includeContent bool) (int, []Row, error) {
-	entries, err := f.ReadDir(archiveDir)
+func scanArchive(filesystem fsys.FS, archiveDir string, includeContent bool) (int, []Row, error) {
+	entries, err := filesystem.ReadDir(archiveDir)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return 0, nil, nil
@@ -233,15 +233,15 @@ func scanArchive(f fsys.FS, archiveDir string, includeContent bool) (int, []Row,
 	}
 	count := 0
 	var rows []Row
-	for _, e := range entries {
-		if e.IsDir() || !tree.IsTaskFile(e.Name()) {
+	for _, dirEntry := range entries {
+		if dirEntry.IsDir() || !tree.IsTaskFile(dirEntry.Name()) {
 			continue
 		}
 		count++
 		if !includeContent {
 			continue
 		}
-		row, err := readArchivedTask(f, archiveDir, e)
+		row, err := readArchivedTask(filesystem, archiveDir, dirEntry)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -250,21 +250,21 @@ func scanArchive(f fsys.FS, archiveDir string, includeContent bool) (int, []Row,
 	return count, rows, nil
 }
 
-func readArchivedTask(f fsys.FS, dir string, e fs.DirEntry) (Row, error) {
-	abs := filepath.Join(dir, e.Name())
-	content, err := f.ReadFile(abs)
+func readArchivedTask(filesystem fsys.FS, dir string, dirEntry fs.DirEntry) (Row, error) {
+	abs := filepath.Join(dir, dirEntry.Name())
+	content, err := filesystem.ReadFile(abs)
 	if err != nil {
 		return Row{}, err
 	}
-	r := Row{File: e.Name(), Path: abs, Content: content, UpdatedAt: entryModTime(e)}
-	t, err := task.Parse(content)
+	row := Row{File: dirEntry.Name(), Path: abs, Content: content, UpdatedAt: entryModTime(dirEntry)}
+	parsed, err := task.Parse(content)
 	if err != nil {
-		r.ID = archivedID(e.Name())
-		return r, nil
+		row.ID = archivedID(dirEntry.Name())
+		return row, nil
 	}
-	r.ID, r.Title, r.Status = t.ID, t.Title, t.Status
-	r.GatesDone, r.GatesTotal = task.CountGates(content)
-	return r, nil
+	row.ID, row.Title, row.Status = parsed.ID, parsed.Title, parsed.Status
+	row.GatesDone, row.GatesTotal = task.CountGates(content)
+	return row, nil
 }
 
 // archivedID recovers a task id from a T-NN-<slug>.md filename, the fallback
@@ -280,43 +280,43 @@ func archivedID(name string) string {
 // readTasks parses every task file directly in dir: files maps filename to
 // its truth Row; bad holds the raw content of files whose frontmatter does
 // not parse.
-func readTasks(f fsys.FS, dir string) (files map[string]Row, bad map[string][]byte, err error) {
-	entries, err := f.ReadDir(dir)
+func readTasks(filesystem fsys.FS, dir string) (files map[string]Row, bad map[string][]byte, err error) {
+	entries, err := filesystem.ReadDir(dir)
 	if err != nil {
 		return nil, nil, fmt.Errorf("scan %s: %w", dir, err)
 	}
 	files = make(map[string]Row)
 	bad = make(map[string][]byte)
-	for _, e := range entries {
-		if e.IsDir() || !tree.IsTaskFile(e.Name()) {
+	for _, dirEntry := range entries {
+		if dirEntry.IsDir() || !tree.IsTaskFile(dirEntry.Name()) {
 			continue
 		}
-		abs := filepath.Join(dir, e.Name())
-		content, err := f.ReadFile(abs)
+		abs := filepath.Join(dir, dirEntry.Name())
+		content, err := filesystem.ReadFile(abs)
 		if err != nil {
 			return nil, nil, err
 		}
-		t, err := task.Parse(content)
+		parsed, err := task.Parse(content)
 		if err != nil {
-			bad[e.Name()] = content
+			bad[dirEntry.Name()] = content
 			continue
 		}
 		gd, gt := task.CountGates(content)
-		files[e.Name()] = Row{
-			ID: t.ID, Title: t.Title, Status: t.Status,
-			File: e.Name(), Path: abs,
+		files[dirEntry.Name()] = Row{
+			ID: parsed.ID, Title: parsed.Title, Status: parsed.Status,
+			File: dirEntry.Name(), Path: abs,
 			GatesDone: gd, GatesTotal: gt,
-			BlockedBy: t.BlockedBy,
-			ClaimedBy: t.ClaimedBy,
+			BlockedBy: parsed.BlockedBy,
+			ClaimedBy: parsed.ClaimedBy,
 			Content:   content,
-			UpdatedAt: entryModTime(e),
+			UpdatedAt: entryModTime(dirEntry),
 		}
 	}
 	return files, bad, nil
 }
 
-func entryModTime(e fs.DirEntry) time.Time {
-	info, err := e.Info()
+func entryModTime(dirEntry fs.DirEntry) time.Time {
+	info, err := dirEntry.Info()
 	if err != nil {
 		return time.Time{}
 	}
@@ -334,28 +334,28 @@ type boardFiles struct {
 
 // joinRow merges one board row with its task file: the file wins on status
 // and title, the board only orders; any disagreement becomes Drift.
-func joinRow(dir string, r board.Row, bf boardFiles) Row {
-	if f, ok := bf.files[r.File]; ok {
-		bf.used[r.File] = true
-		if r.Status != f.Status {
-			f.Drift = "board says " + r.Status
+func joinRow(dir string, boardRow board.Row, bf boardFiles) Row {
+	if fileRow, ok := bf.files[boardRow.File]; ok {
+		bf.used[boardRow.File] = true
+		if boardRow.Status != fileRow.Status {
+			fileRow.Drift = "board says " + boardRow.Status
 		}
-		return f
+		return fileRow
 	}
-	if content, ok := bf.bad[r.File]; ok {
-		bf.used[r.File] = true
+	if content, ok := bf.bad[boardRow.File]; ok {
+		bf.used[boardRow.File] = true
 		return Row{
-			ID: r.ID, Title: r.Title, Status: r.Status,
-			File: r.File, Path: filepath.Join(dir, r.File),
+			ID: boardRow.ID, Title: boardRow.Title, Status: boardRow.Status,
+			File: boardRow.File, Path: filepath.Join(dir, boardRow.File),
 			Drift: "unparsable file", Content: content,
 		}
 	}
-	return Row{ID: r.ID, Title: r.Title, Status: r.Status, File: r.File, Drift: "no file"}
+	return Row{ID: boardRow.ID, Title: boardRow.Title, Status: boardRow.Status, File: boardRow.File, Drift: "no file"}
 }
 
 // appendOrphans adds task files that have no board row to the end of the
 // default section, flagged as drift.
-func appendOrphans(b *Board, bf boardFiles) {
+func appendOrphans(target *Board, bf boardFiles) {
 	var names []string
 	for name := range bf.files {
 		if !bf.used[name] {
@@ -367,20 +367,20 @@ func appendOrphans(b *Board, bf boardFiles) {
 	}
 	sort.Strings(names)
 	idx := -1
-	for i, s := range b.Sections {
-		if s.Name == board.DefaultSection {
+	for i, section := range target.Sections {
+		if section.Name == board.DefaultSection {
 			idx = i
 			break
 		}
 	}
 	if idx < 0 {
-		b.Sections = append(b.Sections, Section{Name: board.DefaultSection})
-		idx = len(b.Sections) - 1
+		target.Sections = append(target.Sections, Section{Name: board.DefaultSection})
+		idx = len(target.Sections) - 1
 	}
 	for _, name := range names {
-		r := bf.files[name]
-		r.Drift = "no row"
-		b.Sections[idx].Rows = append(b.Sections[idx].Rows, r)
+		row := bf.files[name]
+		row.Drift = "no row"
+		target.Sections[idx].Rows = append(target.Sections[idx].Rows, row)
 	}
 }
 
@@ -396,59 +396,59 @@ type localAgg struct {
 // Subs inherits.
 func link(snap Snapshot, paths []string) {
 	locals := make(map[string]localAgg, len(paths))
-	for _, p := range paths {
-		b := snap.Boards[p]
-		locals[p] = localAgg{done: b.Done, total: b.Total, arch: b.ArchivedCount, counts: b.Counts}
+	for _, path := range paths {
+		current := snap.Boards[path]
+		locals[path] = localAgg{done: current.Done, total: current.Total, arch: current.ArchivedCount, counts: current.Counts}
 	}
-	for _, p := range paths {
-		b := snap.Boards[p]
-		b.Done, b.Total, b.ArchivedSubtree = 0, 0, 0
-		b.Counts = make(map[string]int)
-		for _, q := range paths {
-			if !within(q, p) {
+	for _, path := range paths {
+		current := snap.Boards[path]
+		current.Done, current.Total, current.ArchivedSubtree = 0, 0, 0
+		current.Counts = make(map[string]int)
+		for _, candidate := range paths {
+			if !within(candidate, path) {
 				continue
 			}
-			lq := locals[q]
-			b.Done += lq.done
-			b.Total += lq.total
-			b.ArchivedSubtree += lq.arch
-			for st, n := range lq.counts {
-				b.Counts[st] += n
+			lq := locals[candidate]
+			current.Done += lq.done
+			current.Total += lq.total
+			current.ArchivedSubtree += lq.arch
+			for st, count := range lq.counts {
+				current.Counts[st] += count
 			}
 		}
-		b.Parent = parentOf(snap, p)
-		snap.Boards[p] = b
+		current.Parent = parentOf(snap, path)
+		snap.Boards[path] = current
 	}
 	buildSubs(snap, paths)
 }
 
 func buildSubs(snap Snapshot, paths []string) {
-	for _, q := range paths {
-		if q == "." {
+	for _, path := range paths {
+		if path == "." {
 			continue
 		}
-		c := snap.Boards[q]
-		p := snap.Boards[c.Parent]
-		p.Subs = append(p.Subs, Sub{
-			Path: q, Name: subName(c.Parent, q), Title: c.Title,
-			Done: c.Done, Total: c.Total, Counts: c.Counts,
-			Archived: c.ArchivedSubtree,
+		child := snap.Boards[path]
+		parent := snap.Boards[child.Parent]
+		parent.Subs = append(parent.Subs, Sub{
+			Path: path, Name: subName(child.Parent, path), Title: child.Title,
+			Done: child.Done, Total: child.Total, Counts: child.Counts,
+			Archived: child.ArchivedSubtree,
 		})
-		snap.Boards[c.Parent] = p
+		snap.Boards[child.Parent] = parent
 	}
 }
 
-func within(q, p string) bool {
-	return p == "." || q == p || strings.HasPrefix(q, p+"/")
+func within(path, prefix string) bool {
+	return prefix == "." || path == prefix || strings.HasPrefix(path, prefix+"/")
 }
 
 // parentOf returns the nearest ancestor board of p, "." when only the root
 // contains it, "" for the root itself.
-func parentOf(snap Snapshot, p string) string {
-	if p == "." {
+func parentOf(snap Snapshot, path string) string {
+	if path == "." {
 		return ""
 	}
-	segs := strings.Split(p, "/")
+	segs := strings.Split(path, "/")
 	for i := len(segs) - 1; i > 0; i-- {
 		cand := strings.Join(segs[:i], "/")
 		if _, ok := snap.Boards[cand]; ok {
@@ -458,9 +458,9 @@ func parentOf(snap Snapshot, p string) string {
 	return "."
 }
 
-func subName(parent, q string) string {
+func subName(parent, path string) string {
 	if parent != "." {
-		q = strings.TrimPrefix(q, parent+"/")
+		path = strings.TrimPrefix(path, parent+"/")
 	}
-	return q + "/"
+	return path + "/"
 }

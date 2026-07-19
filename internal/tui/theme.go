@@ -44,11 +44,11 @@ type Theme struct {
 	Blocked adaptive
 }
 
-func (t Theme) resolve(a adaptive) color.Color {
+func (t Theme) resolve(slot adaptive) color.Color {
 	if t.dark {
-		return lipgloss.Color(a.Dark)
+		return lipgloss.Color(slot.Dark)
 	}
-	return lipgloss.Color(a.Light)
+	return lipgloss.Color(slot.Light)
 }
 
 // DefaultTheme is the frozen duty palette (§8): peach #e1af7d, bronze #af874b,
@@ -73,58 +73,58 @@ func DefaultTheme() Theme {
 // themeFromConfig overlays the config palette onto DefaultTheme in the resolved
 // dark/light mode: an unset slot (and, in the table form, an unset channel)
 // keeps the default; a malformed value errors naming its key.
-func themeFromConfig(p config.Palette, dark bool) (Theme, error) {
-	t := DefaultTheme()
-	t.dark = dark
+func themeFromConfig(palette config.Palette, dark bool) (Theme, error) {
+	theme := DefaultTheme()
+	theme.dark = dark
 	slots := []struct {
 		key string
 		val *config.Color
 		dst *adaptive
 	}{
-		{"accent", p.Accent, &t.Accent},
-		{"dim", p.Dim, &t.Dim},
-		{"todo", p.Todo, &t.Todo},
-		{"in-progress", p.InProgress, &t.InProgress},
-		{"done", p.Done, &t.Done},
-		{"blocked", p.Blocked, &t.Blocked},
+		{"accent", palette.Accent, &theme.Accent},
+		{"dim", palette.Dim, &theme.Dim},
+		{"todo", palette.Todo, &theme.Todo},
+		{"in-progress", palette.InProgress, &theme.InProgress},
+		{"done", palette.Done, &theme.Done},
+		{"blocked", palette.Blocked, &theme.Blocked},
 	}
-	for _, s := range slots {
-		if s.val == nil {
+	for _, slot := range slots {
+		if slot.val == nil {
 			continue
 		}
-		if err := overlaySlot(s.dst, *s.val, s.key); err != nil {
+		if err := overlaySlot(slot.dst, *slot.val, slot.key); err != nil {
 			return Theme{}, err
 		}
 	}
-	return t, nil
+	return theme, nil
 }
 
-func overlaySlot(dst *adaptive, c config.Color, key string) error {
-	if c.Light != "" {
-		if err := validColor(c.Light); err != nil {
+func overlaySlot(dst *adaptive, value config.Color, key string) error {
+	if value.Light != "" {
+		if err := validColor(value.Light); err != nil {
 			return fmt.Errorf("tui.palette.%s.light: %w", key, err)
 		}
-		dst.Light = c.Light
+		dst.Light = value.Light
 	}
-	if c.Dark != "" {
-		if err := validColor(c.Dark); err != nil {
+	if value.Dark != "" {
+		if err := validColor(value.Dark); err != nil {
 			return fmt.Errorf("tui.palette.%s.dark: %w", key, err)
 		}
-		dst.Dark = c.Dark
+		dst.Dark = value.Dark
 	}
 	return nil
 }
 
-func validColor(s string) error {
-	if len(s) == 7 && s[0] == '#' {
-		if _, err := strconv.ParseUint(s[1:], 16, 32); err == nil {
+func validColor(value string) error {
+	if len(value) == 7 && value[0] == '#' {
+		if _, err := strconv.ParseUint(value[1:], 16, 32); err == nil {
 			return nil
 		}
 	}
-	if n, err := strconv.Atoi(s); err == nil && n >= 0 && n <= 255 {
+	if index, err := strconv.Atoi(value); err == nil && index >= 0 && index <= 255 {
 		return nil
 	}
-	return fmt.Errorf("invalid color %q — want #rrggbb or an ansi index 0-255", s)
+	return fmt.Errorf("invalid color %q — want #rrggbb or an ansi index 0-255", value)
 }
 
 func (t Theme) statusStyle(status string) lipgloss.Style {

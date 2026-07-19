@@ -20,7 +20,7 @@ const (
 	gatesAddExample = `  duty gates add T-07 "build passes" "tests green"`
 )
 
-func newGatesCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
+func newGatesCmd(svc app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var agent bool
 	cmd := &cobra.Command{
 		Use:     "gates <id>",
@@ -31,7 +31,7 @@ func newGatesCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			gates, err := a.Gates(cwd, id)
+			gates, err := svc.Gates(cwd, id)
 			if err != nil {
 				return err
 			}
@@ -41,9 +41,9 @@ func newGatesCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: index, done, text")
 	cmd.AddCommand(
-		newGatesAddCmd(a, cwd),
-		newGatesFlipCmd(a, cwd, "check", true),
-		newGatesFlipCmd(a, cwd, "uncheck", false),
+		newGatesAddCmd(svc, cwd),
+		newGatesFlipCmd(svc, cwd, "check", true),
+		newGatesFlipCmd(svc, cwd, "uncheck", false),
 	)
 	return cmd
 }
@@ -58,7 +58,7 @@ func gatesListID(args []string) (string, error) {
 	return "", errors.New(gatesUsage)
 }
 
-func newGatesAddCmd(a app.App, cwd string) *cobra.Command {
+func newGatesAddCmd(svc app.App, cwd string) *cobra.Command {
 	return &cobra.Command{
 		Use:     "add <id> <text>...",
 		Short:   "append one or more gates to a task",
@@ -67,12 +67,12 @@ func newGatesAddCmd(a app.App, cwd string) *cobra.Command {
 			if len(args) < 2 || args[0] == "" || hasEmpty(args[1:]) {
 				return errors.New(gatesAddUsage)
 			}
-			return a.AddGates(cwd, args[0], args[1:])
+			return svc.AddGates(cwd, args[0], args[1:])
 		},
 	}
 }
 
-func newGatesFlipCmd(a app.App, cwd, verb string, done bool) *cobra.Command {
+func newGatesFlipCmd(svc app.App, cwd, verb string, done bool) *cobra.Command {
 	usage := fmt.Sprintf(gatesFlipUsage, verb)
 	var all bool
 	cmd := &cobra.Command{
@@ -84,16 +84,16 @@ func newGatesFlipCmd(a app.App, cwd, verb string, done bool) *cobra.Command {
 				if len(args) != 1 || args[0] == "" {
 					return errors.New(usage)
 				}
-				return a.SetAllGates(cwd, args[0], done)
+				return svc.SetAllGates(cwd, args[0], done)
 			}
 			if len(args) != 2 || args[0] == "" {
 				return errors.New(usage)
 			}
-			n, err := strconv.Atoi(args[1])
-			if err != nil || n < 1 {
+			index, err := strconv.Atoi(args[1])
+			if err != nil || index < 1 {
 				return errors.New(usage)
 			}
-			return a.SetGate(cwd, args[0], n, done)
+			return svc.SetGate(cwd, args[0], index, done)
 		},
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "flip every gate in one write")
@@ -101,8 +101,8 @@ func newGatesFlipCmd(a app.App, cwd, verb string, done bool) *cobra.Command {
 }
 
 func hasEmpty(ss []string) bool {
-	for _, s := range ss {
-		if s == "" {
+	for _, text := range ss {
+		if text == "" {
 			return true
 		}
 	}
@@ -110,13 +110,13 @@ func hasEmpty(ss []string) bool {
 }
 
 // printGates numbers gates 1-based, plain text or --agent TSV (index, done, text).
-func printGates(w io.Writer, gates []task.Gate, agent bool) {
-	for i, g := range gates {
+func printGates(out io.Writer, gates []task.Gate, agent bool) {
+	for i, gate := range gates {
 		if agent {
-			fmt.Fprintf(w, "%d\t%s\t%s\n", i+1, strconv.FormatBool(g.Done), g.Text)
+			fmt.Fprintf(out, "%d\t%s\t%s\n", i+1, strconv.FormatBool(gate.Done), gate.Text)
 			continue
 		}
-		fmt.Fprintf(w, "%d %s %s\n", i+1, checkbox(g.Done), g.Text)
+		fmt.Fprintf(out, "%d %s %s\n", i+1, checkbox(gate.Done), gate.Text)
 	}
 }
 

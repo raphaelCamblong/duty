@@ -27,18 +27,18 @@ type Watcher struct {
 }
 
 // Callers own Close.
-func NewWatcher(f fsys.FS, root string) (*Watcher, error) {
+func NewWatcher(filesystem fsys.FS, root string) (*Watcher, error) {
 	fw, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("watch %s: %w", root, err)
 	}
-	if err := addDirs(f, fw, root, true); err != nil {
+	if err := addDirs(filesystem, fw, root, true); err != nil {
 		_ = fw.Close()
 		return nil, err
 	}
-	w := &Watcher{C: make(chan struct{}, 1), fsys: f, notif: fw}
-	go w.loop(root)
-	return w, nil
+	watcher := &Watcher{C: make(chan struct{}, 1), fsys: filesystem, notif: fw}
+	go watcher.loop(root)
+	return watcher, nil
 }
 
 // Close stops the watcher; C is closed once the loop drains.
@@ -78,15 +78,15 @@ func (w *Watcher) loop(root string) {
 // Adding a watched path again is a no-op, so re-walks are cheap. With strict
 // false, per-directory failures are skipped — directories vanish mid-walk
 // when tasks are archived.
-func addDirs(f fsys.FS, fw *fsnotify.Watcher, root string, strict bool) error {
-	return f.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+func addDirs(filesystem fsys.FS, fw *fsnotify.Watcher, root string, strict bool) error {
+	return filesystem.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			if strict {
 				return fmt.Errorf("watch %s: %w", path, err)
 			}
 			return nil
 		}
-		if !d.IsDir() {
+		if !entry.IsDir() {
 			return nil
 		}
 		if err := fw.Add(path); err != nil && strict {

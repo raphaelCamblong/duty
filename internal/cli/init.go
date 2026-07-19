@@ -15,7 +15,7 @@ const (
 	initExample = `  duty init "Q3 roadmap"`
 )
 
-func newInitCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
+func newInitCmd(svc app.App, cwd string, stdout io.Writer) *cobra.Command {
 	return &cobra.Command{
 		Use:     "init [title]",
 		Short:   "bootstrap a duty tree in the current directory",
@@ -28,7 +28,7 @@ func newInitCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 			if len(args) == 1 {
 				title = args[0]
 			}
-			path, err := a.Init(cwd, title)
+			path, err := svc.Init(cwd, title)
 			if err != nil {
 				return err
 			}

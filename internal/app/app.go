@@ -20,14 +20,14 @@ type App struct {
 	now func() time.Time
 }
 
-func New(f fsys.FS) App {
-	return NewWithClock(f, time.Now)
+func New(fs fsys.FS) App {
+	return NewWithClock(fs, time.Now)
 }
 
 // NewWithClock returns an App reading time from now instead of the real
 // clock — the seam tests use to fix report timestamps.
-func NewWithClock(f fsys.FS, now func() time.Time) App {
-	return App{fs: f, now: now}
+func NewWithClock(fs fsys.FS, now func() time.Time) App {
+	return App{fs: fs, now: now}
 }
 
 // nameRE validates track folder names.
@@ -94,8 +94,8 @@ type Scope struct {
 	In  string
 }
 
-func (a App) walkBoards(s Scope) (boardDir string, boards []string, err error) {
-	boardDir, err = a.contextBoard(s)
+func (a App) walkBoards(scope Scope) (boardDir string, boards []string, err error) {
+	boardDir, err = a.contextBoard(scope)
 	if err != nil {
 		return "", nil, err
 	}
@@ -107,15 +107,15 @@ func (a App) walkBoards(s Scope) (boardDir string, boards []string, err error) {
 }
 
 // contextBoard resolves scope to its board directory, validated to exist.
-func (a App) contextBoard(s Scope) (string, error) {
-	if s.In == "" {
-		return tree.CurrentBoard(a.fs, s.Cwd)
+func (a App) contextBoard(scope Scope) (string, error) {
+	if scope.In == "" {
+		return tree.CurrentBoard(a.fs, scope.Cwd)
 	}
-	root, err := tree.FindRoot(a.fs, s.Cwd)
+	root, err := tree.FindRoot(a.fs, scope.Cwd)
 	if err != nil {
 		return "", err
 	}
-	return tree.ResolveTrack(a.fs, root, s.In)
+	return tree.ResolveTrack(a.fs, root, scope.In)
 }
 
 func boardIndexPath(dir string) string {
@@ -133,19 +133,19 @@ func (a App) readTask(path string) (task.Task, []byte, error) {
 	if err != nil {
 		return task.Task{}, nil, err
 	}
-	t, err := parseTask(path, content)
+	parsed, err := parseTask(path, content)
 	if err != nil {
 		return task.Task{}, nil, err
 	}
-	return t, content, nil
+	return parsed, content, nil
 }
 
 func parseTask(path string, content []byte) (task.Task, error) {
-	t, err := task.Parse(content)
+	parsed, err := task.Parse(content)
 	if err != nil {
 		return task.Task{}, fmt.Errorf("%s: %w", path, err)
 	}
-	return t, nil
+	return parsed, nil
 }
 
 func (a App) tasksIn(dir string) (files []string, tasks []task.Task, err error) {
@@ -155,11 +155,11 @@ func (a App) tasksIn(dir string) (files []string, tasks []task.Task, err error) 
 	}
 	tasks = make([]task.Task, 0, len(files))
 	for _, name := range files {
-		t, _, err := a.readTask(filepath.Join(dir, name))
+		parsed, _, err := a.readTask(filepath.Join(dir, name))
 		if err != nil {
 			return nil, nil, err
 		}
-		tasks = append(tasks, t)
+		tasks = append(tasks, parsed)
 	}
 	return files, tasks, nil
 }

@@ -37,22 +37,22 @@ const (
 // taskKeyWidth must match the widest key rendered by kv (currently "blocked-by:").
 const taskKeyWidth = len("blocked-by:")
 
-func newGetCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
+func newGetCmd(svc app.App, cwd string, stdout io.Writer) *cobra.Command {
 	cmd := newGroupCmd("get", "read tasks and tracks from the files", getUsage, getExample)
 	cmd.AddCommand(
-		newGetTaskCmd(a, cwd, stdout),
-		newGetTasksCmd(a, cwd, stdout, "tasks", false),
-		newGetTracksCmd(a, cwd, stdout),
-		newGetNextCmd(a, cwd, stdout),
+		newGetTaskCmd(svc, cwd, stdout),
+		newGetTasksCmd(svc, cwd, stdout, "tasks", false),
+		newGetTracksCmd(svc, cwd, stdout),
+		newGetNextCmd(svc, cwd, stdout),
 	)
 	return cmd
 }
 
-func newListCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
-	return newGetTasksCmd(a, cwd, stdout, "list", true)
+func newListCmd(svc app.App, cwd string, stdout io.Writer) *cobra.Command {
+	return newGetTasksCmd(svc, cwd, stdout, "list", true)
 }
 
-func newGetTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
+func newGetTaskCmd(svc app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var (
 		agent   bool
 		section string
@@ -66,7 +66,7 @@ func newGetTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 			if len(args) != 1 || args[0] == "" {
 				return errors.New(getTaskUsage)
 			}
-			return getTaskOut(a, cwd, taskQuery{id: args[0], section: section, body: body, agent: agent}, stdout)
+			return getTaskOut(svc, cwd, taskQuery{id: args[0], section: section, body: body, agent: agent}, stdout)
 		},
 	}
 	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: id, track, status, title, gates-done, gates-total, blocked-by, path, updated, claimed-by")
@@ -86,28 +86,28 @@ type taskQuery struct {
 	agent   bool
 }
 
-func getTaskOut(a app.App, cwd string, q taskQuery, stdout io.Writer) error {
-	if q.body {
-		text, err := a.Body(cwd, q.id)
+func getTaskOut(svc app.App, cwd string, query taskQuery, stdout io.Writer) error {
+	if query.body {
+		text, err := svc.Body(cwd, query.id)
 		if err != nil {
 			return err
 		}
 		fmt.Fprint(stdout, text)
 		return nil
 	}
-	if q.section != "" {
-		sec, err := a.Section(cwd, q.id, q.section)
+	if query.section != "" {
+		sec, err := svc.Section(cwd, query.id, query.section)
 		if err != nil {
 			return err
 		}
 		fmt.Fprintln(stdout, sec)
 		return nil
 	}
-	info, err := a.GetTask(cwd, q.id)
+	info, err := svc.GetTask(cwd, query.id)
 	if err != nil {
 		return err
 	}
-	if q.agent {
+	if query.agent {
 		fmt.Fprintln(stdout, taskAgent(info))
 		return nil
 	}
@@ -115,7 +115,7 @@ func getTaskOut(a app.App, cwd string, q taskQuery, stdout io.Writer) error {
 	return nil
 }
 
-func newGetTracksCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
+func newGetTracksCmd(svc app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var (
 		agent bool
 		in    string
@@ -128,7 +128,7 @@ func newGetTracksCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 			if len(args) != 0 {
 				return errors.New(getTracksUsage)
 			}
-			tracks, err := a.GetTracks(app.Scope{Cwd: cwd, In: in})
+			tracks, err := svc.GetTracks(app.Scope{Cwd: cwd, In: in})
 			if err != nil {
 				return err
 			}
@@ -151,7 +151,7 @@ func newGetTracksCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 
 // newGetNextCmd's --claim atomically marks the task in-progress so parallel
 // agents each land on a distinct task.
-func newGetNextCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
+func newGetNextCmd(svc app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var (
 		agent bool
 		claim bool
@@ -166,7 +166,7 @@ func newGetNextCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 			if len(args) != 0 {
 				return errors.New(getNextUsage)
 			}
-			info, err := a.GetNext(app.Scope{Cwd: cwd, In: in}, claim, claimer(as))
+			info, err := svc.GetNext(app.Scope{Cwd: cwd, In: in}, claim, claimer(as))
 			if err != nil {
 				return err
 			}
@@ -188,7 +188,7 @@ func newGetNextCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	return cmd
 }
 
-func newGetTasksCmd(a app.App, cwd string, stdout io.Writer, use string, hidden bool) *cobra.Command {
+func newGetTasksCmd(svc app.App, cwd string, stdout io.Writer, use string, hidden bool) *cobra.Command {
 	var (
 		status string
 		agent  bool
@@ -203,16 +203,16 @@ func newGetTasksCmd(a app.App, cwd string, stdout io.Writer, use string, hidden 
 			if len(args) != 0 {
 				return errors.New(getTasksUsage)
 			}
-			rows, err := a.List(app.Scope{Cwd: cwd, In: in}, status)
+			rows, err := svc.List(app.Scope{Cwd: cwd, In: in}, status)
 			if err != nil {
 				return err
 			}
-			for _, r := range rows {
+			for _, row := range rows {
 				if agent {
-					fmt.Fprintln(stdout, tsvLine(r))
+					fmt.Fprintln(stdout, tsvLine(row))
 					continue
 				}
-				fmt.Fprintln(stdout, humanLine(r))
+				fmt.Fprintln(stdout, humanLine(row))
 			}
 			return nil
 		},
@@ -224,23 +224,23 @@ func newGetTasksCmd(a app.App, cwd string, stdout io.Writer, use string, hidden 
 }
 
 func taskHuman(info app.TaskInfo) string {
-	var b strings.Builder
-	kv(&b, "id", info.ID)
-	kv(&b, "title", info.Title)
-	kv(&b, "status", info.Status)
+	var builder strings.Builder
+	kv(&builder, "id", info.ID)
+	kv(&builder, "title", info.Title)
+	kv(&builder, "status", info.Status)
 	if info.ClaimedBy != "" {
-		kv(&b, "claimed-by", info.ClaimedBy)
+		kv(&builder, "claimed-by", info.ClaimedBy)
 	}
-	kv(&b, "track", info.Track)
-	kv(&b, "blocked-by", blockedByHuman(info.Deps))
-	kv(&b, "gates", fmt.Sprintf("%d/%d", info.GatesDone, info.GatesTotal))
-	kv(&b, "updated", humanize.RelTime(info.UpdatedAt, time.Now()))
-	kv(&b, "path", info.Path)
-	return strings.TrimRight(b.String(), "\n")
+	kv(&builder, "track", info.Track)
+	kv(&builder, "blocked-by", blockedByHuman(info.Deps))
+	kv(&builder, "gates", fmt.Sprintf("%d/%d", info.GatesDone, info.GatesTotal))
+	kv(&builder, "updated", humanize.RelTime(info.UpdatedAt, time.Now()))
+	kv(&builder, "path", info.Path)
+	return strings.TrimRight(builder.String(), "\n")
 }
 
-func kv(b *strings.Builder, key, value string) {
-	fmt.Fprintf(b, "%-*s %s\n", taskKeyWidth, key+":", value)
+func kv(builder *strings.Builder, key, value string) {
+	fmt.Fprintf(builder, "%-*s %s\n", taskKeyWidth, key+":", value)
 }
 
 func blockedByHuman(deps []app.Dep) string {
@@ -248,8 +248,8 @@ func blockedByHuman(deps []app.Dep) string {
 		return "none"
 	}
 	parts := make([]string, len(deps))
-	for i, d := range deps {
-		parts[i] = d.ID + " (" + d.Status + ")"
+	for i, dep := range deps {
+		parts[i] = dep.ID + " (" + dep.Status + ")"
 	}
 	return strings.Join(parts, ", ")
 }
@@ -303,66 +303,66 @@ func trackAgent(tr app.TrackInfo) string {
 }
 
 // humanLine renders "[track/ ]id  status  title[  drift]  age[  waits]".
-func humanLine(r app.Row) string {
-	var b strings.Builder
-	if r.Board != "." {
-		b.WriteString(r.Board)
-		b.WriteString("/ ")
+func humanLine(row app.Row) string {
+	var builder strings.Builder
+	if row.Board != "." {
+		builder.WriteString(row.Board)
+		builder.WriteString("/ ")
 	}
-	b.WriteString(r.ID)
-	b.WriteString("  ")
-	b.WriteString(statusCell(r))
-	b.WriteString("  ")
-	b.WriteString(r.Title)
-	if drift := humanDrift(r); drift != "" {
-		b.WriteString("  ")
-		b.WriteString(drift)
+	builder.WriteString(row.ID)
+	builder.WriteString("  ")
+	builder.WriteString(statusCell(row))
+	builder.WriteString("  ")
+	builder.WriteString(row.Title)
+	if drift := humanDrift(row); drift != "" {
+		builder.WriteString("  ")
+		builder.WriteString(drift)
 	}
-	b.WriteString("  ")
-	b.WriteString(ageStyle.Render(humanize.RelTime(r.UpdatedAt, time.Now())))
-	if wait := waitsCell(r); wait != "" {
-		b.WriteString("  ")
-		b.WriteString(ageStyle.Render(wait))
+	builder.WriteString("  ")
+	builder.WriteString(ageStyle.Render(humanize.RelTime(row.UpdatedAt, time.Now())))
+	if wait := waitsCell(row); wait != "" {
+		builder.WriteString("  ")
+		builder.WriteString(ageStyle.Render(wait))
 	}
-	return b.String()
+	return builder.String()
 }
 
-func waitsCell(r app.Row) string {
-	if len(r.Waits) == 0 {
+func waitsCell(row app.Row) string {
+	if len(row.Waits) == 0 {
 		return ""
 	}
-	return "waits " + strings.Join(r.Waits, ",")
+	return "waits " + strings.Join(row.Waits, ",")
 }
 
-func statusCell(r app.Row) string {
-	if r.Status == task.StatusInProgress && r.ClaimedBy != "" {
-		return r.Status + " · " + r.ClaimedBy
+func statusCell(row app.Row) string {
+	if row.Status == task.StatusInProgress && row.ClaimedBy != "" {
+		return row.Status + " · " + row.ClaimedBy
 	}
-	return r.Status
+	return row.Status
 }
 
-func humanDrift(r app.Row) string {
+func humanDrift(row app.Row) string {
 	switch {
-	case r.RowMissing:
+	case row.RowMissing:
 		return "⚠ board says missing"
-	case r.RowStatus != "":
-		return "⚠ board says " + r.RowStatus
+	case row.RowStatus != "":
+		return "⚠ board says " + row.RowStatus
 	}
 	return ""
 }
 
 // tsvLine's column order is a wire contract; updated was appended last so
 // existing parsers keep working.
-func tsvLine(r app.Row) string {
-	return tsv(r.ID, r.Board, r.Status, r.Title, agentDrift(r), r.UpdatedAt.Format(time.RFC3339))
+func tsvLine(row app.Row) string {
+	return tsv(row.ID, row.Board, row.Status, row.Title, agentDrift(row), row.UpdatedAt.Format(time.RFC3339))
 }
 
-func agentDrift(r app.Row) string {
+func agentDrift(row app.Row) string {
 	switch {
-	case r.RowMissing:
+	case row.RowMissing:
 		return "no-row"
-	case r.RowStatus != "":
-		return "board=" + r.RowStatus
+	case row.RowStatus != "":
+		return "board=" + row.RowStatus
 	}
 	return ""
 }
