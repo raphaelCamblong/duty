@@ -65,7 +65,6 @@ func newCreateTaskCmd(svc app.App, cwd string, stdin io.Reader, stdout io.Writer
 	return cmd
 }
 
-// readBody returns the task body piped on stdin when body is set, nil otherwise.
 func readBody(stdin io.Reader, body bool) ([]byte, error) {
 	if !body {
 		return nil, nil

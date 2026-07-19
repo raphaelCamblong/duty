@@ -48,10 +48,9 @@ func anySelectable(items []list.Item) bool {
 const tracksSection = "Tracks"
 
 // boardEntries lists a board as left-panel entries: a "Tracks" header over the
-// visible sub-track rows, then every section header followed by its task rows,
-// and — when showArchive is on — a dim "Archived (N)" section of the board's
-// archived tasks. With statusSort on the rows within each section are
-// status-grouped for display (§8); off, they keep the board's file order.
+// visible sub-tracks, then each section header and its task rows, then a dim
+// "Archived (N)" section when showArchive is on. statusSort groups each section's
+// rows by status for display (§8), else keeps file order.
 func boardEntries(board Board, statusSort, showArchive bool) []list.Item {
 	var items []list.Item
 	subs := visibleSubs(board.Subs, showArchive)
@@ -95,10 +94,8 @@ func emptiedByArchiving(sub Sub) bool {
 	return sub.Total == 0 && sub.Archived > 0
 }
 
-// sortedRows groups a section's rows by status for display: stable by
-// rollupOrder rank (unknown statuses last) so the board's build order survives
-// as the tiebreak. It copies first, leaving the snapshot's board order intact
-// for the toggle back.
+// sortedRows groups a section's rows by status (rollupOrder rank, unknown last),
+// stable so file order breaks ties; it copies, leaving the snapshot untouched.
 func sortedRows(rows []Row) []Row {
 	out := make([]Row, len(rows))
 	copy(out, rows)
@@ -244,10 +241,8 @@ func styleMatches(text string, matches []int, base lipgloss.Style) string {
 }
 
 // trackLine renders one sub-track: name and title left, a flexible gap, then a
-// right-aligned fixed-width status-distribution bar of its subtree with a dim
-// total count flush at the line end (dim "empty" when the subtree holds no
-// tasks). The bar column starts at the same x on every track row — mirroring
-// taskLine's right columns — and the title ellipsis-truncates first when narrow.
+// right-aligned fixed-width subtree bar with a dim total flush at the end (dim
+// "empty" when the subtree is empty); the title truncates first when narrow.
 func (d compactDelegate) trackLine(sub Sub, selected bool, width int, match matches) string {
 	rightW := trackRightWidth(d.countW)
 	fixed := 2 + d.nameW + 2 + 2 + rightW
@@ -264,9 +259,8 @@ func (d compactDelegate) trackLine(sub Sub, selected bool, width int, match matc
 	return ansi.Truncate(line, width, "…")
 }
 
-// archivedLine renders one archived task row: dim id, title, and relative age
-// only — no status or gate columns, since an archived task is done by
-// convention. The row stays selectable so enter opens its read-only preview.
+// archivedLine renders one archived row: dim id, title, and age only — no status
+// or gate columns; it stays selectable so enter opens its read-only preview.
 func (d compactDelegate) archivedLine(row Row, selected bool, width int, match matches) string {
 	fixed := 2 + d.idW + 2
 	if d.showAge {
@@ -290,8 +284,7 @@ func boldWhen(base lipgloss.Style, selected bool) lipgloss.Style {
 }
 
 // taskLine renders one task: id, title, colored status, gate progress, drift
-// badge. The board's widest badge yields title room so badges stay aligned; a
-// narrow terminal drops the gate column so the always-on age column keeps room.
+// badge — columns sized to the board's widest so badges stay aligned.
 func (d compactDelegate) taskLine(row Row, selected bool, width int, match matches) string {
 	fixed := 2 + d.idW + 2 + 2 + statusColWidth
 	if d.showGates {

@@ -15,9 +15,8 @@ type Snapshot struct {
 	Boards map[string]Board
 }
 
-// anyInProgress reports whether the whole tree holds at least one in-progress
-// task; the root board's rolled-up counts already tally every board below it,
-// so this is one map lookup — a snapshot-level answer, not a per-row scan.
+// anyInProgress reports whether the tree holds an in-progress task; the root
+// board's rolled-up counts already tally every board below it, so it is one lookup.
 func (s Snapshot) anyInProgress() bool {
 	return s.Boards["."].Counts[task.StatusInProgress] > 0
 }
@@ -46,10 +45,8 @@ type Board struct {
 	// ArchivedSubtree tallies archived tasks in this board and every board
 	// below it; link fills it from each board's local ArchivedCount.
 	ArchivedSubtree int
-	// Archived holds this board's archived task rows, present only when the
-	// scan is asked to include them (the TUI's archive toggle); nil otherwise.
-	// The dim archived list shows id, title, and age; the normal read-only
-	// preview renders each file's body.
+	// Archived holds this board's archived rows, filled only when the scan is
+	// asked to include them (the archive toggle); nil otherwise.
 	Archived []Row
 }
 
@@ -75,9 +72,8 @@ type Section struct {
 	Rows []Row
 }
 
-// Row is one task line: the loaded task view read through, with the TUI's own
-// drift wording pre-rendered as DriftText — the display reads the words, the
-// embedded TaskView.Drift keeps the typed class.
+// Row is one task line: the loaded TaskView plus the TUI's own drift wording
+// pre-rendered as DriftText, while the embedded TaskView.Drift keeps the class.
 type Row struct {
 	app.TaskView
 	// DriftText is "" when file and board agree, else "board says <status>",
@@ -85,10 +81,9 @@ type Row struct {
 	DriftText string
 }
 
-// Scan projects the whole tree under root into a Snapshot over one app.Load:
-// every board's index and task files joined once, drift and waits computed
-// there, archived rows read only when includeArchive is set (the TUI's archive
-// toggle), so the default path never reads an archived file's bytes.
+// Scan projects the whole tree under root into a Snapshot over one app.Load;
+// archived rows are read only when includeArchive is set, so the default path
+// never reads an archived file's bytes.
 func Scan(filesystem fsys.FS, root string, includeArchive bool) (Snapshot, error) {
 	view, err := app.New(filesystem).Load(root, app.LoadOptions{Archive: includeArchive})
 	if err != nil {
@@ -97,9 +92,8 @@ func Scan(filesystem fsys.FS, root string, includeArchive bool) (Snapshot, error
 	return project(view), nil
 }
 
-// project turns the loaded tree into the display snapshot: one Board per loaded
-// board keyed by path, then link rolls subtree counts up and fills each
-// parent's Subs. view.Boards is in walk order, which paths inherits.
+// project turns the loaded tree into the snapshot: one Board per board keyed by
+// path, then link rolls subtree counts up and fills each parent's Subs.
 func project(view *app.TreeView) Snapshot {
 	snap := Snapshot{Boards: make(map[string]Board, len(view.Boards))}
 	paths := make([]string, 0, len(view.Boards))
@@ -187,9 +181,8 @@ type localAgg struct {
 	counts            map[string]int
 }
 
-// link resolves each board's parent, rolls local counts up into subtree
-// counts, and fills every parent's Subs. paths is in lexical order, which
-// Subs inherits.
+// link resolves each board's parent, rolls local counts up into subtree counts,
+// and fills every parent's Subs (paths in lexical order, which Subs inherits).
 func link(snap Snapshot, paths []string) {
 	locals := make(map[string]localAgg, len(paths))
 	for _, path := range paths {

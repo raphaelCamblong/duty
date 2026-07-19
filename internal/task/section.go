@@ -11,10 +11,8 @@ import (
 // report last (spec §3): the report always trails the directive sections.
 const reportHeading = "Report"
 
-// Section returns the body of the "## <heading>" section — every byte after
-// the heading line up to (but not including) the next "## " heading or the end
-// of the file — and whether such a section exists. Heading matching ignores
-// case and trailing whitespace; the heading line itself is never included.
+// Section returns the body of the "## <heading>" section — bytes after the heading
+// line up to the next "## " heading or end of file — and whether it exists.
 func Section(content []byte, heading string) (body []byte, ok bool) {
 	start, end, found := sectionBounds(content, heading)
 	if !found {
@@ -23,10 +21,8 @@ func Section(content []byte, heading string) (body []byte, ok bool) {
 	return content[start:end], true
 }
 
-// ReplaceSection replaces the body of the "## <heading>" section with body,
-// leaving the heading line and every byte outside the section untouched. A
-// missing section is created — inserted before "## Report", or appended at the
-// end of the file when there is no report. An empty heading is rejected.
+// ReplaceSection replaces the "## <heading>" section body, every byte outside it
+// untouched; a missing section is created before "## Report", else at end of file.
 func ReplaceSection(content []byte, heading string, body []byte) ([]byte, error) {
 	if strings.TrimSpace(heading) == "" {
 		return nil, fmt.Errorf("empty section heading")
@@ -38,11 +34,8 @@ func ReplaceSection(content []byte, heading string, body []byte) ([]byte, error)
 	return createSection(content, heading, body), nil
 }
 
-// ReplaceSections applies a bulk-edit payload — a sequence of "## <name>"
-// blocks — onto content: each named section's body is replaced (a missing one
-// created, per ReplaceSection), in payload order, with every byte outside the
-// touched sections surviving. It errors when payload does not open at a "## "
-// heading or names an empty section.
+// ReplaceSections applies a payload of "## <name>" blocks onto content in order,
+// each section's body replaced per ReplaceSection, every other byte surviving.
 func ReplaceSections(content, payload []byte) ([]byte, error) {
 	if err := RequireOpensAtSection(payload); err != nil {
 		return nil, err
@@ -59,17 +52,14 @@ func ReplaceSections(content, payload []byte) ([]byte, error) {
 	return content, nil
 }
 
-// OpensAtSection reports whether content, after any leading blank lines, begins
-// at a "## " section heading — the shape a task body and a bulk-set payload
-// must have.
+// OpensAtSection reports whether content, after leading blank lines, begins at a
+// "## " heading — the shape a task body and a bulk-set payload must have.
 func OpensAtSection(content []byte) bool {
 	at := nextHeadingFrom(content, 0)
 	return at < len(content) && len(bytes.TrimSpace(content[:at])) == 0
 }
 
-// RequireOpensAtSection returns an error unless content opens at a "## " section
-// heading (OpensAtSection): the one guard both a one-shot task body and a
-// bulk-set payload are checked against.
+// RequireOpensAtSection errors unless content OpensAtSection.
 func RequireOpensAtSection(content []byte) error {
 	if !OpensAtSection(content) {
 		return errors.New(`body must start at a "## " heading`)
@@ -96,10 +86,8 @@ func appendSection(content []byte, heading string, body []byte) []byte {
 	return buf.Bytes()
 }
 
-// sectionRegion renders a section body region — the bytes between a heading
-// line and the next "## " heading or end of file — from text: the trimmed
-// text, and a blank separator line when a heading follows. Empty text yields
-// just that separator, matching the skeleton's blank sections.
+// sectionRegion renders a section body from text — the trimmed text plus a
+// trailing blank line when followed is true — matching the skeleton's blanks.
 func sectionRegion(text []byte, followed bool) []byte {
 	var buf bytes.Buffer
 	if trimmed := bytes.TrimSpace(text); len(trimmed) > 0 {

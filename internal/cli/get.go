@@ -34,7 +34,7 @@ const (
   duty get next --claim`
 )
 
-// taskKeyWidth must match the widest key rendered by kv (currently "blocked-by:").
+// taskKeyWidth pads kv's keys to the width of the widest, "blocked-by:".
 const taskKeyWidth = len("blocked-by:")
 
 func newGetCmd(svc app.App, cwd string, stdout io.Writer) *cobra.Command {
@@ -77,8 +77,7 @@ func newGetTaskCmd(svc app.App, cwd string, stdout io.Writer) *cobra.Command {
 	return cmd
 }
 
-// taskQuery is one `get task` request: the id plus how to render it — the whole
-// body, a single section, or the metadata (as human text or --agent TSV).
+// taskQuery is one `get task` request: an id and how to render it.
 type taskQuery struct {
 	id      string
 	section string
@@ -149,8 +148,7 @@ func newGetTracksCmd(svc app.App, cwd string, stdout io.Writer) *cobra.Command {
 	return cmd
 }
 
-// newGetNextCmd's --claim atomically marks the task in-progress so parallel
-// agents each land on a distinct task.
+// newGetNextCmd's --claim marks the task in-progress so parallel agents get distinct tasks.
 func newGetNextCmd(svc app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var (
 		agent bool
@@ -289,8 +287,7 @@ func tracksHuman(tracks []app.TrackInfo) []string {
 	return lines
 }
 
-// trackAgent's column order is a wire contract; new fields only ever append —
-// backlog trails after archived so existing parsers keep working.
+// trackAgent's column order is a wire contract: new fields append, so backlog trails archived.
 func trackAgent(tr app.TrackInfo) string {
 	return tsv(
 		tr.Path,
@@ -358,8 +355,7 @@ func humanDrift(row app.Row) string {
 	return ""
 }
 
-// tsvLine's column order is a wire contract; new fields only ever append —
-// updated trails the original record, claimed-by and waits after it.
+// tsvLine's column order is a wire contract: new fields append (updated, then claimed-by, waits).
 func tsvLine(row app.Row) string {
 	return tsv(row.ID, row.Board, row.Status, row.Title, agentDrift(row),
 		row.UpdatedAt.Format(time.RFC3339), row.ClaimedBy, strings.Join(row.Waits, ","))

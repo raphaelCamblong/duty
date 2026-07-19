@@ -11,23 +11,18 @@ import (
 	"github.com/raphaelCamblong/duty/internal/task"
 )
 
-// adaptive is one palette slot's light and dark values — each a #rrggbb hex
-// triplet or an ansi index 0-255. lipgloss v2 dropped the global background
-// flag, so a slot is resolved to a concrete color here against Theme.dark.
+// adaptive is one palette slot's light and dark values (each #rrggbb or an ansi
+// index 0-255); lipgloss v2 dropped the background flag, so Theme.dark resolves it.
 type adaptive struct {
 	Light, Dark string
 }
 
-// Theme is the TUI's semantic color palette: one adaptive slot per meaning.
-// Each status slot inks its word directly — the raw duty hue on dark, an
-// AA-readable tone on light — while its .Dark component fills that status's
-// distribution-bar segments on both themes. Accent inks focused chrome and
-// ids, Dim inks separators and ages, Blocked inks the blocked word plus scan
-// errors and drift. DefaultTheme is the frozen default (§8); config overrides
-// any slot ([tui.palette]).
+// Theme is the TUI's semantic color palette: one adaptive slot per meaning,
+// resolved once against dark. A status slot inks its word (raw hue on dark, an
+// AA-readable tone on light) while its .Dark component fills that status's bar
+// segments on both themes; config overrides any slot ([tui.palette]).
 type Theme struct {
-	// dark is the resolved terminal mode, picked once at startup; every slot
-	// resolves its light or dark value against it.
+	// dark is the terminal mode, resolved once at startup.
 	dark bool
 	// Accent inks focused borders, the breadcrumb, the selection, ids, and the
 	// header title.
@@ -51,13 +46,9 @@ func (t Theme) resolve(slot adaptive) color.Color {
 	return lipgloss.Color(slot.Light)
 }
 
-// DefaultTheme is the frozen duty palette (§8): peach #e1af7d, bronze #af874b,
-// olive #9baf37 fill the distribution bars on both themes and, on dark
-// terminals, ink the status words directly. On light terminals those hues are
-// too pale for ink (peach 1.9, olive 2.3 to 1 on white), so each word shifts to
-// a flat AA-readable tone measured on white: in-progress blue #3a6ea5 (5.3:1),
-// todo amber #8a6d00 (4.9:1), done olive #6f7d27 (4.5:1), accent navy #1f3a5f
-// (11.5:1). blocked stays red on both — the palette carries no alarm color.
+// DefaultTheme is the frozen duty palette (§8): the raw peach/bronze/olive hues
+// fill the bars on both themes and ink the status words on dark; on light those
+// hues are too pale for text, so each word shifts to an AA-readable tone on white.
 func DefaultTheme() Theme {
 	return Theme{
 		dark:       true,
@@ -70,9 +61,8 @@ func DefaultTheme() Theme {
 	}
 }
 
-// themeFromConfig overlays the config palette onto DefaultTheme in the resolved
-// dark/light mode: an unset slot (and, in the table form, an unset channel)
-// keeps the default; a malformed value errors naming its key.
+// themeFromConfig overlays the config palette onto DefaultTheme: an unset slot
+// or channel keeps the default, a malformed value errors naming its key.
 func themeFromConfig(palette config.Palette, dark bool) (Theme, error) {
 	theme := DefaultTheme()
 	theme.dark = dark
@@ -145,9 +135,8 @@ func (t Theme) statusSlot(status string) adaptive {
 	return t.Dim
 }
 
-// statusColor is a status's distribution-bar fill: the status ink's .Dark hue
-// for the three flat palette statuses (peach, bronze, olive on both themes),
-// the resolved slot for blocked, and dim grey for backlog or an unknown status.
+// statusColor is a status's bar fill: the .Dark hue for the three flat statuses
+// (on both themes), the resolved slot for blocked, dim grey otherwise.
 func (t Theme) statusColor(status string) color.Color {
 	switch status {
 	case task.StatusInProgress:

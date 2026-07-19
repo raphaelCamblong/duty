@@ -31,9 +31,7 @@ func Gates(content []byte) []Gate {
 	return gates
 }
 
-// AddGates appends a "- [ ] <text>" gate per text, in order, to the "## Gates"
-// section, creating the section on the first when it is absent. Existing gate
-// lines survive byte-for-byte; each new gate goes after the last.
+// AddGates appends one "- [ ] <text>" gate per text, in order, via AddGate.
 func AddGates(content []byte, texts []string) []byte {
 	for _, text := range texts {
 		content = AddGate(content, text)
@@ -41,9 +39,8 @@ func AddGates(content []byte, texts []string) []byte {
 	return content
 }
 
-// AddGate appends a "- [ ] <text>" gate to the "## Gates" section, creating the
-// section like ReplaceSection when it is absent. Existing gate lines survive
-// byte-for-byte; the new gate goes after the last one.
+// AddGate appends a "- [ ] <text>" gate to "## Gates" (creating the section when
+// absent); existing gate lines survive byte-for-byte, the new gate goes last.
 func AddGate(content []byte, text string) []byte {
 	line := "- [ ] " + strings.TrimSpace(text)
 	start, end, _ := sectionBounds(content, gatesHeading)
@@ -59,9 +56,8 @@ func AddGate(content []byte, text string) []byte {
 	return splice(content, at, at, []byte(ins))
 }
 
-// SetGate sets the ticked state of gate number (1-based) under "## Gates",
-// flipping only that line's checkbox character. It errors when number is out
-// of range for the gates present.
+// SetGate flips the checkbox of gate number (1-based) under "## Gates", that byte
+// only; errors when number is out of range.
 func SetGate(content []byte, number int, done bool) ([]byte, error) {
 	start, end, _ := sectionBounds(content, gatesHeading)
 	positions := gatePositions(content, start, end)
@@ -71,9 +67,8 @@ func SetGate(content []byte, number int, done bool) ([]byte, error) {
 	return flipBox(content, positions[number-1]+boxIndex, done), nil
 }
 
-// SetAllGates ticks or unticks every gate under "## Gates", flipping only each
-// gate line's checkbox character. Content with no Gates section is returned
-// unchanged.
+// SetAllGates flips every gate's checkbox under "## Gates", those bytes only;
+// content with no Gates section is returned unchanged.
 func SetAllGates(content []byte, done bool) []byte {
 	start, end, found := sectionBounds(content, gatesHeading)
 	if !found {

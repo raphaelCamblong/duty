@@ -121,10 +121,8 @@ func RowStatus(row string) (string, bool) {
 	return strings.TrimSpace(cells[len(cells)-2]), true
 }
 
-// MoveRow relocates the row targeting filename to the end of the named
-// section's table, creating the section above the footer when absent. The row
-// line moves byte-identical. A section left empty is not removed here; callers
-// compose with PruneEmptySections.
+// MoveRow moves filename's row byte-identical to the end of the named section
+// (created above the footer when absent); an emptied section is left for PruneEmptySections.
 func MoveRow(content []byte, filename, section string) ([]byte, error) {
 	lines, idx, err := locateRow(content, filename)
 	if err != nil {
@@ -138,9 +136,7 @@ func MoveRow(content []byte, filename, section string) ([]byte, error) {
 	return joinLines(lines), nil
 }
 
-// ReorderTop relocates the row targeting filename to the top of its section —
-// above the section's first task row — preserving the row's bytes exactly. A
-// row already at the top is left byte-identical.
+// ReorderTop moves filename's row above its section's first task row, bytes exact.
 func ReorderTop(content []byte, filename string) ([]byte, error) {
 	lines, idx, err := locateRow(content, filename)
 	if err != nil {
@@ -149,22 +145,19 @@ func ReorderTop(content []byte, filename string) ([]byte, error) {
 	return joinLines(relocateRow(lines, idx, sectionTop(lines, idx))), nil
 }
 
-// ReorderBefore relocates the row targeting filename to sit immediately above
-// the row targeting ref, preserving the moved row's bytes exactly. When ref is
-// in another section the row adopts it — the move is purely positional.
+// ReorderBefore moves filename's row immediately above ref's row, bytes exact;
+// the move is purely positional, adopting ref's section when they differ.
 func ReorderBefore(content []byte, filename, ref string) ([]byte, error) {
 	return reorderAdjacent(content, filename, ref, 0)
 }
 
-// ReorderAfter relocates the row targeting filename to sit immediately below
-// the row targeting ref, preserving the moved row's bytes exactly. When ref is
-// in another section the row adopts it — the move is purely positional.
+// ReorderAfter moves filename's row immediately below ref's row, bytes exact;
+// the move is purely positional, adopting ref's section when they differ.
 func ReorderAfter(content []byte, filename, ref string) ([]byte, error) {
 	return reorderAdjacent(content, filename, ref, 1)
 }
 
-// reorderAdjacent relocates filename's row to ref's row index plus offset (0
-// above ref, 1 below), preserving the moved row's bytes.
+// reorderAdjacent moves filename's row to refIdx+offset, preserving its bytes.
 func reorderAdjacent(content []byte, filename, ref string, offset int) ([]byte, error) {
 	lines, idx, err := locateRow(content, filename)
 	if err != nil {
@@ -185,10 +178,8 @@ func DropRow(content []byte, filename string) ([]byte, error) {
 	return joinLines(append(lines[:idx], lines[idx+1:]...)), nil
 }
 
-// PruneEmptySections removes every section whose body holds nothing but blank
-// lines and empty table scaffolding (header + separator, no rows). The default
-// "Open tasks" section is never removed, however empty; sections holding any
-// prose, bullet, or row are kept untouched.
+// PruneEmptySections removes every section holding nothing but blank lines and
+// empty table scaffolding; the default "Open tasks" section is never removed.
 func PruneEmptySections(content []byte) []byte {
 	lines := splitLines(content)
 	for idx := len(lines) - 1; idx >= 0; idx-- {
@@ -220,9 +211,8 @@ func SetArchivedCount(content []byte, count int) ([]byte, error) {
 	return joinLines(lines), nil
 }
 
-// AddBoardBullet appends a track bullet linking name/ to its board index,
-// with title, to the "## Boards" section, creating the section before the
-// first task section when absent. name is the track folder, without slash.
+// AddBoardBullet appends a bullet linking name/ (a slashless track folder) to its
+// board, with title, under "## Boards" (created before the first task section if absent).
 func AddBoardBullet(content []byte, name, title string) ([]byte, error) {
 	bullet := "- [" + name + "/](" + name + "/" + names.BoardFile + ") — " + title
 	lines := splitLines(content)
@@ -326,9 +316,8 @@ func rowIndex(lines []string, filename string) int {
 	return -1
 }
 
-// relocateRow moves the line at from to sit before index at (both indices into
-// the original slice), returning the reordered lines with the moved line's
-// bytes intact. from == at leaves the slice unchanged.
+// relocateRow moves the line at from to sit before index at (original-slice
+// indices), the moved line's bytes intact.
 func relocateRow(lines []string, from, at int) []string {
 	row := lines[from]
 	rest := append(lines[:from], lines[from+1:]...)

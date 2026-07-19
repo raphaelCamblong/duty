@@ -52,8 +52,7 @@ func newWatchCmd(svc app.App, fs fsys.FS, cwd string, stdout io.Writer) *cobra.C
 	return cmd
 }
 
-// runWatch prints nothing for the initial snapshot, only for later changes;
-// it returns nil on SIGINT and an error only if the tree becomes unreadable.
+// runWatch streams changes after a silent baseline: nil on SIGINT, error only if the tree becomes unreadable.
 func runWatch(wc watchCmd, in string, agent bool) error {
 	root, err := tree.FindRoot(wc.fs, wc.cwd)
 	if err != nil {
@@ -89,8 +88,7 @@ func runWatch(wc watchCmd, in string, agent bool) error {
 	}
 }
 
-// emitChanges re-snapshots the tree, prints what changed against prev, and
-// returns the new baseline.
+// emitChanges re-snapshots, prints the diff against prev, and returns the new baseline.
 func (wc watchCmd) emitChanges(prev map[string]app.TaskState, in string, agent bool) (map[string]app.TaskState, error) {
 	cur, err := wc.app.Snapshot(app.Scope{Cwd: wc.cwd, In: in})
 	if err != nil {

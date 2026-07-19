@@ -20,10 +20,9 @@ func scrollTickCmd() tea.Cmd {
 	return tea.Tick(time.Second/scrollFPS, func(time.Time) tea.Msg { return scrollTickMsg{} })
 }
 
-// handleMouse routes a mouse event: the wheel scrolls the hovered panel and
-// a left press selects the entry (left) or focuses the preview (right), a
-// second press on the same entry opening it. Bubble Tea v2 encodes the action
-// in the message type, so the routing switches on that rather than a field.
+// handleMouse routes a mouse event: the wheel scrolls the hovered panel, a left
+// press selects an entry (a second press opens it). Bubble Tea v2 encodes the
+// action in the message type, so routing switches on type, not a field.
 func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	switch event := msg.(type) {
 	case tea.MouseWheelMsg:
@@ -49,9 +48,8 @@ func (m Model) wheel(msg tea.MouseMsg, dir int) (tea.Model, tea.Cmd) {
 	return m.moveSelection(dir), nil
 }
 
-// overPreview reports whether a mouse event targets the open preview: inside
-// its zone when the split shows, anywhere while it is the single panel; never
-// while browsing.
+// overPreview reports whether a mouse event targets the open preview: its zone
+// when split, anywhere when it is the single panel, never while browsing.
 func (m Model) overPreview(msg tea.MouseMsg) bool {
 	if !m.previewOpen {
 		return false
@@ -62,9 +60,8 @@ func (m Model) overPreview(msg tea.MouseMsg) bool {
 	return m.zones.Get(zonePreview).InBounds(msg)
 }
 
-// click routes a left press: a breadcrumb segment jumps to that ancestor
-// track, the open preview takes focus, otherwise the entry under the pointer
-// is selected (a second press on it opens it).
+// click routes a left press: a breadcrumb segment jumps to that ancestor, the
+// split preview takes focus, else the entry under the pointer is selected.
 func (m Model) click(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	for _, path := range m.crumbChain() {
 		if m.zones.Get(crumbZone(path)).InBounds(msg) {

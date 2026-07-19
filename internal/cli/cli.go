@@ -24,8 +24,7 @@ type missingCommandError string
 
 func (e missingCommandError) Error() string { return string(e) }
 
-// unknownCommandError names an unrecognized command, optionally with a typo
-// suggestion; Run maps it to exit 2.
+// unknownCommandError names an unrecognized command; Run maps it to exit 2.
 type unknownCommandError struct {
 	name       string
 	suggestion string
@@ -48,8 +47,7 @@ func unknownCommand(cmd *cobra.Command, name string) error {
 	return unknownCommandError{name: name, suggestion: suggestion}
 }
 
-// Run executes one duty command and returns the process exit code: 0
-// success, 2 missing/unknown command, 1 any other error.
+// Run executes one duty command, returning the exit code: 0 ok, 2 missing/unknown command, 1 otherwise.
 func Run(args []string, stdin io.Reader, stdout, stderr io.Writer, version string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, errNoCommand)
@@ -193,8 +191,7 @@ func addInFlag(cmd *cobra.Command, in *string) {
 // tsv joins fields with tab, the wire contract for --agent output.
 func tsv(fields ...string) string { return strings.Join(fields, "\t") }
 
-// stringList is a repeatable flag implementing pflag.Value; each occurrence
-// may itself carry several comma-separated values.
+// stringList is a repeatable, comma-splitting flag implementing pflag.Value.
 type stringList []string
 
 func (l *stringList) String() string { return strings.Join(*l, ",") }

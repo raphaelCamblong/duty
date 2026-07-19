@@ -25,11 +25,9 @@ var ErrArchived = errors.New("archived tasks are read-only")
 // taskNN extracts the numeric part of a task filename (T-NN-<slug>.md).
 var taskNN = regexp.MustCompile(`^` + regexp.QuoteMeta(task.IDPrefix) + `(\d+)-.*\.md$`)
 
-// FindRoot returns the root of the duty tree containing cwd. It walks up to
-// the nearest directory holding a board index, then keeps ascending while the
-// parent also holds one; a directory holding the config file marks the root
-// explicitly and stops the ascent. Outside a tree it falls back to ./duty/
-// if that directory exists.
+// FindRoot returns the root of the duty tree containing cwd: from the nearest
+// board it keeps ascending while the parent also holds a board, stopping at a
+// directory that holds the config file. Outside a tree it falls back to ./duty/.
 func FindRoot(filesystem fsys.FS, cwd string) (string, error) {
 	root, err := CurrentBoard(filesystem, cwd)
 	if err != nil {
@@ -47,9 +45,8 @@ func FindRoot(filesystem fsys.FS, cwd string) (string, error) {
 	}
 }
 
-// CurrentBoard returns the nearest ancestor of cwd (including cwd itself)
-// holding a board index. Outside a tree it falls back to ./duty/ if that
-// directory exists.
+// CurrentBoard returns the nearest ancestor of cwd (cwd included) holding a board
+// index, falling back to ./duty/ outside a tree.
 func CurrentBoard(filesystem fsys.FS, cwd string) (string, error) {
 	abs, err := filepath.Abs(cwd)
 	if err != nil {
@@ -61,9 +58,8 @@ func CurrentBoard(filesystem fsys.FS, cwd string) (string, error) {
 	return fallbackTree(filesystem, abs)
 }
 
-// Boards walks the tree under root and returns every directory holding a board
-// index, in lexical order, skipping archive/ directories. A config file
-// anywhere below root is an error: it would declare a second root.
+// Boards returns every directory under root holding a board index, in lexical
+// order, skipping archive/; a config file below root is an error (a second root).
 func Boards(filesystem fsys.FS, root string) ([]string, error) {
 	var boards []string
 	err := filesystem.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
@@ -90,9 +86,8 @@ func Boards(filesystem fsys.FS, root string) ([]string, error) {
 	return boards, nil
 }
 
-// ResolveTask walks the tree under root for the task file named <id>-*.md
-// and returns its path. A match inside an archive/ directory is an error
-// wrapping ErrArchived: archived tasks are read-only.
+// ResolveTask returns the path of the <id>-*.md task under root; a match inside
+// archive/ is an error wrapping ErrArchived.
 func ResolveTask(filesystem fsys.FS, root, id string) (string, error) {
 	prefix := id + "-"
 	var found string
@@ -122,9 +117,8 @@ func ResolveTask(filesystem fsys.FS, root, id string) (string, error) {
 	return found, nil
 }
 
-// ResolveTrack resolves track — a slash path relative to root, "." naming the
-// root board — to an existing board directory inside the tree. An absolute or
-// escaping path, or a path naming no board, is the one failure: unknown track %q.
+// ResolveTrack resolves track (a slash path relative to root, "." being the root
+// board) to a board directory; an escaping path or one naming no board errors.
 func ResolveTrack(filesystem fsys.FS, root, track string) (string, error) {
 	dir := filepath.Join(root, filepath.FromSlash(track))
 	rel, err := filepath.Rel(root, dir)
@@ -154,9 +148,8 @@ func TaskFileNames(filesystem fsys.FS, dir string) ([]string, error) {
 	return out, nil
 }
 
-// NextNN walks every task filename under root — open and archived, every
-// board — and returns the next task number, zero-padded to two digits
-// minimum.
+// NextNN returns the next task number across every task file under root (open and
+// archived, every board), zero-padded to a two-digit minimum.
 func NextNN(filesystem fsys.FS, root string) (string, error) {
 	highest := 0
 	err := filesystem.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {

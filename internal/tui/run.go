@@ -43,11 +43,9 @@ func Run(filesystem fsys.FS, cwd string) error {
 	return err
 }
 
-// resolveTheme returns a concrete theme ("dark" or "light"). The "auto" case
-// reads the environment instead of querying the terminal: an OSC query eats
-// keystrokes as its "response" under terminals that never answer, wedging
-// startup (the v0.4.0 freeze). Bubble Tea v2 carries no global background flag —
-// the model resolves the palette from this mode.
+// resolveTheme maps the theme setting to a concrete "dark" or "light". "auto"
+// reads the environment, never the terminal: an OSC background query eats
+// keystrokes under terminals that never answer, wedging startup (the v0.4.0 freeze).
 func resolveTheme(theme string) string {
 	dark := true
 	switch theme {

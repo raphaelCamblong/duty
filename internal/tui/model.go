@@ -46,10 +46,9 @@ const (
 	previewTrack = "track"
 )
 
-// Model is the Bubble Tea model of the viewer: a full-width entry list under
-// a subtree-state header, opening a split preview on demand (a task rendered,
-// a track summarized). Update is a pure transition — filesystem reads happen
-// in commands, writes nowhere.
+// Model is the viewer's Bubble Tea model: a full-width entry list under a
+// subtree-state header, opening a split preview on demand. Update is a pure
+// transition — filesystem reads happen in commands, writes nowhere.
 type Model struct {
 	fsys    fsys.FS
 	root    string
@@ -93,8 +92,7 @@ type Model struct {
 }
 
 // New scans the tree under root and returns a model opened on the root track,
-// styled per cfg: the color palette overlaid from [tui.palette] (a malformed
-// color errors) and the dark/light mode from [tui].theme.
+// styled per cfg's [tui.palette] and [tui].theme (a malformed color errors).
 func New(filesystem fsys.FS, root string, cfg config.Config) (Model, error) {
 	theme, err := themeFromConfig(cfg.TUI.Palette, cfg.TUI.Theme != "light")
 	if err != nil {
@@ -145,8 +143,8 @@ func newList(theme Theme) list.Model {
 	return listModel
 }
 
-// newSpinner returns the one shared in-progress spinner: a one-cell MiniDot
-// tinted with the theme's in-progress ink (peach on dark, blue on light).
+// newSpinner returns the shared in-progress spinner: a MiniDot in the theme's
+// in-progress ink.
 func newSpinner(theme Theme) spinner.Model {
 	return spinner.New(
 		spinner.WithSpinner(spinner.MiniDot),
@@ -154,8 +152,7 @@ func newSpinner(theme Theme) spinner.Model {
 	)
 }
 
-// Close releases the model's zone manager; call it once after the program
-// exits.
+// Close releases the model's zone manager after the program exits.
 func (m Model) Close() {
 	if m.zones != nil {
 		m.zones.Close()
@@ -222,15 +219,11 @@ func (m Model) Init() tea.Cmd {
 	return waitRefresh(m.refresh)
 }
 
-// Spinning reports whether the in-progress spinner's tick loop is live (for
-// tests): a quiet snapshot schedules no ticks at all.
+// Spinning reports whether the spinner's tick loop is live (for tests).
 func (m Model) Spinning() bool { return m.spinning }
 
-// arm starts the spinner's tick loop when the snapshot holds an in-progress
-// task and no loop is already running, batching the first tick with base; an
-// already-running loop or a quiet board returns base untouched. It never stops
-// a loop — a live loop halts itself in onSpinnerTick once the last in-progress
-// task leaves the snapshot.
+// arm starts the spinner tick loop once when in-progress work appears;
+// onSpinnerTick stops it when the last such task leaves the snapshot.
 func (m Model) arm(base tea.Cmd) (tea.Model, tea.Cmd) {
 	if m.spinning || !m.snap.anyInProgress() {
 		return m, base
@@ -239,10 +232,8 @@ func (m Model) arm(base tea.Cmd) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(base, m.spinner.Tick)
 }
 
-// onSpinnerTick advances the shared spinner one frame while in-progress work
-// remains, rescheduling the next tick; once the last in-progress task leaves the
-// snapshot it drops the tick — scheduling nothing further — so a quiet board
-// costs zero re-renders.
+// onSpinnerTick advances the spinner while work remains, then drops the tick
+// so a quiet board costs no re-renders.
 func (m Model) onSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd) {
 	if !m.snap.anyInProgress() {
 		m.spinning = false
@@ -347,10 +338,8 @@ func (m Model) handleGlobalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	return m, nil, false
 }
 
-// toggleArchive flips the session-only archive view. The list rebuilds at once
-// — the hiding rule reads archived counts already in the snapshot — while a
-// re-scan loads the archived rows (toggling on) or drops them (toggling off),
-// so archive contents are read only while the toggle is on.
+// toggleArchive flips the session-only archive view: the list rebuilds at once
+// from snapshot counts while a re-scan loads or drops the archived rows.
 func (m Model) toggleArchive() (tea.Model, tea.Cmd, bool) {
 	m.showArchive = !m.showArchive
 	model, cmd := m.rebuildList()
@@ -441,9 +430,9 @@ func (m Model) moveSelection(delta int) Model {
 	return m
 }
 
-// fixSelection nudges a selection off a section header onto the nearest
-// selectable entry below it, or above when the header is last, first pulling
-// an out-of-range cursor back onto the visible list (filtering can strand it).
+// fixSelection pulls an out-of-range cursor back onto the visible list (filtering
+// can strand it), then nudges a selection off a section header onto the nearest
+// selectable entry.
 func (m Model) fixSelection() Model {
 	items := m.list.VisibleItems()
 	if len(items) == 0 {
@@ -477,9 +466,8 @@ func selectableFrom(items []list.Item, start, delta int) (int, bool) {
 	return 0, false
 }
 
-// open acts on the selection: a task always opens the split preview; a track
-// opens its summary card only when the preview is already open, otherwise it
-// descends into the track (§8).
+// open acts on the selection: a task opens the split preview; a track opens its
+// summary card when the preview is already open, else descends into it (§8).
 func (m Model) open() Model {
 	item, ok := m.selectedEntry()
 	if !ok {
@@ -500,20 +488,17 @@ func (m Model) showPreview(kind, arg string) Model {
 	m.previewKind = kind
 	m.previewArg = arg
 	m = m.layout()
-	return m.renderPreview(true)
+	m.preview.SetYOffset(0)
+	return m.renderPreview()
 }
 
-// renderPreview fills the viewport from the open subject, resolved against the
-// current snapshot; reset returns to the top, otherwise the scroll offset
-// survives (a re-scan of the same subject). A no-op while browsing.
-func (m Model) renderPreview(reset bool) Model {
+// renderPreview fills the viewport from the open subject against the current
+// snapshot, keeping the scroll offset; a no-op while browsing.
+func (m Model) renderPreview() Model {
 	if !m.previewOpen {
 		return m
 	}
 	off := m.preview.YOffset()
-	if reset {
-		off = 0
-	}
 	m, body := m.previewContent()
 	m.previewTitleText = m.previewTitle()
 	m.preview.SetContent(body)
@@ -521,9 +506,8 @@ func (m Model) renderPreview(reset bool) Model {
 	return m.settleAt(m.preview.YOffset())
 }
 
-// findRowBoard resolves a task id to its row and the board it sits in, used
-// by the preview header for the row's track title. Archived rows are searched
-// too, so an archived task opens the same read-only preview.
+// findRowBoard resolves a task id to its row and containing board, searching
+// archived rows too so an archived task opens the same read-only preview.
 func (m Model) findRowBoard(id string) (Row, Board, bool) {
 	for _, board := range m.snap.Boards {
 		if row, ok := boardRow(board, id); ok {
@@ -571,9 +555,8 @@ func subByPath(subs []Sub, path string) (Sub, bool) {
 	return Sub{}, false
 }
 
-// back closes the open preview (to full-width browsing), then clears an
-// applied filter, then climbs to the parent track; a no-op on an unfiltered
-// root list.
+// back unwinds one level: close the open preview, else clear an applied filter,
+// else climb to the parent track; a no-op on an unfiltered root list.
 func (m Model) back() (tea.Model, tea.Cmd) {
 	if m.previewOpen {
 		m.previewOpen = false
@@ -628,9 +611,9 @@ func (m Model) rebuildList() (Model, tea.Cmd) {
 	return m, m.list.SetItems(boardEntries(board, m.statusSort, m.showArchive))
 }
 
-// withSnap applies a re-scan: on error the last good snapshot stays on
-// screen with the error in the footer; on success every panel re-renders
-// from the new truth, keeping selection, filter, and preview scroll.
+// withSnap applies a re-scan: on error the last good snapshot stays with the
+// error in the footer; on success panels re-render, keeping selection, filter,
+// and preview scroll.
 func (m Model) withSnap(msg snapMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
 		m.scanErr = msg.err.Error()
@@ -645,7 +628,7 @@ func (m Model) withSnap(msg snapMsg) (tea.Model, tea.Cmd) {
 		m.path = path.Dir(m.path)
 	}
 	m, cmd := m.rebuildList()
-	return m.fixSelection().renderPreview(false).arm(cmd)
+	return m.fixSelection().renderPreview().arm(cmd)
 }
 
 func (m Model) dims() (width, height int) {
@@ -698,7 +681,7 @@ func editCmd(editor, path string) tea.Cmd {
 	return tea.ExecProcess(command, func(err error) tea.Msg { return editedMsg{err: err} })
 }
 
-// clamp bounds v to [lo, hi]; hi below lo collapses to lo.
+// clamp bounds value to [lo, hi]; hi below lo collapses to lo.
 func clamp(value, lo, hi int) int {
 	return max(lo, min(value, hi))
 }

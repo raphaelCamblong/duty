@@ -29,8 +29,7 @@ type skillCtx struct {
 	out     io.Writer
 }
 
-// newSkillCmd fetches the skill from duty-cli.xyz and falls back silently to
-// the embedded copy on failure; --offline skips the network entirely.
+// newSkillCmd prints the skill, fetched from duty-cli.xyz with a silent fallback to the embedded copy.
 func newSkillCmd(sc skillCtx) *cobra.Command {
 	var offline bool
 	cmd := &cobra.Command{

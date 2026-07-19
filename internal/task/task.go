@@ -18,9 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Statuses a task can hold. Any transition between them is legal (a flat
-// setter); the workflow discipline lives in the lifecycle contract, not in
-// a state machine.
+// Statuses a task can hold; any transition is legal (a flat setter, no state machine).
 const (
 	StatusTodo       = "todo"
 	StatusInProgress = "in-progress"
@@ -43,9 +41,8 @@ func FormatID(nn string) string {
 	return IDPrefix + nn
 }
 
-// Task is the machine-owned frontmatter of a task file. Everything below
-// the frontmatter is freeform markdown that tooling appends to but never
-// rewrites.
+// Task is the machine-owned frontmatter of a task file; the markdown below is
+// freeform — appended to, never rewritten.
 type Task struct {
 	// ID is the tree-wide unique task id, e.g. "T-07".
 	ID     string `yaml:"id"`
@@ -53,9 +50,8 @@ type Task struct {
 	Status string `yaml:"status"`
 	// BlockedBy lists ids of tasks that must be done first.
 	BlockedBy []string `yaml:"blocked-by"`
-	// ClaimedBy names the agent currently holding an in-progress task, empty
-	// when unclaimed. It is optional and machine-owned: absent from new-task
-	// templates, written and cleared line-surgically as claims come and go.
+	// ClaimedBy names the agent holding an in-progress task, empty when unclaimed;
+	// machine-owned and written line-surgically, so it is absent from fresh templates.
 	ClaimedBy string `yaml:"claimed-by,omitempty"`
 }
 
@@ -95,20 +91,15 @@ var skeletonTmpl = template.Must(template.New("task").Funcs(template.FuncMap{
 }).Parse(skeletonTmplText))
 
 // Render produces a brand-new task file: frontmatter (status todo) plus the
-// full section skeleton from the spec. Gates starts as an empty checklist,
-// so a fresh task counts 0/0 gates.
+// empty section skeleton — a fresh task counts 0/0 gates.
 func Render(id, title string, blockedBy []string) []byte {
 	var buf bytes.Buffer
 	_ = skeletonTmpl.Execute(&buf, Task{ID: id, Title: title, Status: StatusTodo, BlockedBy: blockedBy})
 	return buf.Bytes()
 }
 
-// RenderWithBody produces a brand-new task file from a caller-supplied body:
-// the generated frontmatter (status todo) and H1, then body verbatim below the
-// H1's blank line. body is expected to open at a "## " heading (OpensAtSection);
-// its bytes are spliced unchanged save leading blank lines and a guaranteed
-// trailing newline, so a task authored in one shot is byte-identical below the
-// H1 to the same task filled section by section.
+// RenderWithBody produces a brand-new task file: frontmatter (status todo) and H1,
+// then body spliced verbatim — byte-identical below the H1 to a section-by-section fill.
 func RenderWithBody(id, title string, blockedBy []string, body []byte) []byte {
 	head := Render(id, title, blockedBy)
 	head = head[:nextHeadingFrom(head, 0)]
@@ -118,9 +109,8 @@ func RenderWithBody(id, title string, blockedBy []string, body []byte) []byte {
 	return buf.Bytes()
 }
 
-// SetStatus rewrites the first `status:` line to the given status and leaves
-// every other byte untouched. It returns an error for a status outside the
-// known set or for content without a status line.
+// SetStatus rewrites the first status: line and leaves every other byte
+// untouched; errors on an unknown status or content with no status line.
 func SetStatus(content []byte, status string) ([]byte, error) {
 	if !ValidStatus(status) {
 		return nil, fmt.Errorf("invalid status %q", status)
@@ -137,12 +127,8 @@ func SetStatus(content []byte, status string) ([]byte, error) {
 	return out, nil
 }
 
-// SetClaimedBy writes the frontmatter claimed-by line, line-surgically: an
-// existing line is replaced in place, an absent one is inserted right after the
-// status line, and an empty name removes the line entirely. Every other byte is
-// untouched — the field is machine-owned and never re-serialized, so inserting
-// a claim then clearing it restores the file byte-for-byte. It errors on
-// content without a status line.
+// SetClaimedBy sets the claimed-by line to name line-surgically (empty name
+// removes it), so a claim then clear restores the file byte-for-byte.
 func SetClaimedBy(content []byte, name string) ([]byte, error) {
 	if loc := claimedLineRE.FindIndex(content); loc != nil {
 		return spliceClaim(content, loc[0], loc[1], name), nil
@@ -193,9 +179,8 @@ func ReportBlock(at time.Time, status string, text []byte) []byte {
 	return append([]byte(ReportHeading(at, status)+"\n\n"), text...)
 }
 
-// AppendReport appends text under the ## Report heading, creating the heading
-// at the end of the file when missing. Reports accumulate: existing content is
-// never rewritten, each call appends one blank-line-separated block.
+// AppendReport appends text as a blank-line-separated block under ## Report
+// (created at end of file when missing); existing content is never rewritten.
 func AppendReport(content, text []byte) []byte {
 	var buf bytes.Buffer
 	writeEndingNL(&buf, content)
@@ -244,11 +229,11 @@ func CountGates(content []byte) (done, total int) {
 	return done, total
 }
 
-// Slugify derives a filename slug from a title: lowercased, every run of
-// non-alphanumeric characters collapsed to one hyphen, no leading or trailing
-// hyphen, at most 40 characters. Only ASCII letters and digits survive. A slug
-// longer than 40 characters breaks at the last word boundary that fits,
-// falling back to a hard cut only when the first word alone exceeds 40.
+const maxSlugLen = 40
+
+// Slugify derives a filename slug from title: lowercased, non-alphanumeric runs
+// collapsed to single hyphens, no leading or trailing hyphen, capped at
+// maxSlugLen on a word boundary.
 func Slugify(title string) string {
 	var builder strings.Builder
 	pending := false
@@ -265,25 +250,24 @@ func Slugify(title string) string {
 		builder.WriteRune(char)
 	}
 	slug := builder.String()
-	if len(slug) > 40 {
+	if len(slug) > maxSlugLen {
 		slug = truncateSlug(slug)
 	}
 	return slug
 }
 
 func truncateSlug(slug string) string {
-	cut := slug[:40]
+	cut := slug[:maxSlugLen]
 	if dashIdx := strings.LastIndexByte(cut, '-'); dashIdx > 0 {
 		return cut[:dashIdx]
 	}
 	return strings.TrimRight(cut, "-")
 }
 
-// ValidSlug reports whether slug is of the shape Slugify produces: a
-// non-empty run of at most 40 lowercase letters, digits, and hyphens, with no
-// leading or trailing hyphen.
+// ValidSlug reports whether slug has the shape Slugify produces: 1..maxSlugLen
+// chars of [a-z0-9-], no leading or trailing hyphen.
 func ValidSlug(slug string) bool {
-	if slug == "" || len(slug) > 40 || slug[0] == '-' || slug[len(slug)-1] == '-' {
+	if slug == "" || len(slug) > maxSlugLen || slug[0] == '-' || slug[len(slug)-1] == '-' {
 		return false
 	}
 	for _, char := range slug {
@@ -302,9 +286,8 @@ func ValidStatus(status string) bool {
 	return false
 }
 
-// yamlScalar renders value as a one-line YAML scalar: plain when unambiguous,
-// double-quoted otherwise. It only ever generates fresh frontmatter —
-// existing frontmatter is never re-serialized.
+// yamlScalar renders value as a one-line YAML scalar (plain when unambiguous,
+// double-quoted otherwise); it only generates fresh frontmatter, never re-serializes.
 func yamlScalar(value string) string {
 	if plainSafe(value) {
 		return value
@@ -312,9 +295,8 @@ func yamlScalar(value string) string {
 	return strconv.Quote(value)
 }
 
-// plainSafe reports whether value survives verbatim as a YAML plain scalar in
-// a block-mapping value position. The check is conservative: quoting a plain
-// string is always safe, the reverse is not.
+// plainSafe reports whether value survives verbatim as a YAML plain scalar in a
+// block-mapping value; the check is conservative (a false negative only over-quotes).
 func plainSafe(value string) bool {
 	if value == "" || value != strings.TrimSpace(value) {
 		return false

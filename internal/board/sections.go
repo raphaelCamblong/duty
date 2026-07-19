@@ -28,9 +28,8 @@ type Row struct {
 
 var rowLinkRe = regexp.MustCompile(`^\|\s*\[([^\]]+)\]\(([^)]+)\)\s*\|`)
 
-// Sections parses the task sections of a board: every "## " heading except
-// Boards (which tooling never reads), each with its table rows in order.
-// Prose, table scaffolding, and the archive footer are skipped, not modeled.
+// Sections parses the task sections of a board: every "## " heading except Boards,
+// each with its table rows in order; prose, scaffolding, and the footer are skipped.
 func Sections(content []byte) []Section {
 	var out []Section
 	open := false

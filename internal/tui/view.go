@@ -23,15 +23,13 @@ const (
 	minLeftWidth     = 30
 	minBarWidth      = 8
 	trackBarWidth    = 14
-	// narrowCols is the terminal width below which the list drops the gate
-	// column, keeping the always-on age column room; the preview header keeps
-	// both regardless.
+	// narrowCols is the width below which the list drops the gate column to keep
+	// the always-on age column room; the preview header keeps both.
 	narrowCols = 100
 )
 
-// rollupOrder is the status sequence for track rollups and summaries: active
-// work first, then queued, blocked, parked, and finished — matching the header
-// bar's colors.
+// rollupOrder is the status sequence for rollups and summaries: active, queued,
+// blocked, parked, finished — matching the header bar's colors.
 var rollupOrder = []string{task.StatusInProgress, task.StatusTodo, task.StatusBlocked, task.StatusBacklog, task.StatusDone}
 
 const (
@@ -42,11 +40,9 @@ const (
 
 func crumbZone(path string) string { return crumbZonePrefix + path }
 
-// View renders the current frame: header, the body (a full-width browsing
-// list, the open split, or the narrow full-screen preview), and the help
-// footer. The zone manager's Scan registers the hit-zones and strips markers.
-// The returned view carries the alt-screen and cell-motion mouse modes that
-// were program options under Bubble Tea v1.
+// View renders the frame: header, body (browsing list, split, or full-screen
+// preview), help footer. Scan registers the hit-zones and strips markers; the
+// view carries the alt-screen and mouse modes that were program options in v1.
 func (m Model) View() tea.View {
 	width, _ := m.dims()
 	var body string
@@ -82,17 +78,16 @@ func (m Model) layout() Model {
 	default:
 		m.list.SetSize(width-4, bodyH-2)
 	}
-	return m.renderPreview(false)
+	return m.renderPreview()
 }
 
 func leftWidth(width int) int {
 	return max(width*38/100, minLeftWidth)
 }
 
-// leftPanel is the entry list in its focus-colored border, a full-panel
-// mouse zone. A board with no rows or tracks shows a centered dim hint in
-// place of the list; a filter that matches nothing falls through to the
-// list's own styled no-items state.
+// leftPanel is the entry list in its focus-colored border, a full-panel mouse
+// zone. An empty board shows a centered dim hint; a filter matching nothing
+// falls through to the list's own no-items state.
 func (m Model) leftPanel() string {
 	lw, lh := m.list.Width(), m.list.Height()
 	box := m.theme.panelBox(m.focus == focusList)
@@ -217,11 +212,9 @@ func (m Model) headerAge(row Row) string {
 	return ageCell(row, time.Now())
 }
 
-// taskHeader joins a task's identity into the preview's pinned line: id ·
-// status · gates n/m · track title, then blocked-by ids (met ones struck
-// through), any drift badge, and the relative age trailing dim. age trails last
-// so a narrow header truncates it before the blocked-by link; age is "" when
-// the age column is hidden.
+// taskHeader joins a task's identity into the preview's pinned line: id · status
+// · gates · track, then blocked-by ids (met ones struck through), any drift
+// badge, and the age trailing dim (empty when the age column is off).
 func (t Theme) taskHeader(row Row, track, age, glyph string) string {
 	status := t.statusStyle(row.Status).Render(row.Status)
 	if inProgress(row) && glyph != "" {
@@ -250,11 +243,9 @@ func (t Theme) taskHeader(row Row, track, age, glyph string) string {
 	return line
 }
 
-// blockedByCell renders the preview header's dim "blocked-by <ids>" segment,
-// striking through every met prerequisite so a reader sees at a glance which
-// ids still block the task. r.Waits (from the scan) names the unmet ones; the
-// label and first-listed unmet id stay contiguous, base-styled, so the segment
-// reads plainly when nothing is met yet.
+// blockedByCell renders the dim "blocked-by <ids>" segment, striking through
+// each met prerequisite; row.Waits names the unmet ones (a plain segment when
+// none are met yet).
 func (t Theme) blockedByCell(row Row) string {
 	label := "blocked-by "
 	text := label + strings.Join(row.BlockedBy, ", ")
@@ -265,9 +256,8 @@ func (t Theme) blockedByCell(row Row) string {
 	return lipgloss.StyleRunes(text, met, t.dim().Strikethrough(true), t.dim())
 }
 
-// metRunes lists, within a "blocked-by <ids>" string, the rune indices of the
-// met prerequisites — those absent from waits. ids and the label are ASCII, so
-// rune index equals byte offset.
+// metRunes lists the rune indices of the met prerequisites (absent from waits)
+// within "blocked-by <ids>"; ids and label are ASCII, so rune index = byte offset.
 func metRunes(labelLen int, ids, waits []string) []int {
 	unmet := make(map[string]bool, len(waits))
 	for _, id := range waits {
@@ -296,9 +286,8 @@ func runeSpan(start, length int) []int {
 	return span
 }
 
-// previewContent renders the open subject from the snapshot alone: a task's
-// markdown through the shared renderer, or a track's summary card. It returns
-// the possibly-updated model because building the renderer mutates it.
+// previewContent renders the open subject from the snapshot: a task's markdown
+// or a track's card. It returns the model — building the renderer mutates it.
 func (m Model) previewContent() (Model, string) {
 	width := max(m.preview.Width(), 1)
 	switch m.previewKind {
@@ -321,9 +310,8 @@ func (m Model) previewContent() (Model, string) {
 	return m, ""
 }
 
-// taskMarkdown renders task content through the one shared glamour renderer,
-// built lazily on the first open and rebuilt only when the preview width
-// changes; the raw markdown shows on any renderer error.
+// taskMarkdown renders content through the shared glamour renderer, built lazily
+// and rebuilt only when the width changes; raw markdown shows on any error.
 func (m Model) taskMarkdown(content []byte) (Model, string) {
 	wrap := max(m.preview.Width()-2, 20)
 	if m.renderer == nil || m.rendererWidth != wrap {
@@ -401,10 +389,9 @@ func totalCount(counts map[string]int) int {
 	return total
 }
 
-// BarCells splits width cells across the non-zero statuses in counts,
-// proportional to each status's share, every non-zero status guaranteed at
-// least one cell and leftover cells given to the largest remainders; an empty
-// subtree yields nil. width must be at least the number of non-zero statuses.
+// BarCells splits width cells across counts' non-zero statuses, proportional to
+// each share, every status getting at least one cell and leftovers to the largest
+// remainders; nil for an empty subtree, width ≥ the non-zero status count.
 func BarCells(counts map[string]int, width int) map[string]int {
 	total := totalCount(counts)
 	if total == 0 {
@@ -460,9 +447,8 @@ func (t Theme) trackBar(counts map[string]int, width int) string {
 	return builder.String()
 }
 
-// trackRightWidth is the fixed cell width of a track row's trailing state
-// column: the bar, a two-cell gap, and the right-aligned total count. Both
-// trackBarCell and trackLine's title-pad reserve exactly this width.
+// trackRightWidth is the fixed width of a track row's trailing state column (bar
+// + gap + right-aligned total); trackBarCell and trackLine both reserve exactly it.
 func trackRightWidth(countW int) int { return trackBarWidth + 2 + countW }
 
 func (t Theme) trackBarCell(counts map[string]int, countW int) string {
@@ -507,9 +493,8 @@ func (m Model) crumbChain() []string {
 	return chain
 }
 
-// newRenderer builds the single glamour renderer used program-wide, at a
-// fixed word-wrap and a concrete style. The theme is resolved to dark/light
-// before the program starts (run.go), so no terminal query fires here.
+// newRenderer builds the shared glamour renderer at a fixed wrap and concrete
+// style; the theme is resolved before startup, so no terminal query fires here.
 func newRenderer(wrap int, dark bool) (*glamour.TermRenderer, error) {
 	style := "dark"
 	if !dark {
