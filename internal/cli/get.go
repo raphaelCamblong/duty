@@ -128,7 +128,7 @@ func newGetTracksCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 			if len(args) != 0 {
 				return errors.New(getTracksUsage)
 			}
-			tracks, err := a.GetTracks(cwd, in)
+			tracks, err := a.GetTracks(app.Scope{Cwd: cwd, In: in})
 			if err != nil {
 				return err
 			}
@@ -166,7 +166,7 @@ func newGetNextCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 			if len(args) != 0 {
 				return errors.New(getNextUsage)
 			}
-			info, err := a.GetNext(cwd, in, claim, claimer(as))
+			info, err := a.GetNext(app.Scope{Cwd: cwd, In: in}, claim, claimer(as))
 			if err != nil {
 				return err
 			}
@@ -203,7 +203,7 @@ func newGetTasksCmd(a app.App, cwd string, stdout io.Writer, use string, hidden 
 			if len(args) != 0 {
 				return errors.New(getTasksUsage)
 			}
-			rows, err := a.List(cwd, status, in)
+			rows, err := a.List(app.Scope{Cwd: cwd, In: in}, status)
 			if err != nil {
 				return err
 			}

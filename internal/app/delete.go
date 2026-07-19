@@ -7,9 +7,8 @@ import (
 	"github.com/raphaelCamblong/duty/internal/task"
 )
 
-// Delete removes an open task: the file, its board row, and any section the
-// row's removal leaves empty. A done task is refused unless force is true —
-// that's Archive's job.
+// Delete removes an open task — its file, board row, and any emptied section;
+// a done task is refused unless force is true (that's Archive's job).
 func (a App) Delete(cwd, id string, force bool) error {
 	root, taskPath, err := a.resolveOpenWithRoot(cwd, id)
 	if err != nil {
@@ -23,7 +22,6 @@ func (a App) Delete(cwd, id string, force bool) error {
 	return a.deleteLocked(id, taskPath, force)
 }
 
-// deleteLocked must run under the tree lock.
 func (a App) deleteLocked(id, taskPath string, force bool) error {
 	t, _, err := a.readTask(taskPath)
 	if err != nil {

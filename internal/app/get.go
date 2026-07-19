@@ -80,12 +80,10 @@ func (a App) Body(cwd, id string) (string, error) {
 	return string(task.Body(content)), nil
 }
 
-// GetTracks returns one TrackInfo per board in the board in — a root-relative
-// track path, or the board containing cwd when empty — and every board below
-// it, that board included as ".". Counts tally the board's own
-// (directly-filed) tasks by status; Archived counts its archive/.
-func (a App) GetTracks(cwd, in string) ([]TrackInfo, error) {
-	boardDir, boards, err := a.walkBoards(cwd, in)
+// GetTracks returns one TrackInfo per board in scope and below (that board as
+// "."), each counting its own directly-filed tasks by status.
+func (a App) GetTracks(s Scope) ([]TrackInfo, error) {
+	boardDir, boards, err := a.walkBoards(s)
 	if err != nil {
 		return nil, err
 	}
@@ -100,25 +98,19 @@ func (a App) GetTracks(cwd, in string) ([]TrackInfo, error) {
 	return out, nil
 }
 
-// GetNext returns the first actionable task: scanning the board in — a
-// root-relative track path, or the board containing cwd when empty — and
-// every board below it in scan order, and within each its rows in board
-// order, it returns the first todo whose blocked-by are all done — archived
-// dependencies count as done. It returns nil when nothing is actionable. With
-// claim set it atomically marks that task in-progress under the tree lock and
-// returns it with the truthful post-claim status and as as its claimer, so
-// parallel callers each get a distinct task.
-func (a App) GetNext(cwd, in string, claim bool, as string) (*TaskInfo, error) {
-	root, err := tree.FindRoot(a.fs, cwd)
+// GetNext returns the first actionable task in scope and below, or nil; with
+// claim it atomically marks that task in-progress as as before returning it.
+func (a App) GetNext(s Scope, claim bool, as string) (*TaskInfo, error) {
+	root, err := tree.FindRoot(a.fs, s.Cwd)
 	if err != nil {
 		return nil, err
 	}
-	info, err := a.nextActionable(root, cwd, in)
+	info, err := a.nextActionable(root, s)
 	if err != nil || info == nil {
 		return info, err
 	}
 	if claim {
-		info, err = a.claim(root, cwd, in, as)
+		info, err = a.claim(root, s, as)
 		if err != nil || info == nil {
 			return info, err
 		}
@@ -129,18 +121,15 @@ func (a App) GetNext(cwd, in string, claim bool, as string) (*TaskInfo, error) {
 	return info, nil
 }
 
-// claim marks the next actionable task in-progress under the tree lock and
-// returns it with the truthful post-claim status. Re-scanning under the lock —
-// the authoritative pass — is what makes parallel claims each pick a distinct
-// task; the caller's earlier unlocked scan only decides whether to lock at all,
-// so a claim with nothing to do leaves no lock-file side effect.
-func (a App) claim(root, cwd, in, as string) (*TaskInfo, error) {
+// claim re-scans under the tree lock — the authoritative pass that makes
+// parallel claims each pick a distinct task — and marks that task in-progress.
+func (a App) claim(root string, s Scope, as string) (*TaskInfo, error) {
 	unlock, err := a.lock(root)
 	if err != nil {
 		return nil, err
 	}
 	defer unlock()
-	info, err := a.nextActionable(root, cwd, in)
+	info, err := a.nextActionable(root, s)
 	if err != nil || info == nil {
 		return info, err
 	}
@@ -152,8 +141,8 @@ func (a App) claim(root, cwd, in, as string) (*TaskInfo, error) {
 	return info, nil
 }
 
-func (a App) nextActionable(root, cwd, in string) (*TaskInfo, error) {
-	_, boards, err := a.walkBoards(cwd, in)
+func (a App) nextActionable(root string, s Scope) (*TaskInfo, error) {
+	_, boards, err := a.walkBoards(s)
 	if err != nil {
 		return nil, err
 	}
@@ -193,9 +182,8 @@ func buildTaskInfo(root, path string, content []byte, t task.Task, updated time.
 	}
 }
 
-// mtime returns path's modification time, or the zero time when it cannot be
-// stat'd — age is display metadata, so a stat miss degrades quietly rather
-// than failing the read.
+// mtime returns path's modification time, or the zero time on a stat miss —
+// age is display metadata, so it degrades quietly rather than failing the read.
 func (a App) mtime(path string) time.Time {
 	info, err := a.fs.Stat(path)
 	if err != nil {
@@ -254,9 +242,8 @@ func (a App) nextInBoard(root, b string) (*TaskInfo, error) {
 	return nil, nil
 }
 
-// actionable returns filename's TaskInfo when it's a todo with every
-// blocked-by done, else nil. A row pointing at a missing file is skipped, not
-// an error — the board can drift ahead of the files.
+// actionable returns filename's TaskInfo when it's a todo with every blocked-by
+// done, else nil; a missing file is skipped (the board can drift ahead), not an error.
 func (a App) actionable(root, b, filename string) (*TaskInfo, error) {
 	path := filepath.Join(b, filename)
 	t, content, err := a.readTask(path)
@@ -288,11 +275,8 @@ const (
 	statusMissing  = "missing"
 )
 
-// UnmetDeps returns the ids in deps that are not yet satisfied, each dep's
-// status read through statusOf: a dep counts as met when its status is done or
-// archived, unmet otherwise (a task still in flight, or one statusOf reports as
-// missing). It is the single wait-state rule behind get next's actionable walk,
-// get tasks' waits column, and the TUI's wait annotation.
+// UnmetDeps returns the deps statusOf reports as neither done nor archived —
+// the one wait-state rule behind get next, get tasks' waits, and the TUI.
 func UnmetDeps(deps []string, statusOf func(id string) (string, error)) ([]string, error) {
 	var unmet []string
 	for _, id := range deps {

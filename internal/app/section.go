@@ -8,9 +8,8 @@ import (
 	"github.com/raphaelCamblong/duty/internal/task"
 )
 
-// Section returns the body of the named section of the task id resolves to,
-// trimmed of its framing blank lines. It errors when no section matches the
-// name (case-insensitively). Archived ids are read-only and rejected.
+// Section returns the named section's body (framing blanks trimmed) of the task
+// id resolves to, erroring on no case-insensitive match; archived ids rejected.
 func (a App) Section(cwd, id, name string) (string, error) {
 	_, path, err := a.resolveOpenWithRoot(cwd, id)
 	if err != nil {
@@ -27,21 +26,16 @@ func (a App) Section(cwd, id, name string) (string, error) {
 	return string(bytes.TrimSpace(body)), nil
 }
 
-// SetSection replaces the named section's body of the task id resolves to with
-// the text read from r, under the tree write lock. Empty (blank) input is
-// refused; the heading line and every byte outside the section survive, and a
-// missing section is created. r is read only after the id resolves.
+// SetSection replaces the named section's body on the task id resolves to with
+// r's text (blank refused, a missing section created); r is read after the id resolves.
 func (a App) SetSection(cwd, id, name string, r io.Reader) error {
 	return a.editSection(cwd, id, "section", r, func(content, payload []byte) ([]byte, error) {
 		return task.ReplaceSection(content, name, payload)
 	})
 }
 
-// SetSections replaces every "## <name>" block read from r on the task id
-// resolves to, under the tree write lock in one file write: each named section
-// is replaced (a missing one created, like SetSection), with every byte outside
-// them surviving. Empty (blank) input, or input not opening at a "## " heading,
-// is refused; r is read only after the id resolves.
+// SetSections replaces every "## " block read from r on the task id resolves to
+// in one write; blank or non-"## "-opening input is refused, r read after the id.
 func (a App) SetSections(cwd, id string, r io.Reader) error {
 	return a.editSection(cwd, id, "sections", r, task.ReplaceSections)
 }

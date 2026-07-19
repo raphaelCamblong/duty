@@ -109,7 +109,7 @@ func TestWatchSnapshot(t *testing.T) {
 	root := tuiTree(t)
 	mustDuty(t, root, "gates", "add", "T-01", "build passes")
 
-	snap, err := app.New(fsys.OS{}).Snapshot(root, "")
+	snap, err := app.New(fsys.OS{}).Snapshot(app.Scope{Cwd: root})
 	if err != nil {
 		t.Fatalf("Snapshot() error = %v", err)
 	}
@@ -216,7 +216,7 @@ func TestWatchCommandExit(t *testing.T) {
 // mustSnapshot snapshots root's whole tree, failing the test on error.
 func mustSnapshot(t *testing.T, a app.App, root string) map[string]app.TaskState {
 	t.Helper()
-	snap, err := a.Snapshot(root, "")
+	snap, err := a.Snapshot(app.Scope{Cwd: root})
 	if err != nil {
 		t.Fatalf("Snapshot() error = %v", err)
 	}

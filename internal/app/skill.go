@@ -44,9 +44,8 @@ func ParseTarget(s string) (Target, error) {
 	return "", unknownTargetErr(s)
 }
 
-// Skill returns the agent skill text: the copy fetched from url when reachable,
-// otherwise the embedded fallback. offline (or a nil fetcher) skips the network
-// entirely; any fetch failure or empty body falls back silently.
+// Skill returns the agent skill text fetched from url, or the embedded fallback
+// when offline, the fetcher is nil, or the fetch fails or is empty.
 func (a App) Skill(f fetch.Fetcher, url string, offline bool) []byte {
 	if offline || f == nil {
 		return skillText
@@ -69,11 +68,8 @@ type Install struct {
 	Force  bool
 }
 
-// InstallSkill writes skill per spec: Claude as a standalone SKILL.md (project
-// scope under Cwd, or home scope with User), Codex and Gemini as a marker-
-// delimited block in AGENTS.md / GEMINI.md at Cwd. Without Force it refuses to
-// overwrite an existing skill; with Force it replaces it cleanly. It returns the
-// path written.
+// InstallSkill writes skill per spec and returns the path: Claude as a standalone
+// SKILL.md, Codex/Gemini as a marker block; Force replaces an existing skill.
 func (a App) InstallSkill(spec Install, skill []byte) (string, error) {
 	if spec.User && spec.Target != Claude {
 		return "", errors.New("--user applies only to the claude target")

@@ -25,10 +25,8 @@ func renderReadme() []byte {
 	return b.Bytes()
 }
 
-// Init bootstraps a duty tree in cwd: duty/ with a skeleton board index
-// (H1 = title, default "Board"), the convention readme, and archive/. It
-// refuses to run inside an existing tree, and on success returns the tree
-// directory's path.
+// Init bootstraps a duty tree in cwd — duty/ with a skeleton board index, the
+// convention readme, and archive/ — returning its path; it refuses an existing tree.
 func (a App) Init(cwd, title string) (string, error) {
 	if title == "" {
 		title = "Board"

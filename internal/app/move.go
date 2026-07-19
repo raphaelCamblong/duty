@@ -36,16 +36,8 @@ type Dest struct {
 
 func (d Dest) none() bool { return d.Track == "" && d.Section == "" }
 
-// Move relocates a task. With a track path — relative to the tree root, "."
-// naming the root board — the file is renamed into that track's folder (same
-// filename — ids don't encode tracks), the source row is dropped and its
-// section pruned, and a row is appended to the target's section (default
-// "Open tasks") with the file's status preserved; all new contents are
-// computed before the rename and the board writes. With an empty track the
-// row moves under "## <section>" within its own board — the section is
-// created above the footer when absent, and any section left empty is pruned.
-// A non-zero pos then reorders the row within its board (a board-only edit).
-// At least one of dest and pos must be non-empty.
+// Move relocates id per dest (track/section) then reorders per pos, computing
+// all writes before the rename; at least one of dest and pos must be set.
 func (a App) Move(cwd, id string, dest Dest, pos Position) error {
 	if dest.none() && pos.None() {
 		return errors.New("move: pass --track, --section, --top, --before, or --after")
@@ -69,9 +61,8 @@ func (a App) Move(cwd, id string, dest Dest, pos Position) error {
 	return a.reorderInBoard(root, taskPath, pos)
 }
 
-// relocate performs the track/section phase of a move and returns the task's
-// resulting file path. With an empty dest it is a no-op returning taskPath
-// unchanged — a position-only move.
+// relocate performs a move's track/section phase and returns the file's path,
+// a no-op returning taskPath unchanged when dest is empty.
 func (a App) relocate(root, id, taskPath string, dest Dest) (string, error) {
 	if dest.none() {
 		return taskPath, nil
@@ -158,9 +149,8 @@ func (a App) moveAcross(x across) error {
 	return a.fs.WriteFile(dstPath, withRow)
 }
 
-// moveRowInBoard moves the row of the task at taskPath under "## <section>"
-// within its own board, byte-preserving the row line and pruning any section
-// left empty. It is the same-board case of both --section and --track moves.
+// moveRowInBoard moves the task's row under "## <section>" within its own board,
+// byte-preserving the row and pruning any emptied section.
 func (a App) moveRowInBoard(taskPath, section string) error {
 	return a.applyEdit(boardBeside(taskPath), func(index []byte) ([]byte, error) {
 		moved, err := board.MoveRow(index, filepath.Base(taskPath), section)
@@ -171,11 +161,8 @@ func (a App) moveRowInBoard(taskPath, section string) error {
 	})
 }
 
-// reorderInBoard applies pos to the row of the task at taskPath — a board-only
-// edit that relocates the row line, its bytes intact, leaving the task file
-// untouched. --top lifts it to the top of its section; --before/--after place
-// it adjacent to ref's row within the same board, adopting ref's section. A
-// ref in another board is rejected, naming the fix: move --track first.
+// reorderInBoard applies pos to the row at taskPath — a board-only edit, the
+// task file untouched; a ref in another board is rejected (move --track first).
 func (a App) reorderInBoard(root, taskPath string, pos Position) error {
 	boardPath := boardBeside(taskPath)
 	filename := filepath.Base(taskPath)

@@ -23,20 +23,18 @@ type Row struct {
 	Waits      []string  // blocked-by ids not yet done, "" when the task is actionable
 }
 
-// List returns one Row per open task in the board in — a root-relative track
-// path, or the board containing cwd when empty — and every board below it,
-// read from the files (never the board index). A non-empty status keeps only
-// tasks with that status.
-func (a App) List(cwd, status, in string) ([]Row, error) {
+// List returns one Row per open task in scope's board and below, read from the
+// files (never the board index); a non-empty status keeps only that status.
+func (a App) List(s Scope, status string) ([]Row, error) {
 	if status != "" && !task.ValidStatus(status) {
 		return nil, unknownStatusErr(status)
 	}
 
-	root, err := tree.FindRoot(a.fs, cwd)
+	root, err := tree.FindRoot(a.fs, s.Cwd)
 	if err != nil {
 		return nil, err
 	}
-	boardDir, boards, err := a.walkBoards(cwd, in)
+	boardDir, boards, err := a.walkBoards(s)
 	if err != nil {
 		return nil, err
 	}
@@ -56,12 +54,8 @@ func (a App) List(cwd, status, in string) ([]Row, error) {
 	return rows, nil
 }
 
-// boardRows returns one Row per task file directly in board b (its
-// tracks are separate entries in the caller's board list), tagged with
-// its path relative to listDir — the board list started from. Rows come out
-// in board order, mirroring nextInBoard; a file with no board row (drift)
-// is appended after, still flagged. treeRoot resolves each row's blocked-by
-// ids for its wait state.
+// boardRows returns one Row per task file in board b, in board order mirroring
+// nextInBoard (drift files appended), tagged with b's path relative to listDir.
 func (a App) boardRows(treeRoot, listDir, b string) ([]Row, error) {
 	boardPath := relBoard(listDir, b)
 	index, err := a.fs.ReadFile(boardIndexPath(b))
@@ -83,9 +77,8 @@ func (a App) boardRows(treeRoot, listDir, b string) ([]Row, error) {
 	return rows, nil
 }
 
-// boardOrder sorts files into board order: each present file in the order
-// its row appears across index's sections, then any file with no row
-// (drift) appended in filename order.
+// boardOrder returns files in board order: each in the order its row appears in
+// index, then rowless (drift) files in filename order.
 func boardOrder(index []byte, files []string) []string {
 	added := make(map[string]bool, len(files))
 	for _, name := range files {
@@ -121,8 +114,7 @@ func (a App) taskRow(treeRoot string, index []byte, dir, filename, boardPath str
 	if err != nil {
 		return Row{}, err
 	}
-	row, ok := board.FindRow(index, filename)
-	missing, rowStatus := drift(ok, row, t.Status)
+	missing, rowStatus := drift(index, filename, t.Status)
 	return Row{
 		ID: t.ID, Title: t.Title, Status: t.Status,
 		Board: boardPath, RowMissing: missing, RowStatus: rowStatus,
@@ -131,12 +123,11 @@ func (a App) taskRow(treeRoot string, index []byte, dir, filename, boardPath str
 	}, nil
 }
 
-// drift compares a task's file status to its board row, found via
-// board.FindRow: rowOK false means the row is missing entirely. A row whose
-// status cell disagrees with the file yields that status; in sync (or an
-// unreadable cell) yields "".
-func drift(rowOK bool, row, fileStatus string) (missing bool, rowStatus string) {
-	if !rowOK {
+// drift reports whether filename's row in index is missing, and the row's
+// status when its cell disagrees with fileStatus.
+func drift(index []byte, filename, fileStatus string) (missing bool, rowStatus string) {
+	row, ok := board.FindRow(index, filename)
+	if !ok {
 		return true, ""
 	}
 	s, ok := board.RowStatus(row)

@@ -8,20 +8,17 @@ import (
 	"github.com/raphaelCamblong/duty/internal/names"
 )
 
-// CreateTrack creates the track name/ under the board in — a root-relative
-// track path, or the board containing cwd when empty: a skeleton board index
-// (H1 = title, default the name) plus archive/, and the courtesy bullet
-// appended to the parent's "## Boards" section. It refuses when the folder
-// already exists, and on success returns the new track's path.
-func (a App) CreateTrack(cwd, name, title, in string) (string, error) {
+// CreateTrack creates the track name/ under scope's board (skeleton index,
+// archive/, a parent Boards bullet) and returns its path, refusing an existing folder.
+func (a App) CreateTrack(s Scope, name, title string) (string, error) {
 	if !nameRE.MatchString(name) {
 		return "", fmt.Errorf("invalid track name %q: must match [a-z0-9-]+", name)
 	}
-	parentDir, err := a.contextBoard(cwd, in)
+	parentDir, err := a.contextBoard(s)
 	if err != nil {
 		return "", err
 	}
-	unlock, err := a.lockTree(cwd)
+	unlock, err := a.lockTree(s.Cwd)
 	if err != nil {
 		return "", err
 	}
@@ -29,7 +26,6 @@ func (a App) CreateTrack(cwd, name, title, in string) (string, error) {
 	return a.createTrackLocked(parentDir, name, title)
 }
 
-// createTrackLocked must run under the tree lock.
 func (a App) createTrackLocked(parentDir, name, title string) (string, error) {
 	sub := filepath.Join(parentDir, name)
 	if _, err := a.fs.Stat(sub); err == nil {

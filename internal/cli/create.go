@@ -44,11 +44,12 @@ func newCreateTaskCmd(a app.App, cwd string, stdin io.Reader, stdout io.Writer) 
 			if len(args) != 1 || args[0] == "" {
 				return errors.New(createTaskUsage)
 			}
-			var bodyReader io.Reader
-			if body {
-				bodyReader = stdin
+			bodyBytes, err := readBody(stdin, body)
+			if err != nil {
+				return err
 			}
-			id, path, err := a.CreateTask(cwd, in, app.TaskSpec{Title: args[0], Slug: slug, Section: section, BlockedBy: blockedBy}, bodyReader)
+			spec := app.TaskSpec{Title: args[0], Slug: slug, Section: section, BlockedBy: blockedBy, Body: bodyBytes}
+			id, path, err := a.CreateTask(app.Scope{Cwd: cwd, In: in}, spec)
 			if err != nil {
 				return err
 			}
@@ -64,6 +65,18 @@ func newCreateTaskCmd(a app.App, cwd string, stdin io.Reader, stdout io.Writer) 
 	return cmd
 }
 
+// readBody returns the task body piped on stdin when body is set, nil otherwise.
+func readBody(stdin io.Reader, body bool) ([]byte, error) {
+	if !body {
+		return nil, nil
+	}
+	b, err := io.ReadAll(stdin)
+	if err != nil {
+		return nil, fmt.Errorf("read stdin: %w", err)
+	}
+	return b, nil
+}
+
 func newCreateTrackCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var (
 		title string
@@ -77,7 +90,7 @@ func newCreateTrackCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 			if len(args) != 1 {
 				return errors.New(createTrackUsage)
 			}
-			path, err := a.CreateTrack(cwd, args[0], title, in)
+			path, err := a.CreateTrack(app.Scope{Cwd: cwd, In: in}, args[0], title)
 			if err != nil {
 				return err
 			}

@@ -51,9 +51,8 @@ func (a App) resolveOpenWithRoot(cwd, id string) (root, path string, err error) 
 	return root, path, nil
 }
 
-// lock takes the tree-wide write lock at root; every mutating use-case holds
-// it for its whole duration so parallel writers serialize on the board rather
-// than racing on a shared file.
+// lock takes root's tree-wide write lock, held for a whole use-case so writers
+// serialize on the board. Helpers named with a Locked suffix require it held.
 func (a App) lock(root string) (func(), error) {
 	return a.fs.Lock(filepath.Join(root, names.LockFile))
 }
@@ -87,8 +86,16 @@ func (a App) lockedEdit(root, path string, fn func([]byte) ([]byte, error)) erro
 	return a.applyEdit(path, fn)
 }
 
-func (a App) walkBoards(cwd, in string) (boardDir string, boards []string, err error) {
-	boardDir, err = a.contextBoard(cwd, in)
+// Scope selects the board a board-scoped command targets. In is a root-relative
+// track path ("." names the root board); empty means the board containing Cwd —
+// the cwd walk-up default.
+type Scope struct {
+	Cwd string
+	In  string
+}
+
+func (a App) walkBoards(s Scope) (boardDir string, boards []string, err error) {
+	boardDir, err = a.contextBoard(s)
 	if err != nil {
 		return "", nil, err
 	}
@@ -99,18 +106,16 @@ func (a App) walkBoards(cwd, in string) (boardDir string, boards []string, err e
 	return boardDir, boards, nil
 }
 
-// contextBoard returns the board an --in-scoped command targets: the board
-// containing cwd when in is empty (the cwd walk-up default), else the board at
-// the root-relative slash path in ("." = root board), validated to exist.
-func (a App) contextBoard(cwd, in string) (string, error) {
-	if in == "" {
-		return tree.CurrentBoard(a.fs, cwd)
+// contextBoard resolves scope to its board directory, validated to exist.
+func (a App) contextBoard(s Scope) (string, error) {
+	if s.In == "" {
+		return tree.CurrentBoard(a.fs, s.Cwd)
 	}
-	root, err := tree.FindRoot(a.fs, cwd)
+	root, err := tree.FindRoot(a.fs, s.Cwd)
 	if err != nil {
 		return "", err
 	}
-	return tree.ResolveTrack(a.fs, root, in)
+	return tree.ResolveTrack(a.fs, root, s.In)
 }
 
 func boardIndexPath(dir string) string {
@@ -121,9 +126,8 @@ func boardBeside(taskPath string) string {
 	return boardIndexPath(filepath.Dir(taskPath))
 }
 
-// readTask reads and parses the task file at path; read errors pass through
-// unwrapped so callers can branch on fs.ErrNotExist, while parse errors are
-// wrapped with the path.
+// readTask reads and parses path; read errors pass through unwrapped (callers
+// branch on fs.ErrNotExist), parse errors are wrapped with the path.
 func (a App) readTask(path string) (task.Task, []byte, error) {
 	content, err := a.fs.ReadFile(path)
 	if err != nil {

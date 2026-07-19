@@ -10,19 +10,15 @@ import (
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
-// Archive moves every status: done task in the board in — a root-relative
-// track path, or the board containing cwd when empty — and every board below
-// it into its own board's archive/: the file is renamed, its row dropped,
-// empty sections pruned, and that board's footer count rewritten. A board
-// with nothing to archive is left untouched, which makes a second run a clean
-// no-op.
-func (a App) Archive(cwd, in string) error {
-	unlock, err := a.lockTree(cwd)
+// Archive moves every done task in scope and below into its board's archive/
+// (row dropped, footer rewritten); a board with nothing to archive is untouched.
+func (a App) Archive(s Scope) error {
+	unlock, err := a.lockTree(s.Cwd)
 	if err != nil {
 		return err
 	}
 	defer unlock()
-	_, boards, err := a.walkBoards(cwd, in)
+	_, boards, err := a.walkBoards(s)
 	if err != nil {
 		return err
 	}

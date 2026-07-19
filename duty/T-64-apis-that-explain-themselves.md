@@ -1,7 +1,7 @@
 ---
 id: T-64
 title: APIs that explain themselves
-status: in-progress
+status: done
 blocked-by: []
 ---
 
@@ -57,13 +57,58 @@ beyond mechanical call-site updates; behavior changes of any kind; new
 features.
 
 ## Gates
-- [ ] CreateTask's doc comment is at most 1 line; no board-scoped method
+- [x] CreateTask's doc comment is at most 1 line; no board-scoped method
   re-documents the in-or-cwd rule (it lives once, on Scope); zero "must run
   under the tree lock" comments remain (one convention sentence exists).
-- [ ] grep: no function comment in internal/app exceeds 2 lines except ones
+- [x] grep: no function comment in internal/app exceeds 2 lines except ones
   the report justifies as irreducible domain contracts (each named).
-- [ ] Full suite green with only mechanical call-syntax test updates
+- [x] Full suite green with only mechanical call-syntax test updates
   (listed, no assertion weakened); observable error ordering unchanged
   (create's body-before-board precedence preserved, test-verified).
-- [ ] just check green; param-count scan does not regress (Scope should
+- [x] just check green; param-count scan does not regress (Scope should
   DROP several functions below 5 params — report before/after).
+
+## Report
+
+### 2026-07-19 19:58 — done
+
+Adopted one app.Scope{Cwd, In} type carrying the in-or-cwd rule, documented once
+on the type. Every board-scoped method now takes it: CreateTask, CreateTrack,
+List, GetTracks, GetNext, Archive, Snapshot — plus the internal
+walkBoards/contextBoard/nextActionable/claim helpers. Their per-method
+restatements of the rule are gone.
+
+TaskSpec gained a Body []byte field (nil renders the skeleton, documented once on
+the struct). The CLI reads stdin at the edge; app keeps the validation (blank +
+RequireOpensAtSection) and runs it before board resolution, so the body-before-
+board error precedence still holds — verified: a bad body outside a tree reports
+the body error, not "no duty tree". Report was left entirely untouched.
+
+The *Locked convention is now stated once on App.lock ("Helpers named with a
+Locked suffix require it held"); every per-helper "must run under the tree lock"
+line is deleted. drift() now takes (index, filename, fileStatus) and does its own
+FindRow lookup, collapsing its comment.
+
+Comment lines, flagged files:
+- create.go: 17 -> 9
+- list.go:   21 -> 12
+
+Param scan (internal/app, AST, receiver excluded):
+- before: sum_params=234, funcs_with_>=5=4
+- after:  sum_params=220, funcs_with_>=5=4
+Scope+Body dropped 14 param slots; nothing crossed into >=5. The four at 5
+(buildTaskInfo, taskRow, reorder, editSection) are pre-existing and out of scope.
+
+Irreducible-contract comments kept, each compressed to <=2 lines:
+- app.go readTask: read errors pass through unwrapped so callers branch on fs.ErrNotExist.
+- create.go writeTask: computes the board row before writing either file (atomicity).
+- get.go claim: the under-lock re-scan is what makes parallel claims pick distinct tasks.
+- status.go statusWrite: both file writes computed before either (atomicity).
+- list.go boardRows: board order mirrors nextInBoard.
+- report.go Report: LEFT UNTOUCHED (out of scope) — its reader ordering (id resolves
+  before stdin) is the one remaining >2-line function comment, by design.
+
+Test files touched: tests/cli_watch_test.go only (2 Snapshot calls -> Scope). No
+assertion weakened; every other test drives the CLI and stayed byte-frozen.
+
+just check green; full suite green, coverage 87.9%.

@@ -38,11 +38,10 @@ type Event struct {
 	New   string
 }
 
-// Snapshot reads every open task under the board in — a root-relative track
-// path, or the board containing cwd when empty — and below, keyed by task id.
-// It is the state duty watch diffs; unparsable files are skipped.
-func (a App) Snapshot(cwd, in string) (map[string]TaskState, error) {
-	boardDir, boards, err := a.walkBoards(cwd, in)
+// Snapshot reads every open task in scope and below, keyed by id — the state
+// duty watch diffs; unparsable files are skipped.
+func (a App) Snapshot(s Scope) (map[string]TaskState, error) {
+	boardDir, boards, err := a.walkBoards(s)
 	if err != nil {
 		return nil, err
 	}

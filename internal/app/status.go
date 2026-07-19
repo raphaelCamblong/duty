@@ -18,12 +18,8 @@ type StatusChange struct {
 	Force  bool
 }
 
-// SetStatus sets a task's status: the frontmatter `status:` line and the
-// board row's status cell change in one use-case (the sync invariant), under
-// the tree write lock. Moving to in-progress records As as the claimer (empty
-// leaves the claim unnamed); any other status clears the claim. Unknown
-// statuses and archived ids are rejected; re-claiming an already in-progress
-// task is refused unless Force is set.
+// SetStatus flips a task's status in both the file and its board row (the sync
+// invariant) under the tree lock; unknown statuses and archived ids are rejected.
 func (a App) SetStatus(cwd string, ch StatusChange) error {
 	if !task.ValidStatus(ch.Status) {
 		return unknownStatusErr(ch.Status)
@@ -40,8 +36,7 @@ func (a App) SetStatus(cwd string, ch StatusChange) error {
 	return a.setStatusLocked(taskPath, ch)
 }
 
-// setStatusLocked computes both new file contents before writing either. It
-// must run under the tree lock.
+// setStatusLocked computes both new file contents before writing either.
 func (a App) setStatusLocked(taskPath string, ch StatusChange) error {
 	t, content, err := a.readTask(taskPath)
 	if err != nil {
@@ -50,11 +45,8 @@ func (a App) setStatusLocked(taskPath string, ch StatusChange) error {
 	return a.statusWrite(taskPath, ch, content, t)
 }
 
-// statusWrite applies ch onto content — the task file's bytes, already read
-// (and possibly already edited, as by report --status) — with cur the task's
-// current parsed state (its status and claimer). Every new content is computed
-// before either write, so an error leaves both untouched. It must run under the
-// tree lock.
+// statusWrite applies ch onto already-read content (possibly pre-edited by
+// report) and cur, computing both file writes before either — an error leaves both.
 func (a App) statusWrite(taskPath string, ch StatusChange, content []byte, cur task.Task) error {
 	if err := guardClaim(ch, cur.Status, cur.ClaimedBy); err != nil {
 		return err
@@ -82,9 +74,8 @@ func (a App) statusWrite(taskPath string, ch StatusChange, content []byte, cur t
 	return a.fs.WriteFile(boardPath, withCell)
 }
 
-// claimerFor is the claimed-by name a status write records: as when the task is
-// moving to in-progress, empty otherwise — the field only ever means "currently
-// holds it", so every other status clears it.
+// claimerFor returns the recorded claimer: as when moving to in-progress, empty
+// otherwise — the field only ever means "currently holds it".
 func claimerFor(status, as string) string {
 	if status == task.StatusInProgress {
 		return as
@@ -92,10 +83,8 @@ func claimerFor(status, as string) string {
 	return ""
 }
 
-// guardClaim refuses to take over a task already in-progress when ch sets it
-// in-progress again without Force; every other transition is free (the flat
-// setter of spec §3). current and holder are the task's present status and
-// claimer; the refusal names the holder when one is recorded.
+// guardClaim refuses to re-claim a task already in-progress (current) without
+// Force, naming holder when one is recorded; every other transition is free.
 func guardClaim(ch StatusChange, current, holder string) error {
 	if ch.Force || ch.Status != task.StatusInProgress || current != task.StatusInProgress {
 		return nil

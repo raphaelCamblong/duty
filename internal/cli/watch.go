@@ -59,7 +59,7 @@ func runWatch(wc watchCmd, in string, agent bool) error {
 	if err != nil {
 		return err
 	}
-	prev, err := wc.app.Snapshot(wc.cwd, in)
+	prev, err := wc.app.Snapshot(app.Scope{Cwd: wc.cwd, In: in})
 	if err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func runWatch(wc watchCmd, in string, agent bool) error {
 			if !ok {
 				return nil
 			}
-			cur, err := wc.app.Snapshot(wc.cwd, in)
+			cur, err := wc.app.Snapshot(app.Scope{Cwd: wc.cwd, In: in})
 			if err != nil {
 				return err
 			}

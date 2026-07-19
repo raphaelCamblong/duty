@@ -23,7 +23,7 @@ func newArchiveCmd(a app.App, cwd string) *cobra.Command {
 			if len(args) != 0 {
 				return errors.New(archiveUsage)
 			}
-			return a.Archive(cwd, in)
+			return a.Archive(app.Scope{Cwd: cwd, In: in})
 		},
 	}
 	addInFlag(cmd, &in)
