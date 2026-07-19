@@ -13,14 +13,12 @@ const (
 	deleteTaskExample = `  duty delete task T-07 --force`
 )
 
-// newDeleteCmd builds the delete verb: resource subcommands for removal.
 func newDeleteCmd(a app.App, cwd string) *cobra.Command {
 	cmd := newGroupCmd("delete", "remove a task", deleteTaskUsage, deleteTaskExample)
 	cmd.AddCommand(newDeleteTaskCmd(a, cwd))
 	return cmd
 }
 
-// newDeleteTaskCmd builds delete task: remove an open task and its row.
 func newDeleteTaskCmd(a app.App, cwd string) *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{

@@ -16,8 +16,7 @@ import (
 	"github.com/raphaelCamblong/duty/internal/task"
 )
 
-// ageStyle dims the trailing columns of get tasks' human output: the
-// relative-age column and the unmet-dependency "waits" annotation.
+// ageStyle dims the age and waits columns in human output.
 var ageStyle = lipgloss.NewStyle().Faint(true)
 
 const (
@@ -35,11 +34,9 @@ const (
   duty get next --claim`
 )
 
-// taskKeyWidth pads the key column of get task's human output; it is the
-// width of the widest key including its colon ("blocked-by:").
+// taskKeyWidth must match the widest key rendered by kv (currently "blocked-by:").
 const taskKeyWidth = len("blocked-by:")
 
-// newGetCmd builds the get verb: resource subcommands for reading state.
 func newGetCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	cmd := newGroupCmd("get", "read tasks and tracks from the files", getUsage, getExample)
 	cmd.AddCommand(
@@ -51,15 +48,10 @@ func newGetCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	return cmd
 }
 
-// newListCmd builds the hidden top-level list alias for get tasks.
 func newListCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	return newGetTasksCmd(a, cwd, stdout, "list", true)
 }
 
-// newGetTaskCmd builds get task: one task's metadata and file path, human
-// aligned or a single --agent TSV record; --section prints one section's body,
-// --body the whole body below the frontmatter — the two read forms are
-// mutually exclusive with each other and with --agent.
 func newGetTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var (
 		agent   bool
@@ -85,10 +77,6 @@ func newGetTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	return cmd
 }
 
-// getTaskOut writes the requested view of task id to stdout: the whole body
-// with body set, one section with section set, the --agent TSV record, else the
-// human metadata block. The three read forms are guarded mutually exclusive on
-// the command.
 func getTaskOut(a app.App, cwd, id, section string, body, agent bool, stdout io.Writer) error {
 	if body {
 		text, err := a.Body(cwd, id)
@@ -118,8 +106,6 @@ func getTaskOut(a app.App, cwd, id, section string, body, agent bool, stdout io.
 	return nil
 }
 
-// newGetTracksCmd builds get tracks: one line per board — the root included —
-// with its title and per-status own-task counts.
 func newGetTracksCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var (
 		agent bool
@@ -154,9 +140,8 @@ func newGetTracksCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	return cmd
 }
 
-// newGetNextCmd builds get next: the first actionable task, or no output when
-// nothing is ready. With --claim it atomically marks that task in-progress and
-// prints it, so parallel agents each receive a distinct task.
+// newGetNextCmd's --claim atomically marks the task in-progress so parallel
+// agents each land on a distinct task.
 func newGetNextCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var (
 		agent bool
@@ -194,9 +179,6 @@ func newGetNextCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	return cmd
 }
 
-// newGetTasksCmd builds the tasks reader under the given name: every open
-// task in the current board and below, one human line or one --agent TSV
-// record per task.
 func newGetTasksCmd(a app.App, cwd string, stdout io.Writer, use string, hidden bool) *cobra.Command {
 	var (
 		status string
@@ -232,8 +214,6 @@ func newGetTasksCmd(a app.App, cwd string, stdout io.Writer, use string, hidden 
 	return cmd
 }
 
-// taskHuman renders info as aligned "key: value" lines: id, title, status,
-// track, blocked-by, gates n/m, path.
 func taskHuman(info app.TaskInfo) string {
 	var b strings.Builder
 	kv(&b, "id", info.ID)
@@ -250,14 +230,10 @@ func taskHuman(info app.TaskInfo) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// kv writes one "key:<pad>value" line, the pad aligning every value to the
-// widest key.
 func kv(b *strings.Builder, key, value string) {
 	fmt.Fprintf(b, "%-*s %s\n", taskKeyWidth, key+":", value)
 }
 
-// blockedByHuman joins each prerequisite as "id (status)" with ", ", or "none"
-// when the task depends on nothing.
 func blockedByHuman(deps []app.Dep) string {
 	if len(deps) == 0 {
 		return "none"
@@ -269,10 +245,7 @@ func blockedByHuman(deps []app.Dep) string {
 	return strings.Join(parts, ", ")
 }
 
-// taskAgent renders info as one agent-output TSV record: id, track, status,
-// title, gates-done, gates-total, blocked-by (comma-joined), path, updated
-// (RFC3339 mtime), and claimed-by. New fields only ever append, so parsers of
-// the earlier fields keep working; claimed-by is empty for an unclaimed task.
+// taskAgent's TSV column order is a wire contract: new fields only ever append.
 func taskAgent(info app.TaskInfo) string {
 	return tsv(
 		info.ID,
@@ -288,8 +261,6 @@ func taskAgent(info app.TaskInfo) string {
 	)
 }
 
-// tracksHuman renders tracks as aligned columns: path, title, then the
-// per-status counts and archived count in fixed order.
 func tracksHuman(tracks []app.TrackInfo) []string {
 	pathW, titleW := 0, 0
 	for _, tr := range tracks {
@@ -309,8 +280,7 @@ func tracksHuman(tracks []app.TrackInfo) []string {
 	return lines
 }
 
-// trackAgent renders one track as a TSV record: path, title, todo,
-// in-progress, done, blocked, archived — fixed column order is the contract.
+// trackAgent's column order is a wire contract; don't reorder them.
 func trackAgent(tr app.TrackInfo) string {
 	return tsv(
 		tr.Path,
@@ -323,7 +293,7 @@ func trackAgent(tr app.TrackInfo) string {
 	)
 }
 
-// humanLine renders r for human reading: "[track/ ]id  status  title[  drift]".
+// humanLine renders "[track/ ]id  status  title[  drift]  age[  waits]".
 func humanLine(r app.Row) string {
 	var b strings.Builder
 	if r.Board != "." {
@@ -348,8 +318,6 @@ func humanLine(r app.Row) string {
 	return b.String()
 }
 
-// waitsCell renders a row's unmet-dependency annotation, "" when the task is
-// actionable — every blocked-by id already done.
 func waitsCell(r app.Row) string {
 	if len(r.Waits) == 0 {
 		return ""
@@ -357,8 +325,6 @@ func waitsCell(r app.Row) string {
 	return "waits " + strings.Join(r.Waits, ",")
 }
 
-// statusCell renders a row's status column, appending "· <claimer>" when an
-// in-progress task names who holds it.
 func statusCell(r app.Row) string {
 	if r.Status == task.StatusInProgress && r.ClaimedBy != "" {
 		return r.Status + " · " + r.ClaimedBy
@@ -366,7 +332,6 @@ func statusCell(r app.Row) string {
 	return r.Status
 }
 
-// humanDrift renders r's drift flag for a human, "" when in sync.
 func humanDrift(r app.Row) string {
 	switch {
 	case r.RowMissing:
@@ -377,15 +342,12 @@ func humanDrift(r app.Row) string {
 	return ""
 }
 
-// tsvLine renders r as one agent-output record:
-// id<TAB>board-path<TAB>status<TAB>title<TAB>drift<TAB>updated (RFC3339 mtime,
-// the trailing field so existing parsers keep working).
+// tsvLine's column order is a wire contract; updated was appended last so
+// existing parsers keep working.
 func tsvLine(r app.Row) string {
 	return tsv(r.ID, r.Board, r.Status, r.Title, agentDrift(r), r.UpdatedAt.Format(time.RFC3339))
 }
 
-// agentDrift renders r's drift flag for --agent output: "", "board=<status>",
-// or "no-row".
 func agentDrift(r app.Row) string {
 	switch {
 	case r.RowMissing:

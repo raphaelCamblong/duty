@@ -20,8 +20,6 @@ const (
 	gatesAddExample = `  duty gates add T-07 "build passes" "tests green"`
 )
 
-// newGatesCmd builds the gates command: list a task's gates (bare or with the
-// "list" word), or add, check, and uncheck them.
 func newGatesCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var agent bool
 	cmd := &cobra.Command{
@@ -50,8 +48,6 @@ func newGatesCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	return cmd
 }
 
-// gatesListID extracts the task id from a gates-list invocation: "<id>" or the
-// explicit "<id> list".
 func gatesListID(args []string) (string, error) {
 	if len(args) == 1 && args[0] != "" {
 		return args[0], nil
@@ -62,8 +58,6 @@ func gatesListID(args []string) (string, error) {
 	return "", errors.New(gatesUsage)
 }
 
-// newGatesAddCmd builds gates add: append one or more gates to a task in order,
-// in one write.
 func newGatesAddCmd(a app.App, cwd string) *cobra.Command {
 	return &cobra.Command{
 		Use:     "add <id> <text>...",
@@ -78,8 +72,6 @@ func newGatesAddCmd(a app.App, cwd string) *cobra.Command {
 	}
 }
 
-// newGatesFlipCmd builds gates check / uncheck: tick or untick a task's n-th
-// gate (1-based), or --all of them in one write.
 func newGatesFlipCmd(a app.App, cwd, verb string, done bool) *cobra.Command {
 	usage := fmt.Sprintf(gatesFlipUsage, verb)
 	var all bool
@@ -108,7 +100,6 @@ func newGatesFlipCmd(a app.App, cwd, verb string, done bool) *cobra.Command {
 	return cmd
 }
 
-// hasEmpty reports whether any string in ss is empty.
 func hasEmpty(ss []string) bool {
 	for _, s := range ss {
 		if s == "" {
@@ -118,8 +109,7 @@ func hasEmpty(ss []string) bool {
 	return false
 }
 
-// printGates writes gates 1-based: human "1 [x] text", or with agent a TSV
-// record "index<TAB>done<TAB>text" (done "true"/"false").
+// printGates numbers gates 1-based, plain text or --agent TSV (index, done, text).
 func printGates(w io.Writer, gates []task.Gate, agent bool) {
 	for i, g := range gates {
 		if agent {
@@ -130,7 +120,6 @@ func printGates(w io.Writer, gates []task.Gate, agent bool) {
 	}
 }
 
-// checkbox renders a gate's ticked state as a markdown checkbox.
 func checkbox(done bool) string {
 	if done {
 		return "[x]"

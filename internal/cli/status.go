@@ -13,8 +13,6 @@ const (
 	statusExample = `  duty status T-07 in-progress`
 )
 
-// newStatusCmd builds the status command: set a task's status in its file
-// and board row.
 func newStatusCmd(a app.App, cwd string) *cobra.Command {
 	var (
 		force bool

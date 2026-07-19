@@ -20,10 +20,8 @@ const (
 	skillInstallUsage = "usage: duty skill install [claude|codex|gemini] [--user] [--force] [--offline]"
 )
 
-// newSkillCmd builds the skill command: print the agent skill to stdout, or
-// install it into a harness via the install subcommand. Both fetch the latest
-// text from duty-cli.xyz and fall back silently to the embedded copy; --offline
-// skips the network.
+// newSkillCmd fetches the skill from duty-cli.xyz and falls back silently to
+// the embedded copy on failure; --offline skips the network entirely.
 func newSkillCmd(a app.App, f fetch.Fetcher, cwd, home string, stdout io.Writer) *cobra.Command {
 	var offline bool
 	cmd := &cobra.Command{
@@ -43,11 +41,6 @@ func newSkillCmd(a app.App, f fetch.Fetcher, cwd, home string, stdout io.Writer)
 	return cmd
 }
 
-// newSkillInstallCmd builds skill install: write the skill for a chosen harness
-// (claude, codex, gemini), picking the target from the argument or, on an
-// interactive terminal with no argument, an interactive selector. It prints
-// where the skill landed — same line whether the content came from the
-// remote or the embedded fallback.
 func newSkillInstallCmd(a app.App, f fetch.Fetcher, cwd, home string, offline *bool, stdout io.Writer) *cobra.Command {
 	var (
 		user  bool
@@ -75,9 +68,6 @@ func newSkillInstallCmd(a app.App, f fetch.Fetcher, cwd, home string, offline *b
 	return cmd
 }
 
-// resolveTarget picks the install target from args, or from an interactive
-// selector when no argument is given on a terminal; a non-interactive run with
-// no argument is an error.
 func resolveTarget(cmd *cobra.Command, args []string) (app.Target, error) {
 	if len(args) > 1 {
 		return "", errors.New(skillInstallUsage)
@@ -91,7 +81,6 @@ func resolveTarget(cmd *cobra.Command, args []string) (app.Target, error) {
 	return selectTarget()
 }
 
-// selectTarget runs the interactive harness picker and returns the choice.
 func selectTarget() (app.Target, error) {
 	var choice string
 	form := huh.NewForm(
@@ -112,13 +101,10 @@ func selectTarget() (app.Target, error) {
 	return app.ParseTarget(choice)
 }
 
-// interactive reports whether cmd's input and output are both a terminal, the
-// condition for showing the selector.
 func interactive(cmd *cobra.Command) bool {
 	return isTTY(cmd.InOrStdin()) && isTTY(cmd.OutOrStdout())
 }
 
-// isTTY reports whether v is an *os.File backed by a terminal.
 func isTTY(v any) bool {
 	f, ok := v.(*os.File)
 	return ok && term.IsTerminal(int(f.Fd()))

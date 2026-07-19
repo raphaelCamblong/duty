@@ -22,8 +22,6 @@ const (
 	watchExample = `  duty watch --agent`
 )
 
-// newWatchCmd builds watch: a long-running stream of one line per task state
-// change, powered by the same filesystem watcher the TUI uses.
 func newWatchCmd(a app.App, f fsys.FS, cwd string, stdout io.Writer) *cobra.Command {
 	var (
 		agent bool
@@ -45,11 +43,8 @@ func newWatchCmd(a app.App, f fsys.FS, cwd string, stdout io.Writer) *cobra.Comm
 	return cmd
 }
 
-// runWatch streams task-state changes until interrupted: on each debounced
-// filesystem burst it re-snapshots, diffs against the previous snapshot, and
-// prints one line per change. It prints nothing on start (state, not history),
-// returns nil on SIGINT, and returns an error only when the tree becomes
-// unreadable — the tree disappearing mid-watch.
+// runWatch prints nothing for the initial snapshot, only for later changes;
+// it returns nil on SIGINT and an error only if the tree becomes unreadable.
 func runWatch(a app.App, f fsys.FS, cwd, in string, agent bool, stdout io.Writer) error {
 	root, err := tree.FindRoot(f, cwd)
 	if err != nil {
@@ -86,8 +81,7 @@ func runWatch(a app.App, f fsys.FS, cwd, in string, agent bool, stdout io.Writer
 	}
 }
 
-// emit writes one line per event: a readable line, or the TSV record when agent
-// is set. Every line in a burst shares the emit timestamp.
+// emit gives every event in a burst the same timestamp (capture time, not per-event).
 func emit(w io.Writer, events []app.Event, agent bool) {
 	now := time.Now()
 	for _, e := range events {
@@ -99,19 +93,15 @@ func emit(w io.Writer, events []app.Event, agent bool) {
 	}
 }
 
-// watchTSV renders one change as the agent record:
-// time<TAB>event<TAB>id<TAB>field<TAB>old<TAB>new, time in RFC3339.
+// watchTSV's column order (time, event, id, field, old, new) is a wire contract.
 func watchTSV(now time.Time, e app.Event) string {
 	return tsv(now.Format(time.RFC3339), e.Kind, e.ID, e.Field, e.Old, e.New)
 }
 
-// watchHuman renders one change as a readable line: a short clock time, the
-// task id, the event, and the old → new transition.
 func watchHuman(now time.Time, e app.Event) string {
 	return now.Format("15:04:05") + "  " + humanChange(e)
 }
 
-// humanChange renders an event's body without its timestamp.
 func humanChange(e app.Event) string {
 	switch e.Kind {
 	case app.EventCreated:
@@ -123,7 +113,6 @@ func humanChange(e app.Event) string {
 	}
 }
 
-// orDash renders an empty value as an em dash so a transition reads cleanly.
 func orDash(s string) string {
 	if s == "" {
 		return "—"

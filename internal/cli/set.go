@@ -14,8 +14,6 @@ const (
 	setExample = "  duty set T-07 goal < goal.md\n  duty set T-07 < body.md"
 )
 
-// newSetCmd builds the set command: replace one section's body (with a section
-// argument) or every "## " block on stdin (without one) from stdin.
 func newSetCmd(a app.App, cwd string, stdin io.Reader) *cobra.Command {
 	return &cobra.Command{
 		Use:     "set <id> [section]",

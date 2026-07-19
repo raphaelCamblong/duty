@@ -19,8 +19,6 @@ const (
 	createTrackExample = `  duty create track backend --title "Backend work"`
 )
 
-// newCreateCmd builds the create verb: resource subcommands for tasks and
-// tracks.
 func newCreateCmd(a app.App, cwd string, stdin io.Reader, stdout io.Writer) *cobra.Command {
 	cmd := newGroupCmd("create", "create a task or a track", createUsage, createExample)
 	cmd.AddCommand(
@@ -30,10 +28,6 @@ func newCreateCmd(a app.App, cwd string, stdin io.Reader, stdout io.Writer) *cob
 	return cmd
 }
 
-// newCreateTaskCmd builds create task: new task in the current board,
-// printing "<id>\t<path>" — the only output, same shape for humans and
-// agents. With --body the whole markdown body (## sections) is read from
-// stdin instead of the section skeleton.
 func newCreateTaskCmd(a app.App, cwd string, stdin io.Reader, stdout io.Writer) *cobra.Command {
 	var (
 		slug      string
@@ -70,9 +64,6 @@ func newCreateTaskCmd(a app.App, cwd string, stdin io.Reader, stdout io.Writer) 
 	return cmd
 }
 
-// newCreateTrackCmd builds create track: new track (a folder with its own
-// board) under the current one, printing "<name>\t<path>" — the confirmation
-// symmetric with create task.
 func newCreateTrackCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	var (
 		title string

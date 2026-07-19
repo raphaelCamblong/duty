@@ -15,8 +15,6 @@ const (
   duty move T-07 --after T-03`
 )
 
-// newMoveCmd builds the move command: relocate a task to another track, move
-// its board row to a section, reorder it within its board, or a combination.
 func newMoveCmd(a app.App, cwd string) *cobra.Command {
 	var (
 		track   string

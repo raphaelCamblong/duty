@@ -14,8 +14,6 @@ const (
 	reportExample = "  duty report T-07 --status done < report.txt\n  duty report T-07 < report.txt"
 )
 
-// newReportCmd builds the report command: append stdin under the task's
-// "## Report" heading, optionally flipping the status in the same write.
 func newReportCmd(a app.App, cwd string, stdin io.Reader) *cobra.Command {
 	var (
 		status string

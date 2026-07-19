@@ -19,22 +19,18 @@ import (
 	"github.com/raphaelCamblong/duty/internal/fsys"
 )
 
-// missingCommandError reports an invocation naming no command or resource;
-// it maps to exit 2.
+// missingCommandError marks a bare invocation; Run maps it to exit 2.
 type missingCommandError string
 
-// Error renders the one-line usage message.
 func (e missingCommandError) Error() string { return string(e) }
 
-// unknownCommandError names a command Run does not know, with an optional
-// typo suggestion; it maps to exit 2.
+// unknownCommandError names an unrecognized command, optionally with a typo
+// suggestion; Run maps it to exit 2.
 type unknownCommandError struct {
 	name       string
 	suggestion string
 }
 
-// Error renders the one-line unknown-command message, with a "did you mean"
-// hint when a close match exists.
 func (e unknownCommandError) Error() string {
 	if e.suggestion == "" {
 		return fmt.Sprintf("unknown command %q", e.name)
@@ -42,11 +38,8 @@ func (e unknownCommandError) Error() string {
 	return fmt.Sprintf("unknown command %q — did you mean %q?", e.name, e.suggestion)
 }
 
-// errNoCommand reports an invocation naming no command at all.
 var errNoCommand = missingCommandError("usage: duty <command> [args]")
 
-// unknownCommand builds the unknown-command error for name, suggesting the
-// closest of cmd's subcommands when one is within SuggestionsMinimumDistance.
 func unknownCommand(cmd *cobra.Command, name string) error {
 	suggestion := ""
 	if suggestions := cmd.SuggestionsFor(name); len(suggestions) > 0 {
@@ -55,11 +48,8 @@ func unknownCommand(cmd *cobra.Command, name string) error {
 	return unknownCommandError{name: name, suggestion: suggestion}
 }
 
-// Run executes one duty command over the real filesystem. args is the command
-// line without the program name; stdin feeds commands that read input; stdout
-// receives command output; stderr receives one-line error messages. It returns
-// the process exit code: 0 on success, 2 on a missing or unknown command, 1 on
-// any other error.
+// Run executes one duty command and returns the process exit code: 0
+// success, 2 missing/unknown command, 1 any other error.
 func Run(args []string, stdin io.Reader, stdout, stderr io.Writer, version string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, errNoCommand)
@@ -84,8 +74,6 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer, version strin
 	return 0
 }
 
-// Command group ids, shared between the root command's grouping and each
-// subcommand's assignment.
 const (
 	groupAuthor    = "author"
 	groupWork      = "work"
@@ -93,8 +81,6 @@ const (
 	groupInterface = "interface"
 )
 
-// rootLong is the root command's long help: what duty is, then the five-step
-// lifecycle it drives.
 const rootLong = `duty is a file-based task system: markdown task files plus nested board
 indexes, kept in sync by one binary.
 
@@ -105,15 +91,12 @@ The lifecycle:
   duty status <id> done          then duty report <id> with what changed
   duty archive                   move every done task into its board's archive/`
 
-// rootExample is a copy-pasteable run through the lifecycle above.
 const rootExample = `  duty get next --agent
   duty status T-07 in-progress
   duty status T-07 done
   duty report T-07 < report.txt
   duty archive`
 
-// newRoot assembles the duty command tree over the real filesystem, rooted
-// at cwd, with cobra's own error and usage printing silenced.
 func newRoot(cwd string, stdin io.Reader, stdout, stderr io.Writer, version string) *cobra.Command {
 	root := rootCmd(version)
 	root.SetIn(stdin)
@@ -123,8 +106,6 @@ func newRoot(cwd string, stdin io.Reader, stdout, stderr io.Writer, version stri
 	return root
 }
 
-// rootCmd builds the bare root command: identity, help text, and cobra's own
-// error and usage printing silenced.
 func rootCmd(version string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "duty <command> [args]",
@@ -137,9 +118,6 @@ func rootCmd(version string) *cobra.Command {
 	return cmd
 }
 
-// dispatchOnly turns cmd into a pure dispatcher: arbitrary args, cobra's own
-// error and usage printing silenced, and a RunE that returns missing when
-// invoked bare or the unknown-command error otherwise — both mapping to exit 2.
 func dispatchOnly(cmd *cobra.Command, missing error) {
 	cmd.Args = cobra.ArbitraryArgs
 	cmd.SilenceErrors = true
@@ -153,8 +131,6 @@ func dispatchOnly(cmd *cobra.Command, missing error) {
 	}
 }
 
-// addCommands registers the help groups and every subcommand under root,
-// wired over the real filesystem rooted at cwd.
 func addCommands(root *cobra.Command, cwd string, stdin io.Reader, stdout io.Writer) {
 	var f fsys.FS = fsys.OS{}
 	a := app.New(f)
@@ -184,14 +160,11 @@ func addCommands(root *cobra.Command, cwd string, stdin io.Reader, stdout io.Wri
 	)
 }
 
-// grouped assigns cmd to the help group id and returns it.
 func grouped(cmd *cobra.Command, id string) *cobra.Command {
 	cmd.GroupID = id
 	return cmd
 }
 
-// claimer resolves the agent name a claim records: the --as flag value when
-// set, else $DUTY_AGENT, else empty for an unnamed claim.
 func claimer(as string) string {
 	if as = strings.TrimSpace(as); as != "" {
 		return as
@@ -199,15 +172,10 @@ func claimer(as string) string {
 	return strings.TrimSpace(os.Getenv("DUTY_AGENT"))
 }
 
-// addAsFlag registers the --as flag on cmd, binding it to as: the agent name a
-// claim records. Shared by every command that can move a task to in-progress.
 func addAsFlag(cmd *cobra.Command, as *string) {
 	cmd.Flags().StringVar(as, "as", "", "agent name to record as the claimer (falls back to $DUTY_AGENT)")
 }
 
-// newGroupCmd builds a verb command that only dispatches to its resource
-// subcommands: invoked bare it reports usage, with an unknown resource it
-// reports the unknown command — both map to exit 2.
 func newGroupCmd(use, short, usage, example string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     use,
@@ -218,26 +186,19 @@ func newGroupCmd(use, short, usage, example string) *cobra.Command {
 	return cmd
 }
 
-// addInFlag registers the local --in flag on cmd, binding it to in: a
-// root-relative track path ("." = root board) selecting the board the command
-// acts on instead of the one derived from cwd. Shared by every board-scoped
-// command.
 func addInFlag(cmd *cobra.Command, in *string) {
 	cmd.Flags().StringVar(in, "in", "", `board to act on by track path from the tree root ("." = root)`)
 }
 
-// tsv joins fields into one agent-output record; the tab is the wire contract
-// for --agent output.
+// tsv joins fields with tab, the wire contract for --agent output.
 func tsv(fields ...string) string { return strings.Join(fields, "\t") }
 
-// stringList is a repeatable string flag; each occurrence may also carry
-// several comma-separated values.
+// stringList is a repeatable flag implementing pflag.Value; each occurrence
+// may itself carry several comma-separated values.
 type stringList []string
 
-// String renders the collected values, satisfying pflag.Value.
 func (l *stringList) String() string { return strings.Join(*l, ",") }
 
-// Set appends the comma-separated values in v, satisfying pflag.Value.
 func (l *stringList) Set(v string) error {
 	for _, s := range strings.Split(v, ",") {
 		if s = strings.TrimSpace(s); s != "" {
@@ -247,5 +208,4 @@ func (l *stringList) Set(v string) error {
 	return nil
 }
 
-// Type names the flag's value in help output, satisfying pflag.Value.
 func (l *stringList) Type() string { return "id" }

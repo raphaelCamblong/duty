@@ -14,7 +14,6 @@ const (
 	tuiExample = `  duty tui`
 )
 
-// newTUICmd builds the tui command: launch the live board viewer.
 func newTUICmd(f fsys.FS, cwd string) *cobra.Command {
 	return &cobra.Command{
 		Use:     "tui",

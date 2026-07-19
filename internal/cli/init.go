@@ -15,8 +15,6 @@ const (
 	initExample = `  duty init "Q3 roadmap"`
 )
 
-// newInitCmd builds the init command: bootstrap a duty tree in cwd, printing
-// where it landed.
 func newInitCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	return &cobra.Command{
 		Use:     "init [title]",
