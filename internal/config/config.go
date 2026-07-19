@@ -1,6 +1,4 @@
-// Package config loads duty's TOML configuration, merging the project file
-// over the user file over built-in defaults. Zero configuration always
-// works: missing files are skipped and every key has a default.
+// Package config loads duty's TOML configuration: project over user over built-in defaults.
 package config
 
 import (
@@ -15,16 +13,12 @@ import (
 	"github.com/raphaelCamblong/duty/internal/fsys"
 )
 
-// Config holds duty's tunable settings. Config tunes presentation only;
-// statuses, naming, and board structure are the convention, never settings.
+// Config tunes presentation only — statuses, naming, and board structure are the convention, never settings.
 type Config struct {
-	// Editor is the command used to open task files.
 	Editor string `toml:"editor"`
-	// TUI groups terminal-UI settings.
-	TUI struct {
+	TUI    struct {
 		// Theme selects the TUI color scheme: auto, dark, or light.
-		Theme string `toml:"theme"`
-		// Palette overrides individual color slots of the TUI theme.
+		Theme   string  `toml:"theme"`
 		Palette Palette `toml:"palette"`
 	} `toml:"tui"`
 }
@@ -36,13 +30,10 @@ type Palette struct {
 	// Accent overrides the accent slot (focused chrome, ids, breadcrumb).
 	Accent *Color `toml:"accent"`
 	// Dim overrides the dim slot (separators, ages, hints).
-	Dim *Color `toml:"dim"`
-	// Todo overrides the todo status slot.
-	Todo *Color `toml:"todo"`
-	// InProgress overrides the in-progress status slot.
+	Dim        *Color `toml:"dim"`
+	Todo       *Color `toml:"todo"`
 	InProgress *Color `toml:"in-progress"`
-	// Done overrides the done status slot.
-	Done *Color `toml:"done"`
+	Done       *Color `toml:"done"`
 	// Blocked overrides the blocked status slot (also scan errors and drift).
 	Blocked *Color `toml:"blocked"`
 }
@@ -51,10 +42,8 @@ type Palette struct {
 // light and dark channels, or an inline table { light = "…", dark = "…" } sets
 // them independently. The values stay unvalidated here; the TUI checks them.
 type Color struct {
-	// Light is the value used on a light background.
 	Light string
-	// Dark is the value used on a dark background.
-	Dark string
+	Dark  string
 }
 
 // UnmarshalTOML reads a Color from a bare string (both channels) or an inline
@@ -88,8 +77,6 @@ func Load(f fsys.FS, userPath, projectPath string) (Config, error) {
 	return cfg, nil
 }
 
-// UserPath returns the user-level config file location:
-// os.UserConfigDir()/duty/config.toml.
 func UserPath() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
@@ -98,8 +85,6 @@ func UserPath() (string, error) {
 	return filepath.Join(dir, "duty", "config.toml"), nil
 }
 
-// defaults returns the built-in configuration: Editor from $EDITOR (vi when
-// unset or empty) and Theme "auto".
 func defaults() Config {
 	cfg := Config{Editor: os.Getenv("EDITOR")}
 	if cfg.Editor == "" {
@@ -109,8 +94,7 @@ func defaults() Config {
 	return cfg
 }
 
-// mergeFile decodes the TOML file at path into cfg, overriding only the keys
-// the file sets. An empty path or a missing file leaves cfg untouched.
+// mergeFile decodes the TOML file at path into cfg, overwriting only the keys the file sets.
 func mergeFile(f fsys.FS, cfg *Config, path string) error {
 	if path == "" {
 		return nil

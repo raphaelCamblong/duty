@@ -1,6 +1,4 @@
-// Command duty is a file-based task system: markdown task files plus nested
-// board indexes, kept in sync by one binary. main is a thin delegate — all
-// dispatch, flag parsing, and error rendering live in internal/cli.
+// Command duty is a file-based task system: markdown task files plus nested board indexes.
 package main
 
 import (

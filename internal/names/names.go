@@ -12,7 +12,6 @@ const ConfigFile = "duty.toml"
 // ReadmeFile is the convention doc duty init writes next to the root board.
 const ReadmeFile = "README.md"
 
-// ArchiveDir is the name of a board's completed-tasks subdirectory.
 const ArchiveDir = "archive"
 
 // TreeDir is the conventional folder a tree lives in below a project root.
@@ -22,7 +21,7 @@ const TreeDir = "duty"
 // demand, gitignored, and never committed.
 const LockFile = ".duty.lock"
 
-// ClaudeDir is the Claude Code config directory that holds installed skills.
+// ClaudeDir is the Claude Code config directory.
 const ClaudeDir = ".claude"
 
 // SkillsDir is the subdirectory of ClaudeDir that Claude Code loads skills from.

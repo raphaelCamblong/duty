@@ -139,8 +139,6 @@ func IsTaskFile(name string) bool {
 	return taskNN.MatchString(name)
 }
 
-// TaskFileNames returns the task filenames directly in dir, in ReadDir order,
-// skipping subdirectories and non-task files.
 func TaskFileNames(f fsys.FS, dir string) ([]string, error) {
 	entries, err := f.ReadDir(dir)
 	if err != nil {
@@ -187,8 +185,6 @@ func NextNN(f fsys.FS, root string) (string, error) {
 	return fmt.Sprintf("%02d", highest+1), nil
 }
 
-// nearestBoard walks up from dir and returns the first directory holding a
-// board index, or false if the walk reaches the filesystem root without one.
 func nearestBoard(f fsys.FS, dir string) (string, bool) {
 	for {
 		if hasFile(f, dir, names.BoardFile) {
@@ -202,8 +198,6 @@ func nearestBoard(f fsys.FS, dir string) (string, bool) {
 	}
 }
 
-// fallbackTree returns cwd/duty if it is a directory, else a one-line error:
-// the conventional tree location when cwd is outside any tree.
 func fallbackTree(f fsys.FS, cwd string) (string, error) {
 	fallback := filepath.Join(cwd, names.TreeDir)
 	info, err := f.Stat(fallback)
@@ -219,8 +213,6 @@ func hasFile(f fsys.FS, dir, name string) bool {
 	return err == nil && !info.IsDir()
 }
 
-// underArchive reports whether path sits below an archive/ directory
-// relative to root.
 func underArchive(root, path string) bool {
 	rel, err := filepath.Rel(root, path)
 	if err != nil {

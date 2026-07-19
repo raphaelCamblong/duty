@@ -26,7 +26,6 @@ type Mem struct {
 
 var _ FS = (*Mem)(nil)
 
-// NewMem returns an empty in-memory filesystem holding only the root "/".
 func NewMem() *Mem {
 	return &Mem{
 		files: map[string][]byte{},
@@ -35,7 +34,6 @@ func NewMem() *Mem {
 	}
 }
 
-// ReadFile returns a copy of the contents of the file at name.
 func (m *Mem) ReadFile(name string) ([]byte, error) {
 	data, ok := m.files[filepath.Clean(name)]
 	if !ok {
@@ -44,7 +42,6 @@ func (m *Mem) ReadFile(name string) ([]byte, error) {
 	return append([]byte(nil), data...), nil
 }
 
-// WriteFile writes a copy of data to name; its parent directory must exist.
 func (m *Mem) WriteFile(name string, data []byte) error {
 	c := filepath.Clean(name)
 	if !m.dirs[filepath.Dir(c)] {
@@ -54,7 +51,6 @@ func (m *Mem) WriteFile(name string, data []byte) error {
 	return nil
 }
 
-// Rename moves the file at oldpath to newpath; newpath's parent must exist.
 func (m *Mem) Rename(oldpath, newpath string) error {
 	co := filepath.Clean(oldpath)
 	data, ok := m.files[co]
@@ -70,7 +66,6 @@ func (m *Mem) Rename(oldpath, newpath string) error {
 	return nil
 }
 
-// Remove deletes the file or empty directory at name.
 func (m *Mem) Remove(name string) error {
 	c := filepath.Clean(name)
 	if _, ok := m.files[c]; ok {
@@ -84,7 +79,6 @@ func (m *Mem) Remove(name string) error {
 	return notExist("remove", name)
 }
 
-// MkdirAll marks path and every ancestor as an existing directory.
 func (m *Mem) MkdirAll(path string) error {
 	for d := filepath.Clean(path); ; {
 		m.dirs[d] = true
@@ -96,7 +90,6 @@ func (m *Mem) MkdirAll(path string) error {
 	}
 }
 
-// ReadDir lists the immediate children of name, sorted by filename.
 func (m *Mem) ReadDir(name string) ([]fs.DirEntry, error) {
 	c := filepath.Clean(name)
 	if !m.dirs[c] {
@@ -117,7 +110,6 @@ func (m *Mem) ReadDir(name string) ([]fs.DirEntry, error) {
 	return entries, nil
 }
 
-// Stat returns the FileInfo describing name.
 func (m *Mem) Stat(name string) (fs.FileInfo, error) {
 	c := filepath.Clean(name)
 	if !m.exists(c) {
@@ -183,7 +175,6 @@ func (m *Mem) Lock(path string) (func(), error) {
 	}
 }
 
-// lockChan returns the token channel guarding path, creating it once.
 func (m *Mem) lockChan(path string) chan struct{} {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -196,7 +187,6 @@ func (m *Mem) lockChan(path string) chan struct{} {
 	return ch
 }
 
-// exists reports whether the clean path c is a known file or directory.
 func (m *Mem) exists(c string) bool {
 	_, ok := m.files[c]
 	return ok || m.dirs[c]
@@ -215,20 +205,17 @@ func notExist(op, name string) error {
 	return &fs.PathError{Op: op, Path: name, Err: fs.ErrNotExist}
 }
 
-// memInfo is the fs.FileInfo of an in-memory file or directory.
 type memInfo struct {
 	name string
 	size int64
 	dir  bool
 }
 
-// Name returns the base name of the file.
 func (i memInfo) Name() string { return i.name }
 
 // Size returns the length in bytes, zero for a directory.
 func (i memInfo) Size() int64 { return i.size }
 
-// Mode returns 0644 for a file, ModeDir|0755 for a directory.
 func (i memInfo) Mode() fs.FileMode {
 	if i.dir {
 		return fs.ModeDir | 0o755
@@ -239,8 +226,6 @@ func (i memInfo) Mode() fs.FileMode {
 // ModTime returns the zero time; the Mem adapter tracks no timestamps.
 func (i memInfo) ModTime() time.Time { return time.Time{} }
 
-// IsDir reports whether the entry is a directory.
 func (i memInfo) IsDir() bool { return i.dir }
 
-// Sys returns nil.
 func (i memInfo) Sys() any { return nil }
