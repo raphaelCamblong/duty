@@ -30,8 +30,6 @@ const (
 	EventGates     = "gates"
 )
 
-// Event is one change duty watch detected between two snapshots: the task id,
-// the kind of change, and the changed field's old and new values.
 type Event struct {
 	Kind  string
 	ID    string
@@ -121,12 +119,10 @@ func changedFields(id string, prev, cur TaskState) []Event {
 	return events
 }
 
-// gatePair renders a state's gate counts as "done/total".
 func gatePair(s TaskState) string {
 	return fmt.Sprintf("%d/%d", s.GatesDone, s.GatesTotal)
 }
 
-// sortedIDs returns the union of both maps' ids in lexical order.
 func sortedIDs(before, after map[string]TaskState) []string {
 	ids := make(map[string]struct{}, len(before)+len(after))
 	for id := range before {

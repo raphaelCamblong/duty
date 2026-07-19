@@ -60,8 +60,7 @@ func readTaskBody(r io.Reader) ([]byte, error) {
 	return text, nil
 }
 
-// createTaskLocked validates dependencies, numbers the task tree-wide, and
-// writes the task file and its board row. It must run under the tree lock.
+// createTaskLocked must run under the tree lock.
 func (a App) createTaskLocked(root, boardDir, title, slug, section string, blockedBy []string, body []byte) (id, path string, err error) {
 	if err := a.validateBlockedBy(root, blockedBy); err != nil {
 		return "", "", err
@@ -84,8 +83,7 @@ func (a App) createTaskLocked(root, boardDir, title, slug, section string, block
 	return id, path, err
 }
 
-// validateBlockedBy checks every dependency id resolves somewhere in the
-// tree; archived dependencies are legal.
+// validateBlockedBy treats an archived dependency as a legal blocked-by id.
 func (a App) validateBlockedBy(root string, blockedBy []string) error {
 	for _, dep := range blockedBy {
 		if _, err := tree.ResolveTask(a.fs, root, dep); err != nil && !errors.Is(err, tree.ErrArchived) {
@@ -95,8 +93,8 @@ func (a App) validateBlockedBy(root string, blockedBy []string) error {
 	return nil
 }
 
-// writeTask renders the task file and appends its board row (status todo),
-// both contents computed before either write, and returns the new file's path.
+// writeTask computes both the task file and its board row before writing
+// either, so a failure leaves neither written.
 func (a App) writeTask(boardDir, id, slug, title, section string, blockedBy []string, body []byte) (string, error) {
 	filename := id + "-" + slug + ".md"
 	boardPath := boardIndexPath(boardDir)
@@ -118,8 +116,6 @@ func (a App) writeTask(boardDir, id, slug, title, section string, blockedBy []st
 	return taskPath, nil
 }
 
-// renderTask renders a new task file: the one-shot body below a generated H1
-// when body is non-nil, else the full section skeleton.
 func renderTask(id, title string, blockedBy []string, body []byte) []byte {
 	if body == nil {
 		return task.Render(id, title, blockedBy)

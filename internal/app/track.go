@@ -29,8 +29,7 @@ func (a App) CreateTrack(cwd, name, title, in string) (string, error) {
 	return a.createTrackLocked(parentDir, name, title)
 }
 
-// createTrackLocked writes the track's skeleton board and archive/ and appends
-// the courtesy bullet to the parent board. It must run under the tree lock.
+// createTrackLocked must run under the tree lock.
 func (a App) createTrackLocked(parentDir, name, title string) (string, error) {
 	sub := filepath.Join(parentDir, name)
 	if _, err := a.fs.Stat(sub); err == nil {

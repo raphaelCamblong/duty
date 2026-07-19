@@ -30,8 +30,8 @@ func (a App) SetStatus(cwd, id, status string, force bool, as string) error {
 	return a.setStatusLocked(taskPath, id, status, force, as)
 }
 
-// setStatusLocked performs the synced status write; both new contents are
-// computed before either file is written. It must run under the tree lock.
+// setStatusLocked computes both new file contents before writing either. It
+// must run under the tree lock.
 func (a App) setStatusLocked(taskPath, id, status string, force bool, as string) error {
 	t, content, err := a.readTask(taskPath)
 	if err != nil {
@@ -42,10 +42,9 @@ func (a App) setStatusLocked(taskPath, id, status string, force bool, as string)
 
 // statusWrite applies the synced status change onto content — the task file's
 // bytes, already read (and possibly already edited, as by report --status) —
-// with current its parsed status and holder its current claimer: it guards the
-// claim, rewrites the status line, sets or clears the claimed-by line, rewrites
-// the board cell, then writes both files, every new content computed before
-// either write so an error leaves both untouched. It must run under the tree lock.
+// with current its parsed status and holder its current claimer. Every new
+// content is computed before either write, so an error leaves both untouched.
+// It must run under the tree lock.
 func (a App) statusWrite(taskPath, id, status string, force bool, content []byte, current, holder, as string) error {
 	if err := guardClaim(id, status, current, holder, force); err != nil {
 		return err

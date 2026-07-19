@@ -34,8 +34,6 @@ func (a App) Archive(cwd, in string) error {
 	return nil
 }
 
-// archiveBoard archives every done task filed directly in b (not in a
-// track) into b's own archive/ directory.
 func (a App) archiveBoard(b string) error {
 	done, err := a.doneTasks(b)
 	if err != nil {
@@ -64,8 +62,6 @@ func (a App) archiveBoard(b string) error {
 	return a.fs.WriteFile(boardPath, index)
 }
 
-// dropRows drops one row per filename from the board index and prunes any
-// section left empty.
 func dropRows(index []byte, filenames []string) ([]byte, error) {
 	for _, name := range filenames {
 		var err error
@@ -76,8 +72,6 @@ func dropRows(index []byte, filenames []string) ([]byte, error) {
 	return board.PruneEmptySections(index), nil
 }
 
-// moveToArchive renames every named task file in b into b's archive/,
-// creating it if needed, and returns the archive's new task-file count.
 func (a App) moveToArchive(b string, filenames []string) (int, error) {
 	archiveDir := filepath.Join(b, names.ArchiveDir)
 	if err := a.fs.MkdirAll(archiveDir); err != nil {
@@ -91,8 +85,6 @@ func (a App) moveToArchive(b string, filenames []string) (int, error) {
 	return a.countTaskFiles(archiveDir)
 }
 
-// doneTasks returns the filenames of every status: done task filed directly
-// in dir.
 func (a App) doneTasks(dir string) ([]string, error) {
 	files, tasks, err := a.tasksIn(dir)
 	if err != nil {
@@ -107,7 +99,6 @@ func (a App) doneTasks(dir string) ([]string, error) {
 	return done, nil
 }
 
-// countTaskFiles counts the task files directly in dir.
 func (a App) countTaskFiles(dir string) (int, error) {
 	files, err := tree.TaskFileNames(a.fs, dir)
 	if err != nil {

@@ -15,7 +15,6 @@ import (
 // a reference task's row (adopting that row's section). The zero Position asks
 // for no reordering.
 type Position struct {
-	// Top requests the row move to the top of its section.
 	Top bool
 	// Before is the id of the task whose row the moved row goes above; empty
 	// when unused.
@@ -25,7 +24,6 @@ type Position struct {
 	After string
 }
 
-// None reports whether pos requests no reordering.
 func (p Position) None() bool { return !p.Top && p.Before == "" && p.After == "" }
 
 // Move relocates a task. With a track path — relative to the tree root, "."
@@ -77,9 +75,8 @@ func (a App) relocate(root, id, taskPath, track, section string) (string, error)
 	return a.moveTrack(root, id, taskPath, track, section)
 }
 
-// moveTrack relocates id's file into track's folder, dropping its source row
-// and appending one to the target's section, the file's status preserved, and
-// returns the file's new path.
+// moveTrack relocates id's file into track's folder (dropping its source row,
+// appending one to the target's section) and returns the file's new path.
 func (a App) moveTrack(root, id, taskPath, track, section string) (string, error) {
 	target, err := tree.ResolveTrack(a.fs, root, track)
 	if err != nil {
@@ -104,8 +101,6 @@ func (a App) moveTrack(root, id, taskPath, track, section string) (string, error
 	return filepath.Join(target, filename), nil
 }
 
-// dropFromBoard returns the board index at boardPath with filename's row
-// dropped and any section left empty pruned.
 func (a App) dropFromBoard(boardPath, filename string) ([]byte, error) {
 	src, err := a.fs.ReadFile(boardPath)
 	if err != nil {
@@ -118,9 +113,8 @@ func (a App) dropFromBoard(boardPath, filename string) ([]byte, error) {
 	return board.PruneEmptySections(dropped), nil
 }
 
-// moveAcross renames the task file into target and writes both boards; the
-// target row is computed before the rename so a failure leaves the tree
-// untouched.
+// moveAcross computes the target row before renaming the file, so a failure
+// leaves the tree untouched.
 func (a App) moveAcross(id, taskPath, target, section string, pruned []byte, t task.Task) error {
 	filename := filepath.Base(taskPath)
 	srcPath := boardBeside(taskPath)
@@ -168,8 +162,6 @@ func (a App) reorderInBoard(root, taskPath string, pos Position) error {
 	})
 }
 
-// reorder computes the reordered board for pos: --top, or --before/--after a
-// reference row resolved and checked to live in the same board.
 func (a App) reorder(root, boardPath string, index []byte, filename string, pos Position) ([]byte, error) {
 	if pos.Top {
 		return board.ReorderTop(index, filename)
@@ -185,9 +177,8 @@ func (a App) reorder(root, boardPath string, index []byte, filename string, pos 
 	return adjacent(index, filename, refFile)
 }
 
-// refFilename resolves a reference task id to its board row's filename,
-// requiring it to live in the board at boardPath. A ref in another board is an
-// error naming the fix: move it here with --track first.
+// refFilename resolves ref's filename, requiring it to live in the board at
+// boardPath.
 func (a App) refFilename(root, boardPath, ref string) (string, error) {
 	refPath, err := tree.ResolveTask(a.fs, root, ref)
 	if err != nil {

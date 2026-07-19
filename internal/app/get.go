@@ -37,8 +37,8 @@ type Dep struct {
 	Status string
 }
 
-// TrackInfo is one board's line for GetTracks: its path, title, per-status
-// own-task counts, and archived count.
+// TrackInfo is one board's line for GetTracks: per-status counts of its own
+// (directly-filed, non-recursive) tasks, plus its archived count.
 type TrackInfo struct {
 	Path       string
 	Title      string
@@ -49,8 +49,8 @@ type TrackInfo struct {
 	Archived   int
 }
 
-// GetTask returns the metadata of the open task id resolves to anywhere in
-// the tree containing cwd. It reads the frontmatter and gates, never the body.
+// GetTask returns the metadata — never the body — of the open task id
+// resolves to.
 func (a App) GetTask(cwd, id string) (TaskInfo, error) {
 	root, path, err := a.resolveOpenWithRoot(cwd, id)
 	if err != nil {
@@ -152,8 +152,6 @@ func (a App) claim(root, cwd, in, as string) (*TaskInfo, error) {
 	return info, nil
 }
 
-// nextActionable scans the board in and every board below it and returns the
-// first actionable task, or nil when none is ready.
 func (a App) nextActionable(root, cwd, in string) (*TaskInfo, error) {
 	_, boards, err := a.walkBoards(cwd, in)
 	if err != nil {
@@ -171,7 +169,6 @@ func (a App) nextActionable(root, cwd, in string) (*TaskInfo, error) {
 	return nil, nil
 }
 
-// taskInfo reads the task file at path and assembles its TaskInfo.
 func (a App) taskInfo(root, path string) (TaskInfo, error) {
 	t, content, err := a.readTask(path)
 	if err != nil {
@@ -180,7 +177,6 @@ func (a App) taskInfo(root, path string) (TaskInfo, error) {
 	return buildTaskInfo(root, path, content, t, a.mtime(path)), nil
 }
 
-// buildTaskInfo assembles a TaskInfo from an already-read task file.
 func buildTaskInfo(root, path string, content []byte, t task.Task, updated time.Time) TaskInfo {
 	done, total := task.CountGates(content)
 	return TaskInfo{
@@ -197,9 +193,9 @@ func buildTaskInfo(root, path string, content []byte, t task.Task, updated time.
 	}
 }
 
-// mtime returns the modification time of the file at path, the zero time when
-// it cannot be stat'd. Age is display metadata, so a stat miss degrades to no
-// age rather than failing the read.
+// mtime returns path's modification time, or the zero time when it cannot be
+// stat'd — age is display metadata, so a stat miss degrades quietly rather
+// than failing the read.
 func (a App) mtime(path string) time.Time {
 	info, err := a.fs.Stat(path)
 	if err != nil {
@@ -239,8 +235,6 @@ func (a App) trackInfo(listDir, b string) (TrackInfo, error) {
 	return info, nil
 }
 
-// nextInBoard returns the first actionable task filed directly in board b,
-// scanning its rows in board order, or nil when b holds none.
 func (a App) nextInBoard(root, b string) (*TaskInfo, error) {
 	index, err := a.fs.ReadFile(boardIndexPath(b))
 	if err != nil {
@@ -260,9 +254,9 @@ func (a App) nextInBoard(root, b string) (*TaskInfo, error) {
 	return nil, nil
 }
 
-// actionable returns the TaskInfo for filename in board b when its file is a
-// todo whose blocked-by are all done, else nil. A row pointing at a missing
-// file is skipped, not an error — the board can drift ahead of the files.
+// actionable returns filename's TaskInfo when it's a todo with every
+// blocked-by done, else nil. A row pointing at a missing file is skipped, not
+// an error — the board can drift ahead of the files.
 func (a App) actionable(root, b, filename string) (*TaskInfo, error) {
 	path := filepath.Join(b, filename)
 	t, content, err := a.readTask(path)
@@ -313,20 +307,16 @@ func UnmetDeps(deps []string, statusOf func(id string) (string, error)) ([]strin
 	return unmet, nil
 }
 
-// depMet reports whether a computed dependency status counts as satisfied:
-// done, or archived — archived prerequisites are treated as done.
 func depMet(status string) bool {
 	return status == task.StatusDone || status == statusArchived
 }
 
-// unmetDeps returns deps' unmet ids, reading each dep's status from the files.
 func (a App) unmetDeps(root string, deps []string) ([]string, error) {
 	return UnmetDeps(deps, func(id string) (string, error) {
 		return a.depStatus(root, id)
 	})
 }
 
-// fillDeps resolves info's blocked-by ids to their statuses and stores them.
 func (a App) fillDeps(root string, info *TaskInfo) error {
 	info.Deps = make([]Dep, 0, len(info.BlockedBy))
 	for _, id := range info.BlockedBy {
@@ -339,10 +329,8 @@ func (a App) fillDeps(root string, info *TaskInfo) error {
 	return nil
 }
 
-// depStatus resolves dependency id to the status duty computes for it: the open
-// task's lifecycle status, statusArchived for an archived task, or
-// statusMissing when the id resolves to no task. It is the one source the wait
-// computation and get task's annotations both read.
+// depStatus is the one source both wait computation and get task's dep
+// annotations read for a blocked-by id's computed status.
 func (a App) depStatus(root, id string) (string, error) {
 	path, err := tree.ResolveTask(a.fs, root, id)
 	if err != nil {
@@ -358,7 +346,6 @@ func (a App) depStatus(root, id string) (string, error) {
 	return t.Status, nil
 }
 
-// taskStatuses returns the file status of every task filed directly in dir.
 func (a App) taskStatuses(dir string) ([]string, error) {
 	_, tasks, err := a.tasksIn(dir)
 	if err != nil {
@@ -371,8 +358,8 @@ func (a App) taskStatuses(dir string) ([]string, error) {
 	return out, nil
 }
 
-// archivedCount counts the task files directly in dir, returning 0 when dir
-// does not exist — a board with nothing archived may lack the folder.
+// archivedCount counts dir's task files, or 0 when dir doesn't exist — a
+// board with nothing archived may lack the folder.
 func (a App) archivedCount(dir string) (int, error) {
 	info, err := a.fs.Stat(dir)
 	if err != nil || !info.IsDir() {

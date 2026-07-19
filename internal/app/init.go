@@ -19,7 +19,6 @@ var readmeTmplText string
 // table, the lifecycle→command mapping, and what stays the worker's judgment.
 var readmeTmpl = template.Must(template.New("readme").Parse(readmeTmplText))
 
-// renderReadme produces the convention readme Init drops next to the root board.
 func renderReadme() []byte {
 	var b bytes.Buffer
 	_ = readmeTmpl.Execute(&b, struct{ Board string }{Board: names.BoardFile})

@@ -19,7 +19,6 @@ var skillText []byte
 // Target names an agent harness the skill installs into.
 type Target string
 
-// The harness targets skill install understands.
 const (
 	Claude Target = "claude" // .claude/skills/duty/SKILL.md
 	Codex  Target = "codex"  // a delimited block in AGENTS.md
@@ -33,13 +32,10 @@ const (
 	skillBlockEnd   = "<!-- duty:skill end -->"
 )
 
-// unknownTargetErr is the one-line error for a target string that is not one of
-// the known harnesses.
 func unknownTargetErr(s string) error {
 	return fmt.Errorf("unknown target %q: want claude, codex or gemini", s)
 }
 
-// ParseTarget validates s as one of the known harness targets.
 func ParseTarget(s string) (Target, error) {
 	switch Target(s) {
 	case Claude, Codex, Gemini:
@@ -82,8 +78,6 @@ func (a App) InstallSkill(cwd, home string, target Target, skill []byte, user, f
 	return "", unknownTargetErr(string(target))
 }
 
-// installClaude writes skill verbatim to .claude/skills/duty/SKILL.md under cwd,
-// or under home when user is set, refusing an existing file without force.
 func (a App) installClaude(cwd, home string, skill []byte, user, force bool) (string, error) {
 	base := cwd
 	if user {
@@ -108,8 +102,6 @@ func (a App) installClaude(cwd, home string, skill []byte, user, force bool) (st
 	return path, nil
 }
 
-// installBlock merges the marker-delimited skill body into the file at path,
-// creating it if absent and refusing an existing duty block without force.
 func (a App) installBlock(path string, skill []byte, force bool) (string, error) {
 	existing, err := a.fs.ReadFile(path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -124,7 +116,6 @@ func (a App) installBlock(path string, skill []byte, force bool) (string, error)
 	return path, nil
 }
 
-// hasSkillBlock reports whether content already carries a duty skill block.
 func hasSkillBlock(content []byte) bool {
 	return bytes.Contains(content, []byte(skillBlockStart))
 }

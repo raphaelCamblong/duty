@@ -50,8 +50,6 @@ func (a App) Report(cwd, id string, r io.Reader, status string, force bool, as s
 	return a.statusWrite(taskPath, id, status, force, withReport, t.Status, t.ClaimedBy, as)
 }
 
-// readNonBlank reads all of r and rejects blank input, naming the piped content
-// kind in both the read-error and empty-input messages.
 func readNonBlank(r io.Reader, kind string) ([]byte, error) {
 	text, err := io.ReadAll(r)
 	if err != nil {

@@ -46,10 +46,8 @@ func (a App) SetSections(cwd, id string, r io.Reader) error {
 	return a.editSection(cwd, id, "sections", r, task.ReplaceSections)
 }
 
-// editSection resolves id to an open task file and rewrites it under the tree
-// write lock: it reads r (refusing blank input, naming it kind) and applies
-// edit to the current contents. The single read/lock/write spine shared by the
-// single- and multi-section setters.
+// editSection is the shared read/lock/write spine of SetSection and
+// SetSections.
 func (a App) editSection(cwd, id, kind string, r io.Reader, edit func(content, payload []byte) ([]byte, error)) error {
 	root, path, err := a.resolveOpenWithRoot(cwd, id)
 	if err != nil {

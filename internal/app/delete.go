@@ -23,8 +23,7 @@ func (a App) Delete(cwd, id string, force bool) error {
 	return a.deleteLocked(id, taskPath, force)
 }
 
-// deleteLocked removes an open task's file and board row, refusing a done task
-// unless force is set. It must run under the tree lock.
+// deleteLocked must run under the tree lock.
 func (a App) deleteLocked(id, taskPath string, force bool) error {
 	t, _, err := a.readTask(taskPath)
 	if err != nil {
