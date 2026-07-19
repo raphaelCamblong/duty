@@ -10,7 +10,6 @@ import (
 type Section struct {
 	// Name is the heading text after "## ".
 	Name string
-	// Rows are the section's task rows, top to bottom.
 	Rows []Row
 }
 
@@ -57,7 +56,6 @@ func Sections(content []byte) []Section {
 	return out
 }
 
-// parseRow decodes one task row; ok is false for scaffolding and prose.
 func parseRow(line string) (Row, bool) {
 	m := rowLinkRe.FindStringSubmatch(line)
 	if m == nil {

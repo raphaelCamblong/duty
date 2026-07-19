@@ -6,21 +6,17 @@ import (
 	"strings"
 )
 
-// gatesHeading names the section the gate checklist lives under.
 const gatesHeading = "Gates"
 
 // boxIndex is the offset of the checkbox character within a "- [ ]" gate line.
 const boxIndex = len("- [")
 
-// Gate is one gate checkbox: its text and whether it is ticked.
 type Gate struct {
 	// Text is the gate line's text after the checkbox.
 	Text string
-	// Done reports whether the checkbox is ticked.
 	Done bool
 }
 
-// Gates returns the gate checkboxes under the "## Gates" section in file order.
 func Gates(content []byte) []Gate {
 	body, ok := Section(content, gatesHeading)
 	if !ok {
@@ -102,8 +98,6 @@ func parseGate(line string) (Gate, bool) {
 	return Gate{}, false
 }
 
-// lastGateEnd returns the offset just past the last gate line within [start,end)
-// and whether the section holds any gate.
 func lastGateEnd(content []byte, start, end int) (int, bool) {
 	positions := gatePositions(content, start, end)
 	if len(positions) == 0 {
@@ -113,8 +107,6 @@ func lastGateEnd(content []byte, start, end int) (int, bool) {
 	return next, true
 }
 
-// gatePositions returns the start offset of each gate line within [start,end),
-// in file order.
 func gatePositions(content []byte, start, end int) []int {
 	var positions []int
 	for pos := start; pos < end; {
@@ -127,14 +119,12 @@ func gatePositions(content []byte, start, end int) []int {
 	return positions
 }
 
-// flipBox returns content with the checkbox byte at at set ticked or unticked.
 func flipBox(content []byte, at int, done bool) []byte {
 	out := bytes.Clone(content)
 	out[at] = boxByte(done)
 	return out
 }
 
-// boxByte is the checkbox character for a gate's ticked state: 'x' or a space.
 func boxByte(done bool) byte {
 	if done {
 		return 'x'

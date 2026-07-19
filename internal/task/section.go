@@ -77,8 +77,6 @@ func RequireOpensAtSection(content []byte) error {
 	return nil
 }
 
-// createSection inserts a fresh "## <heading>" section: before the report
-// section when one exists, else appended at the end of the file.
 func createSection(content []byte, heading string, body []byte) []byte {
 	if at, ok := headingIndex(content, reportHeading); ok {
 		block := append([]byte("## "+heading+"\n"), sectionRegion(body, true)...)
@@ -87,8 +85,6 @@ func createSection(content []byte, heading string, body []byte) []byte {
 	return appendSection(content, heading, body)
 }
 
-// appendSection writes a fresh "## <heading>" section at the end of content,
-// blank-line separated from whatever precedes it.
 func appendSection(content []byte, heading string, body []byte) []byte {
 	var b bytes.Buffer
 	writeEndingNL(&b, content)
@@ -116,9 +112,6 @@ func sectionRegion(text []byte, followed bool) []byte {
 	return b.Bytes()
 }
 
-// sectionBounds locates the "## <heading>" section body by byte offset: start
-// just past the heading line, end at the next "## " heading or the end of the
-// file. found is false when no heading matches.
 func sectionBounds(content []byte, heading string) (start, end int, found bool) {
 	at, ok := headingIndex(content, heading)
 	if !ok {
@@ -128,8 +121,6 @@ func sectionBounds(content []byte, heading string) (start, end int, found bool) 
 	return start, nextHeadingFrom(content, start), true
 }
 
-// headingIndex returns the byte offset of the "## <heading>" line and whether
-// it is present; matching ignores case and trailing whitespace.
 func headingIndex(content []byte, heading string) (int, bool) {
 	for pos := 0; pos < len(content); {
 		line, next := lineAt(content, pos)
@@ -141,8 +132,6 @@ func headingIndex(content []byte, heading string) (int, bool) {
 	return 0, false
 }
 
-// nextHeadingFrom returns the offset of the first "## " heading at or after
-// pos, or len(content) when none follows.
 func nextHeadingFrom(content []byte, pos int) int {
 	for pos < len(content) {
 		line, next := lineAt(content, pos)
@@ -154,8 +143,6 @@ func nextHeadingFrom(content []byte, pos int) int {
 	return len(content)
 }
 
-// headingMatch reports whether line is a "## " heading whose text equals
-// heading, ignoring case and trailing whitespace.
 func headingMatch(line []byte, heading string) bool {
 	return isSectionHeading(line) && strings.EqualFold(headingName(line), strings.TrimSpace(heading))
 }
@@ -167,13 +154,10 @@ func headingName(line []byte) string {
 	return strings.TrimSpace(rest)
 }
 
-// isSectionHeading reports whether line opens a "## " level-two section.
 func isSectionHeading(line []byte) bool {
 	return bytes.HasPrefix(bytes.TrimRight(line, " \t\r"), []byte("## "))
 }
 
-// lineAt returns the line beginning at pos (without its newline) and the offset
-// of the next line, len(content) when pos is on the final line.
 func lineAt(content []byte, pos int) (line []byte, next int) {
 	if i := bytes.IndexByte(content[pos:], '\n'); i >= 0 {
 		return content[pos : pos+i], pos + i + 1
@@ -181,7 +165,6 @@ func lineAt(content []byte, pos int) (line []byte, next int) {
 	return content[pos:], len(content)
 }
 
-// splice returns content with the bytes in [start,end) replaced by mid.
 func splice(content []byte, start, end int, mid []byte) []byte {
 	out := make([]byte, 0, start+len(mid)+len(content)-end)
 	out = append(out, content[:start]...)

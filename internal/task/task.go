@@ -22,9 +22,7 @@ import (
 // setter); the workflow discipline lives in the lifecycle contract, not in
 // a state machine.
 const (
-	// StatusTodo marks a task not started yet.
-	StatusTodo = "todo"
-	// StatusInProgress marks a task a worker has picked up.
+	StatusTodo       = "todo"
 	StatusInProgress = "in-progress"
 	// StatusDone marks a task whose gates all passed.
 	StatusDone = "done"
@@ -50,10 +48,8 @@ func FormatID(nn string) string {
 // rewrites.
 type Task struct {
 	// ID is the tree-wide unique task id, e.g. "T-07".
-	ID string `yaml:"id"`
-	// Title is the short imperative title.
-	Title string `yaml:"title"`
-	// Status is one of the Status… constants.
+	ID     string `yaml:"id"`
+	Title  string `yaml:"title"`
 	Status string `yaml:"status"`
 	// BlockedBy lists ids of tasks that must be done first.
 	BlockedBy []string `yaml:"blocked-by"`
@@ -69,9 +65,6 @@ var (
 	claimedLineRE = regexp.MustCompile(`(?m)^claimed-by: .*\r?\n`)
 )
 
-// Parse extracts the frontmatter of a task file. It returns an error when
-// the content does not open with a ----delimited frontmatter block or when
-// that block is not valid YAML.
 func Parse(content []byte) (Task, error) {
 	m := frontmatterRE.FindSubmatch(content)
 	if m == nil {
@@ -96,7 +89,6 @@ func Body(content []byte) []byte {
 //go:embed task.md.tmpl
 var skeletonTmplText string
 
-// skeletonTmpl renders a fresh task file from its embedded template.
 var skeletonTmpl = template.Must(template.New("task").Funcs(template.FuncMap{
 	"yamlTitle": yamlScalar,
 	"blockedBy": func(ids []string) string { return strings.Join(ids, ", ") },
@@ -165,8 +157,6 @@ func SetClaimedBy(content []byte, name string) ([]byte, error) {
 	return spliceClaim(content, at, at, name), nil
 }
 
-// spliceClaim replaces content[start:end) with the claimed-by line for name, or
-// with nothing when name is empty (the removal case).
 func spliceClaim(content []byte, start, end int, name string) []byte {
 	var line string
 	if name != "" {
@@ -179,9 +169,6 @@ func spliceClaim(content []byte, start, end int, name string) []byte {
 	return out
 }
 
-// afterStatusLine returns the offset just past the status line's newline, where
-// an absent claimed-by line is inserted. It errors when content has no status
-// line to anchor to.
 func afterStatusLine(content []byte) (int, error) {
 	loc := statusLineRE.FindIndex(content)
 	if loc == nil {
@@ -194,8 +181,6 @@ func afterStatusLine(content []byte) (int, error) {
 	return loc[1] + nl + 1, nil
 }
 
-// ReportHeading formats the dated heading a report append opens with: at in
-// "2006-01-02 15:04", plus " — status" when status is non-empty.
 func ReportHeading(at time.Time, status string) string {
 	heading := "### " + at.Format("2006-01-02 15:04")
 	if status != "" {
@@ -204,8 +189,6 @@ func ReportHeading(at time.Time, status string) string {
 	return heading
 }
 
-// ReportBlock builds the report block AppendReport appends: the heading
-// ReportHeading formats for at and status, a blank line, then text.
 func ReportBlock(at time.Time, status string, text []byte) []byte {
 	return append([]byte(ReportHeading(at, status)+"\n\n"), text...)
 }
@@ -225,8 +208,6 @@ func AppendReport(content, text []byte) []byte {
 	return b.Bytes()
 }
 
-// writeEndingNL writes p to b, adding a trailing newline when p is non-empty
-// and not already newline-terminated.
 func writeEndingNL(b *bytes.Buffer, p []byte) {
 	b.Write(p)
 	if n := len(p); n > 0 && p[n-1] != '\n' {
@@ -234,21 +215,16 @@ func writeEndingNL(b *bytes.Buffer, p []byte) {
 	}
 }
 
-// ensureBlankLine writes a newline to b when its content is non-empty and does
-// not already end on a blank line, so the next block reads blank-line separated.
 func ensureBlankLine(b *bytes.Buffer) {
 	if b.Len() > 0 && !endsBlank(b.Bytes()) {
 		b.WriteByte('\n')
 	}
 }
 
-// endsBlank reports whether b ends with a blank line.
 func endsBlank(b []byte) bool {
 	return len(b) >= 2 && b[len(b)-1] == '\n' && b[len(b)-2] == '\n'
 }
 
-// CountGates counts gate checkboxes under the "## Gates" section: done is the
-// number of ticked gates, total every gate.
 func CountGates(content []byte) (done, total int) {
 	start, end, found := sectionBounds(content, gatesHeading)
 	if !found {
@@ -295,9 +271,6 @@ func Slugify(title string) string {
 	return s
 }
 
-// truncateSlug cuts a slug longer than 40 characters at the last hyphen that
-// fits, so words never split; it hard-cuts at 40 only when the first word
-// alone exceeds the limit.
 func truncateSlug(s string) string {
 	cut := s[:40]
 	if i := strings.LastIndexByte(cut, '-'); i > 0 {
@@ -321,7 +294,6 @@ func ValidSlug(s string) bool {
 	return true
 }
 
-// ValidStatus reports whether s is one of the five task statuses.
 func ValidStatus(s string) bool {
 	switch s {
 	case StatusTodo, StatusInProgress, StatusDone, StatusBlocked, StatusBacklog:

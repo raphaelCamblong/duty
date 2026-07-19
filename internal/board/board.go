@@ -35,7 +35,6 @@ var (
 //go:embed board.md.tmpl
 var skeletonTmplText string
 
-// skeletonTmpl renders a fresh board index from its embedded template.
 var skeletonTmpl = template.Must(template.New("board").Parse(skeletonTmplText))
 
 // Render returns a skeleton board index: H1 = title, the convention line, an
@@ -55,7 +54,6 @@ func Render(title string) []byte {
 	return b.Bytes()
 }
 
-// Title returns the board's H1 text, or "" when the board has no H1.
 func Title(content []byte) string {
 	for _, line := range splitLines(content) {
 		if strings.HasPrefix(line, "# ") {
@@ -65,7 +63,6 @@ func Title(content []byte) string {
 	return ""
 }
 
-// TitleOr returns the board's H1 text, or fallback when the board has no H1.
 func TitleOr(content []byte, fallback string) string {
 	if t := Title(content); t != "" {
 		return t
@@ -73,8 +70,6 @@ func TitleOr(content []byte, fallback string) string {
 	return fallback
 }
 
-// FindRow returns the table row whose task link targets filename — the
-// |-prefixed line containing "(filename)" — and whether such a row exists.
 func FindRow(content []byte, filename string) (string, bool) {
 	lines := splitLines(content)
 	i := rowIndex(lines, filename)
@@ -95,8 +90,6 @@ func AddRow(content []byte, section, id, filename, title, status string) ([]byte
 	return joinLines(lines), nil
 }
 
-// locateRow splits content into lines and returns the index of the row
-// targeting filename, erroring when no such row exists.
 func locateRow(content []byte, filename string) ([]string, int, error) {
 	lines := splitLines(content)
 	i := rowIndex(lines, filename)
@@ -106,8 +99,6 @@ func locateRow(content []byte, filename string) ([]string, int, error) {
 	return lines, i, nil
 }
 
-// SetRowStatus rewrites the status cell of the row targeting filename. Only
-// that cell changes; every other cell keeps its exact spacing.
 func SetRowStatus(content []byte, filename, status string) ([]byte, error) {
 	lines, i, err := locateRow(content, filename)
 	if err != nil {
@@ -122,8 +113,6 @@ func SetRowStatus(content []byte, filename, status string) ([]byte, error) {
 	return joinLines(lines), nil
 }
 
-// RowStatus returns the status cell of a table row as returned by FindRow,
-// and whether row parsed as one (at least three "|"-separated cells).
 func RowStatus(row string) (string, bool) {
 	cells := strings.Split(row, "|")
 	if len(cells) < 3 {
@@ -188,7 +177,6 @@ func reorderAdjacent(content []byte, filename, ref string, offset int) ([]byte, 
 	return joinLines(relocateRow(lines, i, r+offset)), nil
 }
 
-// DropRow removes the row targeting filename.
 func DropRow(content []byte, filename string) ([]byte, error) {
 	lines, i, err := locateRow(content, filename)
 	if err != nil {
@@ -255,8 +243,6 @@ func AddBoardBullet(content []byte, name, title string) ([]byte, error) {
 	return joinLines(insertAt(lines, at, bullet)), nil
 }
 
-// insertRow appends row to the named section's table, creating the section
-// above the footer when it does not exist.
 func insertRow(lines []string, section, row string) ([]string, error) {
 	start, end, ok := sectionBounds(lines, section)
 	if !ok {
@@ -272,7 +258,6 @@ func insertRow(lines []string, section, row string) ([]string, error) {
 	return insertAt(lines, at, tableHeader, tableSeparator, row), nil
 }
 
-// createSection inserts a new section holding row directly above the footer.
 func createSection(lines []string, section, row string) ([]string, error) {
 	f := footerIndex(lines)
 	if f < 0 {
@@ -285,8 +270,6 @@ func createSection(lines []string, section, row string) ([]string, error) {
 	return insertAt(lines, f, block...), nil
 }
 
-// createBoardsSection inserts a "## Boards" section holding bullet before the
-// first section heading (or above the footer when the board has no sections).
 func createBoardsSection(lines []string, bullet string) ([]byte, error) {
 	at := firstHeadingIndex(lines)
 	if at < 0 {
@@ -302,8 +285,6 @@ func createBoardsSection(lines []string, bullet string) ([]byte, error) {
 	return joinLines(insertAt(lines, at, block...)), nil
 }
 
-// sectionBounds locates "## <section>": start is the heading line index, end
-// the index of the next heading, the footer, or len(lines).
 func sectionBounds(lines []string, section string) (start, end int, ok bool) {
 	heading := "## " + section
 	for i, line := range lines {
@@ -315,8 +296,6 @@ func sectionBounds(lines []string, section string) (start, end int, ok bool) {
 	return 0, 0, false
 }
 
-// sectionEnd returns the index of the line ending the section that starts at
-// start: the next heading, the footer, or len(lines).
 func sectionEnd(lines []string, start int) int {
 	for i := start + 1; i < len(lines); i++ {
 		if isHeading(lines[i]) || footerRe.MatchString(lines[i]) {
@@ -326,8 +305,6 @@ func sectionEnd(lines []string, start int) int {
 	return len(lines)
 }
 
-// sectionEmpty reports whether the section body in (start, end) holds nothing
-// but blank lines and empty table scaffolding.
 func sectionEmpty(lines []string, start, end int) bool {
 	for i := start + 1; i < end; i++ {
 		line := strings.TrimSpace(lines[i])
@@ -339,8 +316,6 @@ func sectionEmpty(lines []string, start, end int) bool {
 	return true
 }
 
-// rowIndex returns the index of the |-prefixed line containing "(filename)",
-// or -1 when no such row exists.
 func rowIndex(lines []string, filename string) int {
 	needle := "(" + filename + ")"
 	for i, line := range lines {
@@ -376,8 +351,6 @@ func sectionTop(lines []string, i int) int {
 	return end
 }
 
-// sectionStart returns the index of the "## " heading at or above i, or 0 when
-// i sits above every heading.
 func sectionStart(lines []string, i int) int {
 	for j := i; j >= 0; j-- {
 		if isHeading(lines[j]) {
@@ -387,8 +360,6 @@ func sectionStart(lines []string, i int) int {
 	return 0
 }
 
-// lastTableLine returns the index of the last |-prefixed line strictly inside
-// (start, end), or -1 when the section holds no table.
 func lastTableLine(lines []string, start, end int) int {
 	for i := end - 1; i > start; i-- {
 		if strings.HasPrefix(lines[i], "|") {
@@ -398,7 +369,6 @@ func lastTableLine(lines []string, start, end int) int {
 	return -1
 }
 
-// firstHeadingIndex returns the index of the first "## " heading, or -1.
 func firstHeadingIndex(lines []string) int {
 	for i, line := range lines {
 		if isHeading(line) {
@@ -408,7 +378,6 @@ func firstHeadingIndex(lines []string) int {
 	return -1
 }
 
-// footerIndex returns the index of the archive footer line, or -1.
 func footerIndex(lines []string) int {
 	for i, line := range lines {
 		if footerRe.MatchString(line) {
@@ -418,7 +387,6 @@ func footerIndex(lines []string) int {
 	return -1
 }
 
-// insertAt returns lines with insert placed before index i.
 func insertAt(lines []string, i int, insert ...string) []string {
 	out := make([]string, 0, len(lines)+len(insert))
 	out = append(out, lines[:i]...)
@@ -427,7 +395,6 @@ func insertAt(lines []string, i int, insert ...string) []string {
 	return out
 }
 
-// isHeading reports whether line opens a "## " section.
 func isHeading(line string) bool {
 	return strings.HasPrefix(line, "## ")
 }
@@ -438,7 +405,6 @@ func splitLines(content []byte) []string {
 	return strings.Split(string(content), "\n")
 }
 
-// joinLines reassembles lines split by splitLines.
 func joinLines(lines []string) []byte {
 	return []byte(strings.Join(lines, "\n"))
 }
