@@ -81,6 +81,11 @@ layer — it goes through the port.
   irreducible domain contracts (byte-format guarantees, cross-function invariants)
   earn prose, and they earn one line.
 - Small functions, guard clauses, early return, no `else` after `return`.
+- Names are words: no single-letter parameters or variables — `scope`, not `s`.
+  Only exceptions: conventional short receivers, and `i`/`j` loop indices in loops
+  a few lines long.
+- Indentation stays shallow: a third nested level (loops in loops in ifs) means
+  extract a named helper instead.
 - No package-level mutable state, no `init()`. Dependencies enter through constructors
   (`New…`) or parameters.
 - **Line-surgical file edits** (spec invariant): find the target line, change only it,
