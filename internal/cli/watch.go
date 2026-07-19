@@ -80,14 +80,24 @@ func runWatch(wc watchCmd, in string, agent bool) error {
 			if !ok {
 				return nil
 			}
-			cur, err := wc.app.Snapshot(app.Scope{Cwd: wc.cwd, In: in})
+			next, err := wc.emitChanges(prev, in, agent)
 			if err != nil {
 				return err
 			}
-			emit(wc.out, app.Diff(prev, cur), agent)
-			prev = cur
+			prev = next
 		}
 	}
+}
+
+// emitChanges re-snapshots the tree, prints what changed against prev, and
+// returns the new baseline.
+func (wc watchCmd) emitChanges(prev map[string]app.TaskState, in string, agent bool) (map[string]app.TaskState, error) {
+	cur, err := wc.app.Snapshot(app.Scope{Cwd: wc.cwd, In: in})
+	if err != nil {
+		return nil, err
+	}
+	emit(wc.out, app.Diff(prev, cur), agent)
+	return cur, nil
 }
 
 // emit gives every event in a burst the same timestamp (capture time, not per-event).

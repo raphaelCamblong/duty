@@ -280,13 +280,20 @@ func metRunes(labelLen int, ids, waits []string) []int {
 			pos += len(", ")
 		}
 		if !unmet[id] {
-			for offset := 0; offset < len(id); offset++ {
-				runes = append(runes, pos+offset)
-			}
+			runes = append(runes, runeSpan(pos, len(id))...)
 		}
 		pos += len(id)
 	}
 	return runes
+}
+
+// runeSpan lists the length consecutive indices starting at start.
+func runeSpan(start, length int) []int {
+	span := make([]int, length)
+	for offset := range span {
+		span[offset] = start + offset
+	}
+	return span
 }
 
 // previewContent renders the open subject from the snapshot alone: a task's
@@ -548,10 +555,16 @@ func pad(text string, width int) string {
 func driftCount(board Board) int {
 	count := 0
 	for _, section := range board.Sections {
-		for _, row := range section.Rows {
-			if row.Drift != "" {
-				count++
-			}
+		count += sectionDriftCount(section)
+	}
+	return count
+}
+
+func sectionDriftCount(section Section) int {
+	count := 0
+	for _, row := range section.Rows {
+		if row.Drift != "" {
+			count++
 		}
 	}
 	return count
@@ -590,10 +603,16 @@ func maxIDWidth(sections []Section) int {
 func maxDriftWidth(sections []Section) int {
 	width := 0
 	for _, section := range sections {
-		for _, row := range section.Rows {
-			if row.Drift != "" {
-				width = max(width, lipgloss.Width("⚠ "+row.Drift))
-			}
+		width = max(width, sectionMaxDriftWidth(section))
+	}
+	return width
+}
+
+func sectionMaxDriftWidth(section Section) int {
+	width := 0
+	for _, row := range section.Rows {
+		if row.Drift != "" {
+			width = max(width, lipgloss.Width("⚠ "+row.Drift))
 		}
 	}
 	return width

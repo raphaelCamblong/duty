@@ -36,11 +36,7 @@ func Sections(content []byte) []Section {
 	open := false
 	for _, line := range splitLines(content) {
 		if isHeading(line) {
-			name := strings.TrimSpace(line[len("## "):])
-			open = name != boardsSection
-			if open {
-				out = append(out, Section{Name: name})
-			}
+			out, open = startSection(out, line)
 			continue
 		}
 		if !open {
@@ -55,6 +51,16 @@ func Sections(content []byte) []Section {
 		}
 	}
 	return out
+}
+
+// startSection appends a task section for a "## " heading, skipping Boards; it
+// reports whether a section is now open for rows.
+func startSection(out []Section, line string) ([]Section, bool) {
+	name := strings.TrimSpace(line[len("## "):])
+	if name == boardsSection {
+		return out, false
+	}
+	return append(out, Section{Name: name}), true
 }
 
 func parseRow(line string) (Row, bool) {

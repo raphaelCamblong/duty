@@ -46,8 +46,7 @@ func (w *Watcher) Close() error {
 	return w.notif.Close()
 }
 
-// loop drops a notification if the last one is still unread, since the
-// re-scan is total anyway.
+// loop coalesces a burst of fsnotify events into one debounced notification.
 func (w *Watcher) loop(root string) {
 	defer close(w.C)
 	var fire <-chan time.Time
@@ -67,11 +66,16 @@ func (w *Watcher) loop(root string) {
 		case <-fire:
 			fire = nil
 			_ = addDirs(w.fsys, w.notif, root, false)
-			select {
-			case w.C <- struct{}{}:
-			default:
-			}
+			w.notify()
 		}
+	}
+}
+
+// notify drops the signal if the last one is still unread; the re-scan is total.
+func (w *Watcher) notify() {
+	select {
+	case w.C <- struct{}{}:
+	default:
 	}
 }
 

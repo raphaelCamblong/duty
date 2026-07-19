@@ -147,10 +147,11 @@ func (m *Mem) walkDir(path string, entry fs.DirEntry, fn fs.WalkDirFunc) error {
 		return err
 	}
 	for _, child := range entries {
-		if err := m.walkDir(filepath.Join(path, child.Name()), child, fn); err != nil {
-			if err == fs.SkipDir {
-				break
-			}
+		err := m.walkDir(filepath.Join(path, child.Name()), child, fn)
+		if err == fs.SkipDir {
+			break
+		}
+		if err != nil {
 			return err
 		}
 	}

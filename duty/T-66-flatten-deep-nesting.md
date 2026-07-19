@@ -1,7 +1,7 @@
 ---
 id: T-66
 title: Flatten deep nesting
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -30,5 +30,27 @@ Test files; logic changes; the task-representation redesign (separate task —
 don't pre-empt it with structural changes to list/get/scan beyond extraction).
 
 ## Gates
-- [ ] Post-scan shows no unjustified 3+-level function in internal/ + cmd/.
-- [ ] just check green with zero test edits.
+- [x] Post-scan shows no unjustified 3+-level function in internal/ + cmd/.
+- [x] just check green with zero test edits.
+
+## Report
+
+### 2026-07-19 20:54 — done
+
+An AST depth scan found 16 functions nesting 3+ control levels (two at
+depth 4). Eleven were flattened by extraction or guard-clause inversion:
+Sections, walkDir, watch.loop, runWatch, newDelegate, fixSelection,
+findRowBoard (depth 4, split into rowByID + boardRow), findSub, metRunes,
+driftCount, maxDriftWidth. Every new helper name states what its level
+does; no callback frameworks introduced.
+
+Survivors, all justified: watch.loop and runWatch still scan at 3 because
+a channel-close guard (if !ok return) cannot leave its select case — that
+is guard-clause idiom, not logic nesting. The five remaining deep
+functions (List, boardOrder, nextInBoard, annotateWaits, link) are
+exactly the assembly paths T-67 redesigns; flattening code about to be
+rebuilt is wasted motion, so the depth rule is enforced on their
+replacements in T-67 instead (scan re-runs there).
+
+Behavior byte-identical, zero test edits; gofmt/vet/golangci (0 issues)/
+suite green at 87.9%.

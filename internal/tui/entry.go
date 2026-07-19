@@ -160,11 +160,18 @@ func newDelegate(theme Theme, zones *zone.Manager, board Board, opts viewOpts) c
 		delegate.ageW = maxAgeWidth(board.Sections, opts.now)
 	}
 	if opts.showArchive {
-		for _, row := range board.Archived {
-			delegate.idW = max(delegate.idW, lipgloss.Width(row.ID))
-			if opts.showAge {
-				delegate.ageW = max(delegate.ageW, lipgloss.Width(ageCell(row, opts.now)))
-			}
+		delegate = widenForArchive(delegate, board.Archived, opts)
+	}
+	return delegate
+}
+
+// widenForArchive grows the id and age columns to fit the board's archived
+// rows, which the sections' widths don't cover.
+func widenForArchive(delegate compactDelegate, archived []Row, opts viewOpts) compactDelegate {
+	for _, row := range archived {
+		delegate.idW = max(delegate.idW, lipgloss.Width(row.ID))
+		if opts.showAge {
+			delegate.ageW = max(delegate.ageW, lipgloss.Width(ageCell(row, opts.now)))
 		}
 	}
 	return delegate

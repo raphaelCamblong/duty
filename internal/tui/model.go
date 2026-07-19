@@ -458,14 +458,23 @@ func (m Model) fixSelection() Model {
 		return m
 	}
 	for _, delta := range []int{1, -1} {
-		for i := idx + delta; i >= 0 && i < len(items); i += delta {
-			if item, ok := items[i].(entry); ok && item.selectable() {
-				m.list.Select(i)
-				return m
-			}
+		if i, ok := selectableFrom(items, idx+delta, delta); ok {
+			m.list.Select(i)
+			return m
 		}
 	}
 	return m
+}
+
+// selectableFrom returns the index of the first selectable entry from start,
+// stepping by delta, or false when the scan runs off either end.
+func selectableFrom(items []list.Item, start, delta int) (int, bool) {
+	for i := start; i >= 0 && i < len(items); i += delta {
+		if item, ok := items[i].(entry); ok && item.selectable() {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 // open acts on the selection: a task always opens the split preview; a track
@@ -517,28 +526,46 @@ func (m Model) renderPreview(reset bool) Model {
 // too, so an archived task opens the same read-only preview.
 func (m Model) findRowBoard(id string) (Row, Board, bool) {
 	for _, board := range m.snap.Boards {
-		for _, section := range board.Sections {
-			for _, row := range section.Rows {
-				if row.ID == id {
-					return row, board, true
-				}
-			}
-		}
-		for _, row := range board.Archived {
-			if row.ID == id {
-				return row, board, true
-			}
+		if row, ok := boardRow(board, id); ok {
+			return row, board, true
 		}
 	}
 	return Row{}, Board{}, false
 }
 
+// boardRow finds a row by id anywhere in a board: any section first, then the
+// archived rows.
+func boardRow(board Board, id string) (Row, bool) {
+	for _, section := range board.Sections {
+		if row, ok := rowByID(section.Rows, id); ok {
+			return row, true
+		}
+	}
+	return rowByID(board.Archived, id)
+}
+
+func rowByID(rows []Row, id string) (Row, bool) {
+	for _, row := range rows {
+		if row.ID == id {
+			return row, true
+		}
+	}
+	return Row{}, false
+}
+
 func (m Model) findSub(path string) (Sub, bool) {
 	for _, board := range m.snap.Boards {
-		for _, sub := range board.Subs {
-			if sub.Path == path {
-				return sub, true
-			}
+		if sub, ok := subByPath(board.Subs, path); ok {
+			return sub, true
+		}
+	}
+	return Sub{}, false
+}
+
+func subByPath(subs []Sub, path string) (Sub, bool) {
+	for _, sub := range subs {
+		if sub.Path == path {
+			return sub, true
 		}
 	}
 	return Sub{}, false
