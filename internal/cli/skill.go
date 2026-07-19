@@ -20,9 +20,18 @@ const (
 	skillInstallUsage = "usage: duty skill install [claude|codex|gemini] [--user] [--force] [--offline]"
 )
 
+// skillCtx is the shared context the skill command constructors build from.
+type skillCtx struct {
+	app     app.App
+	fetcher fetch.Fetcher
+	cwd     string
+	home    string
+	out     io.Writer
+}
+
 // newSkillCmd fetches the skill from duty-cli.xyz and falls back silently to
 // the embedded copy on failure; --offline skips the network entirely.
-func newSkillCmd(a app.App, f fetch.Fetcher, cwd, home string, stdout io.Writer) *cobra.Command {
+func newSkillCmd(sc skillCtx) *cobra.Command {
 	var offline bool
 	cmd := &cobra.Command{
 		Use:     "skill",
@@ -32,16 +41,16 @@ func newSkillCmd(a app.App, f fetch.Fetcher, cwd, home string, stdout io.Writer)
 			if len(args) != 0 {
 				return unknownCommand(c, args[0])
 			}
-			_, err := stdout.Write(a.Skill(f, skillURL, offline))
+			_, err := sc.out.Write(sc.app.Skill(sc.fetcher, skillURL, offline))
 			return err
 		},
 	}
 	cmd.PersistentFlags().BoolVar(&offline, "offline", false, "skip the network fetch; use the embedded copy")
-	cmd.AddCommand(newSkillInstallCmd(a, f, cwd, home, &offline, stdout))
+	cmd.AddCommand(newSkillInstallCmd(sc, &offline))
 	return cmd
 }
 
-func newSkillInstallCmd(a app.App, f fetch.Fetcher, cwd, home string, offline *bool, stdout io.Writer) *cobra.Command {
+func newSkillInstallCmd(sc skillCtx, offline *bool) *cobra.Command {
 	var (
 		user  bool
 		force bool
@@ -55,11 +64,12 @@ func newSkillInstallCmd(a app.App, f fetch.Fetcher, cwd, home string, offline *b
 			if err != nil {
 				return err
 			}
-			path, err := a.InstallSkill(cwd, home, target, a.Skill(f, skillURL, *offline), user, force)
+			spec := app.Install{Target: target, Cwd: sc.cwd, Home: sc.home, User: user, Force: force}
+			path, err := sc.app.InstallSkill(spec, sc.app.Skill(sc.fetcher, skillURL, *offline))
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(stdout, "installed %s skill → %s\n", target, path)
+			fmt.Fprintf(sc.out, "installed %s skill → %s\n", target, path)
 			return nil
 		},
 	}

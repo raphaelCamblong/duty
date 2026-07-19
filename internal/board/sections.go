@@ -13,7 +13,8 @@ type Section struct {
 	Rows []Row
 }
 
-// Row is one parsed task row of a section table.
+// Row is one task row of a section table: the id/file link plus the title and
+// status cells. Sections parses it out of a board; AddRow writes one in.
 type Row struct {
 	// ID is the link text of the Task cell.
 	ID string

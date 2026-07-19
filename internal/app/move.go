@@ -26,6 +26,16 @@ type Position struct {
 
 func (p Position) None() bool { return !p.Top && p.Before == "" && p.After == "" }
 
+// Dest is a move's track/section destination: a track path relative to the tree
+// root ("." naming the root board, "" the task's current board) and the board
+// section the row lands in ("" the default "Open tasks").
+type Dest struct {
+	Track   string
+	Section string
+}
+
+func (d Dest) none() bool { return d.Track == "" && d.Section == "" }
+
 // Move relocates a task. With a track path — relative to the tree root, "."
 // naming the root board — the file is renamed into that track's folder (same
 // filename — ids don't encode tracks), the source row is dropped and its
@@ -35,9 +45,9 @@ func (p Position) None() bool { return !p.Top && p.Before == "" && p.After == ""
 // row moves under "## <section>" within its own board — the section is
 // created above the footer when absent, and any section left empty is pruned.
 // A non-zero pos then reorders the row within its board (a board-only edit).
-// At least one of track, section, and pos must be non-empty.
-func (a App) Move(cwd, id, track, section string, pos Position) error {
-	if track == "" && section == "" && pos.None() {
+// At least one of dest and pos must be non-empty.
+func (a App) Move(cwd, id string, dest Dest, pos Position) error {
+	if dest.none() && pos.None() {
 		return errors.New("move: pass --track, --section, --top, --before, or --after")
 	}
 	root, taskPath, err := a.resolveOpenWithRoot(cwd, id)
@@ -49,7 +59,7 @@ func (a App) Move(cwd, id, track, section string, pos Position) error {
 		return err
 	}
 	defer unlock()
-	taskPath, err = a.relocate(root, id, taskPath, track, section)
+	taskPath, err = a.relocate(root, id, taskPath, dest)
 	if err != nil {
 		return err
 	}
@@ -60,30 +70,30 @@ func (a App) Move(cwd, id, track, section string, pos Position) error {
 }
 
 // relocate performs the track/section phase of a move and returns the task's
-// resulting file path. With no track and no section it is a no-op returning
-// taskPath unchanged — a position-only move.
-func (a App) relocate(root, id, taskPath, track, section string) (string, error) {
-	if track == "" && section == "" {
+// resulting file path. With an empty dest it is a no-op returning taskPath
+// unchanged — a position-only move.
+func (a App) relocate(root, id, taskPath string, dest Dest) (string, error) {
+	if dest.none() {
 		return taskPath, nil
 	}
-	if track == "" {
-		return taskPath, a.moveRowInBoard(taskPath, section)
+	if dest.Track == "" {
+		return taskPath, a.moveRowInBoard(taskPath, dest.Section)
 	}
-	if section == "" {
-		section = board.DefaultSection
+	if dest.Section == "" {
+		dest.Section = board.DefaultSection
 	}
-	return a.moveTrack(root, id, taskPath, track, section)
+	return a.moveTrack(root, id, taskPath, dest)
 }
 
-// moveTrack relocates id's file into track's folder (dropping its source row,
-// appending one to the target's section) and returns the file's new path.
-func (a App) moveTrack(root, id, taskPath, track, section string) (string, error) {
-	target, err := tree.ResolveTrack(a.fs, root, track)
+// moveTrack relocates id's file into dest.Track's folder (dropping its source
+// row, appending one to the target's section) and returns the file's new path.
+func (a App) moveTrack(root, id, taskPath string, dest Dest) (string, error) {
+	target, err := tree.ResolveTrack(a.fs, root, dest.Track)
 	if err != nil {
 		return "", err
 	}
 	if filepath.Dir(taskPath) == target {
-		return taskPath, a.moveRowInBoard(taskPath, section)
+		return taskPath, a.moveRowInBoard(taskPath, dest.Section)
 	}
 	t, _, err := a.readTask(taskPath)
 	if err != nil {
@@ -95,7 +105,7 @@ func (a App) moveTrack(root, id, taskPath, track, section string) (string, error
 	if err != nil {
 		return "", err
 	}
-	if err := a.moveAcross(id, taskPath, target, section, pruned, t); err != nil {
+	if err := a.moveAcross(across{id: id, taskPath: taskPath, target: target, section: dest.Section, pruned: pruned, task: t}); err != nil {
 		return "", err
 	}
 	return filepath.Join(target, filename), nil
@@ -113,24 +123,36 @@ func (a App) dropFromBoard(boardPath, filename string) ([]byte, error) {
 	return board.PruneEmptySections(dropped), nil
 }
 
+// across is one cross-board move: the id and file of the task, the resolved
+// target board dir and section its row lands in, the pruned source board bytes,
+// and the parsed task whose row is written into the target.
+type across struct {
+	id       string
+	taskPath string
+	target   string
+	section  string
+	pruned   []byte
+	task     task.Task
+}
+
 // moveAcross computes the target row before renaming the file, so a failure
 // leaves the tree untouched.
-func (a App) moveAcross(id, taskPath, target, section string, pruned []byte, t task.Task) error {
-	filename := filepath.Base(taskPath)
-	srcPath := boardBeside(taskPath)
-	dstPath := boardIndexPath(target)
+func (a App) moveAcross(x across) error {
+	filename := filepath.Base(x.taskPath)
+	srcPath := boardBeside(x.taskPath)
+	dstPath := boardIndexPath(x.target)
 	dst, err := a.fs.ReadFile(dstPath)
 	if err != nil {
 		return err
 	}
-	withRow, err := board.AddRow(dst, section, t.ID, filename, t.Title, t.Status)
+	withRow, err := board.AddRow(dst, x.section, board.Row{ID: x.task.ID, File: filename, Title: x.task.Title, Status: x.task.Status})
 	if err != nil {
 		return err
 	}
-	if err := a.fs.Rename(taskPath, filepath.Join(target, filename)); err != nil {
-		return fmt.Errorf("move %s: %w", id, err)
+	if err := a.fs.Rename(x.taskPath, filepath.Join(x.target, filename)); err != nil {
+		return fmt.Errorf("move %s: %w", x.id, err)
 	}
-	if err := a.fs.WriteFile(srcPath, pruned); err != nil {
+	if err := a.fs.WriteFile(srcPath, x.pruned); err != nil {
 		return err
 	}
 	return a.fs.WriteFile(dstPath, withRow)

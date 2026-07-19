@@ -1,7 +1,7 @@
 ---
 id: T-63
 title: Refactor functions taking more than 4-5 parameters
-status: backlog
+status: done
 blocked-by: []
 ---
 
@@ -50,8 +50,79 @@ Comment pruning (separate task); new features; changing what any function
 does, only how its inputs are grouped.
 
 ## Gates
-- [ ] Every function above 6 params refactored to a parameter struct (or
+- [x] Every function above 6 params refactored to a parameter struct (or
   judged and explicitly left, with why, in the report).
-- [ ] `just check` green; full suite green with only mechanical test-call
+- [x] `just check` green; full suite green with only mechanical test-call
   updates (listed).
-- [ ] Before/after AST scan counts in the report.
+- [x] Before/after AST scan counts in the report.
+
+## Report
+
+### 2026-07-19 19:28 — done
+
+Bundled the many-parameter functions into parameter structs. Re-scanned the
+AST first (T-62's comment prune had shifted line numbers) — the before list was
+31 functions with >4 params. After: 7, all at exactly 5 and each judged worth
+leaving.
+
+## Before (AST scan, >4 params)
+8: statusWrite, newDelegate
+7: CreateTask, createTaskLocked, writeTask, getTaskOut
+6: moveAcross, Report, InstallSkill, AddRow, newSkillInstallCmd, runWatch
+5: buildTaskInfo, taskRow, reorder, Move, relocate, moveTrack, editSection,
+   installClaude, SetStatus, setStatusLocked, guardClaim, newRoot, Run,
+   newGetTasksCmd, newSkillCmd, trackLine, archivedLine, taskLine, joinRow
+TOTAL: 31
+
+## After (AST scan, >4 params)
+5: buildTaskInfo, taskRow, reorder, editSection, newRoot, Run, newGetTasksCmd
+TOTAL: 7  (0 above 5)
+
+## Structs introduced
+- app.StatusChange {ID, Status, As, Force} — SetStatus, setStatusLocked,
+  statusWrite, guardClaim, Report all thread it (exported: cli + tests build it).
+- app.TaskSpec {Title, Slug, Section, BlockedBy} — CreateTask, createTaskLocked,
+  writeTask.
+- app.Dest {Track, Section} — Move, relocate, moveTrack (paired with the
+  existing Position for the reorder phase).
+- app.Install {Target, Cwd, Home, User, Force} — InstallSkill, installClaude.
+- app.across (unexported) — moveAcross's one cross-board-move bundle.
+- board.AddRow now takes the existing board.Row {ID, File, Title, Status} plus
+  section, instead of five loose strings.
+- tui.viewOpts {showAge, showGates, showArchive, now, glyph} — newDelegate.
+- tui.matches {head, tail} — splitMatches returns it; trackLine/archivedLine/
+  taskLine take it.
+- tui.boardFiles {files, bad, used} — joinRow and appendOrphans.
+- cli.taskQuery {id, section, body, agent} — getTaskOut.
+- cli.skillCtx {app, fetcher, cwd, home, out} — newSkillCmd, newSkillInstallCmd.
+- cli.watchCmd {app, fs, cwd, out} — runWatch.
+
+24 functions refactored; behaviour frozen (the round-trip and full suite are
+byte-for-byte unchanged).
+
+## Left at 5 (judged, no clarifying split)
+- buildTaskInfo / taskRow — TaskInfo/Row constructors; their 5 inputs (root or
+  board context + file location + parsed content + mtime) are all distinct, no
+  subset is a value object. A wrapper would just relist the fields.
+- reorder — root (for ref resolution) + board bytes + path + filename + Position
+  are unrelated; Position is already a struct.
+- editSection — cwd, id, kind, reader, edit-callback: the shared spine of
+  SetSection/SetSections, all distinct.
+- Run / newRoot — the conventional CLI entry shape (args + stdin/stdout/stderr +
+  version); a streams struct would obscure a familiar signature and churn the
+  public entry + every cli.Run test for no readability gain.
+- newGetTasksCmd — the (use, hidden) pair just parameterises two registrations
+  (tasks vs list); wrapping two scalars adds a type without clarifying.
+
+## Gates
+- go build -o bin/duty ./cmd/duty: ok
+- go test ./tests/... -coverpkg=./internal/... -count=1: ok (87.9%)
+- golangci-lint run: 0 issues
+- gofumpt -l . / gofmt -l .: empty
+- go vet ./...: clean
+- just check: green
+
+## Mechanically-touched test files (call syntax only, no assertion weakened)
+- tests/board_test.go — 2 board.AddRow calls now pass board.Row{...}
+- tests/cli_mutate_test.go — 2 a.Report calls now pass app.StatusChange{...}
+- tests/cli_skill_test.go — 1 a.InstallSkill call now passes app.Install{...}

@@ -241,7 +241,7 @@ func TestAddRow(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := board.AddRow(joinBoard(tt.content), tt.section, "T-05", "T-05-new-task.md", "New task", "todo")
+			got, err := board.AddRow(joinBoard(tt.content), tt.section, board.Row{ID: "T-05", File: "T-05-new-task.md", Title: "New task", Status: "todo"})
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("AddRow() error = nil, want error")
@@ -743,7 +743,7 @@ func TestAddBoardBullet(t *testing.T) {
 func TestSurgicalRoundTrip(t *testing.T) {
 	start := joinBoard(boardFixture())
 
-	b, err := board.AddRow(start, "Open tasks", "T-99", "T-99-scratch.md", "Scratch", "todo")
+	b, err := board.AddRow(start, "Open tasks", board.Row{ID: "T-99", File: "T-99-scratch.md", Title: "Scratch", Status: "todo"})
 	if err != nil {
 		t.Fatalf("AddRow() error = %v", err)
 	}

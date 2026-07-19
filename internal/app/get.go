@@ -144,7 +144,7 @@ func (a App) claim(root, cwd, in, as string) (*TaskInfo, error) {
 	if err != nil || info == nil {
 		return info, err
 	}
-	if err := a.setStatusLocked(info.Path, info.ID, task.StatusInProgress, false, as); err != nil {
+	if err := a.setStatusLocked(info.Path, StatusChange{ID: info.ID, Status: task.StatusInProgress, As: as}); err != nil {
 		return nil, err
 	}
 	info.Status = task.StatusInProgress

@@ -235,7 +235,7 @@ func TestSkillRemoteInstalled(t *testing.T) {
 	mem := fsys.NewMem()
 	a := app.New(mem)
 	content := a.Skill(fetch.HTTP{}, srv.URL, false)
-	path, err := a.InstallSkill("/repo", "", app.Claude, content, false, false)
+	path, err := a.InstallSkill(app.Install{Target: app.Claude, Cwd: "/repo"}, content)
 	if err != nil {
 		t.Fatalf("install remote: %v", err)
 	}

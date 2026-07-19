@@ -11,17 +11,26 @@ import (
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
-// CreateTask creates a task in the board in — a root-relative track path, or
-// the board containing cwd when empty — and returns the new task's id and
+// TaskSpec describes a task to create: its title, an optional filename slug and
+// board section (empty means derive/default), and its blocked-by ids.
+type TaskSpec struct {
+	Title     string
+	Slug      string
+	Section   string
+	BlockedBy []string
+}
+
+// CreateTask creates spec's task in the board in — a root-relative track path,
+// or the board containing cwd when empty — and returns the new task's id and
 // file path: every blocked-by id is validated against the whole tree, the
 // task is numbered tree-wide, and the task file and its board row (status
 // todo) are written in one use-case. An empty slug is derived from the title;
 // an empty section means the default one. A non-nil body is the one-shot
 // markdown read from stdin (## sections verbatim below a generated H1); nil
 // renders the section skeleton instead.
-func (a App) CreateTask(cwd, title, slug, section, in string, blockedBy []string, body io.Reader) (id, path string, err error) {
-	if slug != "" && !task.ValidSlug(slug) {
-		return "", "", fmt.Errorf("invalid slug %q: want 1-40 chars of [a-z0-9-], no leading or trailing hyphen", slug)
+func (a App) CreateTask(cwd, in string, spec TaskSpec, body io.Reader) (id, path string, err error) {
+	if spec.Slug != "" && !task.ValidSlug(spec.Slug) {
+		return "", "", fmt.Errorf("invalid slug %q: want 1-40 chars of [a-z0-9-], no leading or trailing hyphen", spec.Slug)
 	}
 	bodyBytes, err := readTaskBody(body)
 	if err != nil {
@@ -40,7 +49,7 @@ func (a App) CreateTask(cwd, title, slug, section, in string, blockedBy []string
 		return "", "", err
 	}
 	defer unlock()
-	return a.createTaskLocked(root, boardDir, title, slug, section, blockedBy, bodyBytes)
+	return a.createTaskLocked(root, boardDir, spec, bodyBytes)
 }
 
 // readTaskBody reads an optional one-shot task body: a nil reader (no --body)
@@ -61,25 +70,25 @@ func readTaskBody(r io.Reader) ([]byte, error) {
 }
 
 // createTaskLocked must run under the tree lock.
-func (a App) createTaskLocked(root, boardDir, title, slug, section string, blockedBy []string, body []byte) (id, path string, err error) {
-	if err := a.validateBlockedBy(root, blockedBy); err != nil {
+func (a App) createTaskLocked(root, boardDir string, spec TaskSpec, body []byte) (id, path string, err error) {
+	if err := a.validateBlockedBy(root, spec.BlockedBy); err != nil {
 		return "", "", err
 	}
 	nn, err := tree.NextNN(a.fs, root)
 	if err != nil {
 		return "", "", err
 	}
-	if slug == "" {
-		slug = task.Slugify(title)
+	if spec.Slug == "" {
+		spec.Slug = task.Slugify(spec.Title)
 	}
-	if slug == "" {
-		return "", "", fmt.Errorf("cannot derive a slug from %q, pass --slug", title)
+	if spec.Slug == "" {
+		return "", "", fmt.Errorf("cannot derive a slug from %q, pass --slug", spec.Title)
 	}
-	if section == "" {
-		section = board.DefaultSection
+	if spec.Section == "" {
+		spec.Section = board.DefaultSection
 	}
 	id = task.FormatID(nn)
-	path, err = a.writeTask(boardDir, id, slug, title, section, blockedBy, body)
+	path, err = a.writeTask(boardDir, id, spec, body)
 	return id, path, err
 }
 
@@ -95,19 +104,19 @@ func (a App) validateBlockedBy(root string, blockedBy []string) error {
 
 // writeTask computes both the task file and its board row before writing
 // either, so a failure leaves neither written.
-func (a App) writeTask(boardDir, id, slug, title, section string, blockedBy []string, body []byte) (string, error) {
-	filename := id + "-" + slug + ".md"
+func (a App) writeTask(boardDir, id string, spec TaskSpec, body []byte) (string, error) {
+	filename := id + "-" + spec.Slug + ".md"
 	boardPath := boardIndexPath(boardDir)
 	content, err := a.fs.ReadFile(boardPath)
 	if err != nil {
 		return "", err
 	}
-	withRow, err := board.AddRow(content, section, id, filename, title, task.StatusTodo)
+	withRow, err := board.AddRow(content, spec.Section, board.Row{ID: id, File: filename, Title: spec.Title, Status: task.StatusTodo})
 	if err != nil {
 		return "", err
 	}
 	taskPath := filepath.Join(boardDir, filename)
-	if err := a.fs.WriteFile(taskPath, renderTask(id, title, blockedBy, body)); err != nil {
+	if err := a.fs.WriteFile(taskPath, renderTask(id, spec.Title, spec.BlockedBy, body)); err != nil {
 		return "", err
 	}
 	if err := a.fs.WriteFile(boardPath, withRow); err != nil {

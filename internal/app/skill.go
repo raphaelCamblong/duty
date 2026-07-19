@@ -58,37 +58,48 @@ func (a App) Skill(f fetch.Fetcher, url string, offline bool) []byte {
 	return body
 }
 
-// InstallSkill writes skill for target: Claude as a standalone SKILL.md (project
-// scope under cwd, or home scope with user), Codex and Gemini as a marker-
-// delimited block in AGENTS.md / GEMINI.md at cwd. Without force it refuses to
-// overwrite an existing skill; with force it replaces it cleanly. It returns the
-// path written.
-func (a App) InstallSkill(cwd, home string, target Target, skill []byte, user, force bool) (string, error) {
-	if user && target != Claude {
-		return "", errors.New("--user applies only to the claude target")
-	}
-	switch target {
-	case Claude:
-		return a.installClaude(cwd, home, skill, user, force)
-	case Codex:
-		return a.installBlock(filepath.Join(cwd, names.AgentsFile), skill, force)
-	case Gemini:
-		return a.installBlock(filepath.Join(cwd, names.GeminiFile), skill, force)
-	}
-	return "", unknownTargetErr(string(target))
+// Install is where and how InstallSkill writes a skill: the target harness, the
+// Cwd and Home base dirs it may write under, and the User (home-scope) and Force
+// (overwrite) flags.
+type Install struct {
+	Target Target
+	Cwd    string
+	Home   string
+	User   bool
+	Force  bool
 }
 
-func (a App) installClaude(cwd, home string, skill []byte, user, force bool) (string, error) {
-	base := cwd
-	if user {
-		if home == "" {
+// InstallSkill writes skill per spec: Claude as a standalone SKILL.md (project
+// scope under Cwd, or home scope with User), Codex and Gemini as a marker-
+// delimited block in AGENTS.md / GEMINI.md at Cwd. Without Force it refuses to
+// overwrite an existing skill; with Force it replaces it cleanly. It returns the
+// path written.
+func (a App) InstallSkill(spec Install, skill []byte) (string, error) {
+	if spec.User && spec.Target != Claude {
+		return "", errors.New("--user applies only to the claude target")
+	}
+	switch spec.Target {
+	case Claude:
+		return a.installClaude(spec, skill)
+	case Codex:
+		return a.installBlock(filepath.Join(spec.Cwd, names.AgentsFile), skill, spec.Force)
+	case Gemini:
+		return a.installBlock(filepath.Join(spec.Cwd, names.GeminiFile), skill, spec.Force)
+	}
+	return "", unknownTargetErr(string(spec.Target))
+}
+
+func (a App) installClaude(spec Install, skill []byte) (string, error) {
+	base := spec.Cwd
+	if spec.User {
+		if spec.Home == "" {
 			return "", errors.New("cannot resolve the home directory for --user")
 		}
-		base = home
+		base = spec.Home
 	}
 	dir := filepath.Join(base, names.ClaudeDir, names.SkillsDir, names.SkillName)
 	path := filepath.Join(dir, names.SkillFile)
-	if !force {
+	if !spec.Force {
 		if _, err := a.fs.Stat(path); err == nil {
 			return "", fmt.Errorf("%s already exists (use --force to replace)", path)
 		}

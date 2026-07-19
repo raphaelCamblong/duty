@@ -156,7 +156,7 @@ func addCommands(root *cobra.Command, cwd string, stdin io.Reader, stdout io.Wri
 		grouped(newDeleteCmd(a, cwd), groupWork),
 		grouped(newTUICmd(f, cwd), groupInterface),
 		grouped(newWatchCmd(a, f, cwd, stdout), groupInterface),
-		grouped(newSkillCmd(a, fetch.HTTP{}, cwd, home, stdout), groupInterface),
+		grouped(newSkillCmd(skillCtx{app: a, fetcher: fetch.HTTP{}, cwd: cwd, home: home, out: stdout}), groupInterface),
 	)
 }
 

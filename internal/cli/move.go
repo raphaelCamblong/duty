@@ -29,7 +29,7 @@ func newMoveCmd(a app.App, cwd string) *cobra.Command {
 			if len(args) != 1 || args[0] == "" || (track == "" && section == "" && pos.None()) {
 				return errors.New(moveUsage)
 			}
-			return a.Move(cwd, args[0], track, section, pos)
+			return a.Move(cwd, args[0], app.Dest{Track: track, Section: section}, pos)
 		},
 	}
 	cmd.Flags().StringVar(&track, "track", "", `target track path from the tree root ("." = root board)`)

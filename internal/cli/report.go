@@ -28,7 +28,7 @@ func newReportCmd(a app.App, cwd string, stdin io.Reader) *cobra.Command {
 			if len(args) != 1 || args[0] == "" {
 				return errors.New(reportUsage)
 			}
-			return a.Report(cwd, args[0], stdin, status, force, claimer(as))
+			return a.Report(cwd, app.StatusChange{ID: args[0], Status: status, Force: force, As: claimer(as)}, stdin)
 		},
 	}
 	cmd.Flags().StringVar(&status, "status", "", "also set the task's status (file + board) in one write")

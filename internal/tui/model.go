@@ -370,7 +370,7 @@ func (m Model) resizeGates(w int) Model {
 // visibility, leaving items, selection, and any filter untouched.
 func (m Model) reskinList() Model {
 	b, _ := m.board()
-	m.list.SetDelegate(newDelegate(m.theme, m.zones, b, m.showAge, m.showGates, m.showArchive, time.Now(), m.spinnerGlyph()))
+	m.list.SetDelegate(newDelegate(m.theme, m.zones, b, viewOpts{showAge: m.showAge, showGates: m.showGates, showArchive: m.showArchive, now: time.Now(), glyph: m.spinnerGlyph()}))
 	return m
 }
 

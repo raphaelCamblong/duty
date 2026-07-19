@@ -189,15 +189,15 @@ func scanBoard(f fsys.FS, dir, path string, includeArchive bool) (Board, error) 
 	}
 
 	b := Board{Path: path, Title: title}
-	used := make(map[string]bool)
+	bf := boardFiles{files: files, bad: bad, used: make(map[string]bool)}
 	for _, sec := range board.Sections(index) {
 		s := Section{Name: sec.Name}
 		for _, r := range sec.Rows {
-			s.Rows = append(s.Rows, joinRow(dir, r, files, bad, used))
+			s.Rows = append(s.Rows, joinRow(dir, r, bf))
 		}
 		b.Sections = append(b.Sections, s)
 	}
-	appendOrphans(&b, files, used)
+	appendOrphans(&b, bf)
 	tallyOpen(&b, files)
 	b.ArchivedCount, b.Archived, err = scanArchive(f, filepath.Join(dir, names.ArchiveDir), includeArchive)
 	if err != nil {
@@ -323,18 +323,27 @@ func entryModTime(e fs.DirEntry) time.Time {
 	return info.ModTime()
 }
 
+// boardFiles indexes a board directory's parsed task files for joining with
+// board rows: files by name, bad the raw bytes of unparsable ones, and used
+// the set consumed by rows so appendOrphans can find the rest.
+type boardFiles struct {
+	files map[string]Row
+	bad   map[string][]byte
+	used  map[string]bool
+}
+
 // joinRow merges one board row with its task file: the file wins on status
 // and title, the board only orders; any disagreement becomes Drift.
-func joinRow(dir string, r board.Row, files map[string]Row, bad map[string][]byte, used map[string]bool) Row {
-	if f, ok := files[r.File]; ok {
-		used[r.File] = true
+func joinRow(dir string, r board.Row, bf boardFiles) Row {
+	if f, ok := bf.files[r.File]; ok {
+		bf.used[r.File] = true
 		if r.Status != f.Status {
 			f.Drift = "board says " + r.Status
 		}
 		return f
 	}
-	if content, ok := bad[r.File]; ok {
-		used[r.File] = true
+	if content, ok := bf.bad[r.File]; ok {
+		bf.used[r.File] = true
 		return Row{
 			ID: r.ID, Title: r.Title, Status: r.Status,
 			File: r.File, Path: filepath.Join(dir, r.File),
@@ -346,10 +355,10 @@ func joinRow(dir string, r board.Row, files map[string]Row, bad map[string][]byt
 
 // appendOrphans adds task files that have no board row to the end of the
 // default section, flagged as drift.
-func appendOrphans(b *Board, files map[string]Row, used map[string]bool) {
+func appendOrphans(b *Board, bf boardFiles) {
 	var names []string
-	for name := range files {
-		if !used[name] {
+	for name := range bf.files {
+		if !bf.used[name] {
 			names = append(names, name)
 		}
 	}
@@ -369,7 +378,7 @@ func appendOrphans(b *Board, files map[string]Row, used map[string]bool) {
 		idx = len(b.Sections) - 1
 	}
 	for _, name := range names {
-		r := files[name]
+		r := bf.files[name]
 		r.Drift = "no row"
 		b.Sections[idx].Rows = append(b.Sections[idx].Rows, r)
 	}

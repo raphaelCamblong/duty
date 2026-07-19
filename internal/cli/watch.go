@@ -22,7 +22,16 @@ const (
 	watchExample = `  duty watch --agent`
 )
 
+// watchCmd is the watch command's dependencies and output sink.
+type watchCmd struct {
+	app app.App
+	fs  fsys.FS
+	cwd string
+	out io.Writer
+}
+
 func newWatchCmd(a app.App, f fsys.FS, cwd string, stdout io.Writer) *cobra.Command {
+	wc := watchCmd{app: a, fs: f, cwd: cwd, out: stdout}
 	var (
 		agent bool
 		in    string
@@ -35,7 +44,7 @@ func newWatchCmd(a app.App, f fsys.FS, cwd string, stdout io.Writer) *cobra.Comm
 			if len(args) != 0 {
 				return errors.New(watchUsage)
 			}
-			return runWatch(a, f, cwd, in, agent, stdout)
+			return runWatch(wc, in, agent)
 		},
 	}
 	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: time, event, id, field, old, new")
@@ -45,16 +54,16 @@ func newWatchCmd(a app.App, f fsys.FS, cwd string, stdout io.Writer) *cobra.Comm
 
 // runWatch prints nothing for the initial snapshot, only for later changes;
 // it returns nil on SIGINT and an error only if the tree becomes unreadable.
-func runWatch(a app.App, f fsys.FS, cwd, in string, agent bool, stdout io.Writer) error {
-	root, err := tree.FindRoot(f, cwd)
+func runWatch(wc watchCmd, in string, agent bool) error {
+	root, err := tree.FindRoot(wc.fs, wc.cwd)
 	if err != nil {
 		return err
 	}
-	prev, err := a.Snapshot(cwd, in)
+	prev, err := wc.app.Snapshot(wc.cwd, in)
 	if err != nil {
 		return err
 	}
-	w, err := watch.NewWatcher(f, root)
+	w, err := watch.NewWatcher(wc.fs, root)
 	if err != nil {
 		return err
 	}
@@ -71,11 +80,11 @@ func runWatch(a app.App, f fsys.FS, cwd, in string, agent bool, stdout io.Writer
 			if !ok {
 				return nil
 			}
-			cur, err := a.Snapshot(cwd, in)
+			cur, err := wc.app.Snapshot(wc.cwd, in)
 			if err != nil {
 				return err
 			}
-			emit(stdout, app.Diff(prev, cur), agent)
+			emit(wc.out, app.Diff(prev, cur), agent)
 			prev = cur
 		}
 	}

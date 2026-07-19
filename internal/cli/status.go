@@ -26,7 +26,7 @@ func newStatusCmd(a app.App, cwd string) *cobra.Command {
 			if len(args) != 2 || args[0] == "" || args[1] == "" {
 				return errors.New(statusUsage)
 			}
-			return a.SetStatus(cwd, args[0], args[1], force, claimer(as))
+			return a.SetStatus(cwd, app.StatusChange{ID: args[0], Status: args[1], Force: force, As: claimer(as)})
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "take over a task already in-progress")

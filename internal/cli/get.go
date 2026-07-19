@@ -66,7 +66,7 @@ func newGetTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 			if len(args) != 1 || args[0] == "" {
 				return errors.New(getTaskUsage)
 			}
-			return getTaskOut(a, cwd, args[0], section, body, agent, stdout)
+			return getTaskOut(a, cwd, taskQuery{id: args[0], section: section, body: body, agent: agent}, stdout)
 		},
 	}
 	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: id, track, status, title, gates-done, gates-total, blocked-by, path, updated, claimed-by")
@@ -77,28 +77,37 @@ func newGetTaskCmd(a app.App, cwd string, stdout io.Writer) *cobra.Command {
 	return cmd
 }
 
-func getTaskOut(a app.App, cwd, id, section string, body, agent bool, stdout io.Writer) error {
-	if body {
-		text, err := a.Body(cwd, id)
+// taskQuery is one `get task` request: the id plus how to render it — the whole
+// body, a single section, or the metadata (as human text or --agent TSV).
+type taskQuery struct {
+	id      string
+	section string
+	body    bool
+	agent   bool
+}
+
+func getTaskOut(a app.App, cwd string, q taskQuery, stdout io.Writer) error {
+	if q.body {
+		text, err := a.Body(cwd, q.id)
 		if err != nil {
 			return err
 		}
 		fmt.Fprint(stdout, text)
 		return nil
 	}
-	if section != "" {
-		sec, err := a.Section(cwd, id, section)
+	if q.section != "" {
+		sec, err := a.Section(cwd, q.id, q.section)
 		if err != nil {
 			return err
 		}
 		fmt.Fprintln(stdout, sec)
 		return nil
 	}
-	info, err := a.GetTask(cwd, id)
+	info, err := a.GetTask(cwd, q.id)
 	if err != nil {
 		return err
 	}
-	if agent {
+	if q.agent {
 		fmt.Fprintln(stdout, taskAgent(info))
 		return nil
 	}

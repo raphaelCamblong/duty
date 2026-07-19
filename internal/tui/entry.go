@@ -132,7 +132,17 @@ type compactDelegate struct {
 	glyph       string
 }
 
-func newDelegate(theme Theme, z *zone.Manager, b Board, showAge, showGates, showArchive bool, now time.Time, glyph string) compactDelegate {
+// viewOpts is how a board renders right now: which optional columns show, the
+// clock for relative ages, and the spinner glyph for in-progress rows.
+type viewOpts struct {
+	showAge     bool
+	showGates   bool
+	showArchive bool
+	now         time.Time
+	glyph       string
+}
+
+func newDelegate(theme Theme, z *zone.Manager, b Board, opts viewOpts) compactDelegate {
 	d := compactDelegate{
 		theme:       theme,
 		zones:       z,
@@ -140,20 +150,20 @@ func newDelegate(theme Theme, z *zone.Manager, b Board, showAge, showGates, show
 		countW:      maxSubCountWidth(b.Subs),
 		idW:         maxIDWidth(b.Sections),
 		driftW:      maxDriftWidth(b.Sections),
-		showAge:     showAge,
-		showGates:   showGates,
-		showArchive: showArchive,
-		now:         now,
-		glyph:       glyph,
+		showAge:     opts.showAge,
+		showGates:   opts.showGates,
+		showArchive: opts.showArchive,
+		now:         opts.now,
+		glyph:       opts.glyph,
 	}
-	if showAge {
-		d.ageW = maxAgeWidth(b.Sections, now)
+	if opts.showAge {
+		d.ageW = maxAgeWidth(b.Sections, opts.now)
 	}
-	if showArchive {
+	if opts.showArchive {
 		for _, r := range b.Archived {
 			d.idW = max(d.idW, lipgloss.Width(r.ID))
-			if showAge {
-				d.ageW = max(d.ageW, lipgloss.Width(ageCell(r, now)))
+			if opts.showAge {
+				d.ageW = max(d.ageW, lipgloss.Width(ageCell(r, opts.now)))
 			}
 		}
 	}
@@ -183,14 +193,11 @@ func (d compactDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	var line string
 	switch {
 	case e.track != nil:
-		head, tail := splitMatches(m.MatchesForItem(index), len(e.track.Name))
-		line = d.trackLine(*e.track, sel, m.Width(), head, tail)
+		line = d.trackLine(*e.track, sel, m.Width(), splitMatches(m.MatchesForItem(index), len(e.track.Name)))
 	case e.archived:
-		head, tail := splitMatches(m.MatchesForItem(index), len(e.task.ID))
-		line = d.archivedLine(*e.task, sel, m.Width(), head, tail)
+		line = d.archivedLine(*e.task, sel, m.Width(), splitMatches(m.MatchesForItem(index), len(e.task.ID)))
 	default:
-		head, tail := splitMatches(m.MatchesForItem(index), len(e.task.ID))
-		line = d.taskLine(*e.task, sel, m.Width(), head, tail)
+		line = d.taskLine(*e.task, sel, m.Width(), splitMatches(m.MatchesForItem(index), len(e.task.ID)))
 	}
 	fmt.Fprint(w, d.zones.Mark(itemZone(index), line))
 }
@@ -199,19 +206,27 @@ func itemZone(index int) string {
 	return fmt.Sprintf("item-%d", index)
 }
 
+// matches is one row's filter-match rune indices split across its two styled
+// cells: head into the id/name cell, tail into the title cell (re-based).
+type matches struct {
+	head []int
+	tail []int
+}
+
 // splitMatches splits filter-match rune indices around a head of headLen
 // runes followed by one separator, re-basing the tail indices.
-func splitMatches(matches []int, headLen int) (head, tail []int) {
-	for _, i := range matches {
+func splitMatches(all []int, headLen int) matches {
+	var m matches
+	for _, i := range all {
 		if i < headLen {
-			head = append(head, i)
+			m.head = append(m.head, i)
 			continue
 		}
 		if i > headLen {
-			tail = append(tail, i-headLen-1)
+			m.tail = append(m.tail, i-headLen-1)
 		}
 	}
-	return head, tail
+	return m
 }
 
 func styleMatches(s string, matches []int, base lipgloss.Style) string {
@@ -226,7 +241,7 @@ func styleMatches(s string, matches []int, base lipgloss.Style) string {
 // total count flush at the line end (dim "empty" when the subtree holds no
 // tasks). The bar column starts at the same x on every track row — mirroring
 // taskLine's right columns — and the title ellipsis-truncates first when narrow.
-func (d compactDelegate) trackLine(s Sub, selected bool, w int, nameM, titleM []int) string {
+func (d compactDelegate) trackLine(s Sub, selected bool, w int, m matches) string {
 	rightW := trackRightWidth(d.countW)
 	fixed := 2 + d.nameW + 2 + 2 + rightW
 	nameStyle := boldWhen(d.theme.accent(), selected)
@@ -236,8 +251,8 @@ func (d compactDelegate) trackLine(s Sub, selected bool, w int, nameM, titleM []
 		rightCell = pad(d.theme.dim().Render(fmt.Sprintf("%d archived", s.Archived)), rightW)
 	}
 	line := d.theme.cursorMark(selected) +
-		pad(styleMatches(s.Name, nameM, nameStyle), d.nameW) + "  " +
-		pad(styleMatches(s.Title, titleM, boldWhen(lipgloss.NewStyle(), selected)), max(w-fixed, minTitleWidth)) + "  " +
+		pad(styleMatches(s.Name, m.head, nameStyle), d.nameW) + "  " +
+		pad(styleMatches(s.Title, m.tail, boldWhen(lipgloss.NewStyle(), selected)), max(w-fixed, minTitleWidth)) + "  " +
 		rightCell
 	return ansi.Truncate(line, w, "…")
 }
@@ -245,15 +260,15 @@ func (d compactDelegate) trackLine(s Sub, selected bool, w int, nameM, titleM []
 // archivedLine renders one archived task row: dim id, title, and relative age
 // only — no status or gate columns, since an archived task is done by
 // convention. The row stays selectable so enter opens its read-only preview.
-func (d compactDelegate) archivedLine(r Row, selected bool, w int, idM, titleM []int) string {
+func (d compactDelegate) archivedLine(r Row, selected bool, w int, m matches) string {
 	fixed := 2 + d.idW + 2
 	if d.showAge {
 		fixed += 2 + d.ageW
 	}
 	dim := boldWhen(d.theme.dim(), selected)
 	line := d.theme.cursorMark(selected) +
-		pad(styleMatches(r.ID, idM, dim), d.idW) + "  " +
-		pad(styleMatches(r.Title, titleM, dim), max(w-fixed, minTitleWidth))
+		pad(styleMatches(r.ID, m.head, dim), d.idW) + "  " +
+		pad(styleMatches(r.Title, m.tail, dim), max(w-fixed, minTitleWidth))
 	if d.showAge {
 		line += "  " + dim.Render(pad(ageCell(r, d.now), d.ageW))
 	}
@@ -270,7 +285,7 @@ func boldWhen(base lipgloss.Style, selected bool) lipgloss.Style {
 // taskLine renders one task: id, title, colored status, gate progress, drift
 // badge. The board's widest badge yields title room so badges stay aligned; a
 // narrow terminal drops the gate column so the always-on age column keeps room.
-func (d compactDelegate) taskLine(r Row, selected bool, w int, idM, titleM []int) string {
+func (d compactDelegate) taskLine(r Row, selected bool, w int, m matches) string {
 	fixed := 2 + d.idW + 2 + 2 + statusColWidth
 	if d.showGates {
 		fixed += 2 + gatesColWidth
@@ -283,8 +298,8 @@ func (d compactDelegate) taskLine(r Row, selected bool, w int, idM, titleM []int
 	}
 	dim := boldWhen(d.theme.dim(), selected)
 	line := d.theme.cursorMark(selected) +
-		pad(styleMatches(r.ID, idM, boldWhen(d.theme.accent(), selected)), d.idW) + "  " +
-		pad(styleMatches(r.Title, titleM, boldWhen(lipgloss.NewStyle(), selected)), max(w-fixed, minTitleWidth)) + "  " +
+		pad(styleMatches(r.ID, m.head, boldWhen(d.theme.accent(), selected)), d.idW) + "  " +
+		pad(styleMatches(r.Title, m.tail, boldWhen(lipgloss.NewStyle(), selected)), max(w-fixed, minTitleWidth)) + "  " +
 		d.statusCell(r, selected)
 	if who := claimerTag(r); who != "" {
 		line += dim.Render(" · " + who)

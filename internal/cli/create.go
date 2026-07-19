@@ -48,7 +48,7 @@ func newCreateTaskCmd(a app.App, cwd string, stdin io.Reader, stdout io.Writer) 
 			if body {
 				bodyReader = stdin
 			}
-			id, path, err := a.CreateTask(cwd, args[0], slug, section, in, blockedBy, bodyReader)
+			id, path, err := a.CreateTask(cwd, in, app.TaskSpec{Title: args[0], Slug: slug, Section: section, BlockedBy: blockedBy}, bodyReader)
 			if err != nil {
 				return err
 			}

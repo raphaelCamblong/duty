@@ -9,20 +9,20 @@ import (
 )
 
 // Report appends the text read from r under the task's "## Report" heading,
-// opened by a dated "### 2006-01-02 15:04" line (plus " — status" when status
+// opened by a dated "### 2006-01-02 15:04" line (plus " — status" when ch.Status
 // is given) stamped from a.now, creating the heading once at the end of the
 // file. Reports accumulate — nothing already in the file is rewritten. When
-// status is non-empty it also flips the task's status (file + board row) in
+// ch.Status is non-empty it also flips the task's status (file + board row) in
 // the same locked write, the done/blocked lifecycle endings: both edits are
 // computed before either file is written, so any error leaves neither the
-// report nor the status applied. Moving to in-progress records as as the
+// report nor the status applied. Moving to in-progress records ch.As as the
 // claimer; every other status clears the claim. Empty (or blank) input is
 // refused; r is read only after the id resolves.
-func (a App) Report(cwd, id string, r io.Reader, status string, force bool, as string) error {
-	if status != "" && !task.ValidStatus(status) {
-		return unknownStatusErr(status)
+func (a App) Report(cwd string, ch StatusChange, r io.Reader) error {
+	if ch.Status != "" && !task.ValidStatus(ch.Status) {
+		return unknownStatusErr(ch.Status)
 	}
-	root, taskPath, err := a.resolveOpenWithRoot(cwd, id)
+	root, taskPath, err := a.resolveOpenWithRoot(cwd, ch.ID)
 	if err != nil {
 		return err
 	}
@@ -39,15 +39,15 @@ func (a App) Report(cwd, id string, r io.Reader, status string, force bool, as s
 	if err != nil {
 		return err
 	}
-	withReport := task.AppendReport(content, task.ReportBlock(a.now(), status, text))
-	if status == "" {
+	withReport := task.AppendReport(content, task.ReportBlock(a.now(), ch.Status, text))
+	if ch.Status == "" {
 		return a.fs.WriteFile(taskPath, withReport)
 	}
 	t, err := parseTask(taskPath, content)
 	if err != nil {
 		return err
 	}
-	return a.statusWrite(taskPath, id, status, force, withReport, t.Status, t.ClaimedBy, as)
+	return a.statusWrite(taskPath, ch, withReport, t)
 }
 
 func readNonBlank(r io.Reader, kind string) ([]byte, error) {

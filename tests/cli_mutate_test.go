@@ -359,11 +359,11 @@ func TestReportDatesEachAppend(t *testing.T) {
 	clock := time.Date(2026, 3, 4, 9, 5, 0, 0, time.UTC)
 	a := app.NewWithClock(fsys.OS{}, func() time.Time { return clock })
 
-	if err := a.Report(root, "T-01", strings.NewReader("First pass.\n"), "", false, ""); err != nil {
+	if err := a.Report(root, app.StatusChange{ID: "T-01"}, strings.NewReader("First pass.\n")); err != nil {
 		t.Fatalf("report: %v", err)
 	}
 	clock = time.Date(2026, 3, 4, 9, 12, 0, 0, time.UTC)
-	if err := a.Report(root, "T-01", strings.NewReader("Second pass.\n"), "done", false, ""); err != nil {
+	if err := a.Report(root, app.StatusChange{ID: "T-01", Status: "done"}, strings.NewReader("Second pass.\n")); err != nil {
 		t.Fatalf("report --status done: %v", err)
 	}
 

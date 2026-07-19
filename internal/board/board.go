@@ -79,10 +79,10 @@ func FindRow(content []byte, filename string) (string, bool) {
 	return lines[i], true
 }
 
-// AddRow appends a task row "| [id](filename) | title | status |" to the
-// named section's table, creating the section above the footer when absent.
-func AddRow(content []byte, section, id, filename, title, status string) ([]byte, error) {
-	row := "| [" + id + "](" + filename + ") | " + title + " | " + status + " |"
+// AddRow appends r as a row "| [id](file) | title | status |" to the named
+// section's table, creating the section above the footer when absent.
+func AddRow(content []byte, section string, r Row) ([]byte, error) {
+	row := "| [" + r.ID + "](" + r.File + ") | " + r.Title + " | " + r.Status + " |"
 	lines, err := insertRow(splitLines(content), section, row)
 	if err != nil {
 		return nil, err
