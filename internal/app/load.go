@@ -43,7 +43,8 @@ func (a App) Load(cwd string, opts LoadOptions) (*TreeView, error) {
 	}
 	view := &TreeView{
 		Root: root, contextPath: relBoard(root, contextDir),
-		byID: map[string]*TaskView{}, archivedIDs: map[string]bool{},
+		byID:   map[string]*TaskView{},
+		badIDs: map[string]bool{}, archivedIDs: map[string]bool{},
 	}
 	if err := a.loadBoards(view, dirs, opts); err != nil {
 		return nil, err
@@ -287,28 +288,33 @@ func (a App) readArchived(dir string, entry fs.DirEntry) (TaskView, error) {
 }
 
 // index records every open file-truth task by id, so Task and the dep oracle
-// answer from memory. It runs after every board is built, so the pointers it
-// keeps into the section slices stay valid.
+// answer from memory, and every bad-file id so a projection can name that fault.
+// It runs after every board is built, so the pointers it keeps into the section
+// slices stay valid.
 func (view *TreeView) index() {
 	for bi := range view.Boards {
-		indexBoard(view.byID, &view.Boards[bi])
+		view.indexBoard(&view.Boards[bi])
 	}
 }
 
-func indexBoard(byID map[string]*TaskView, boardView *BoardView) {
+func (view *TreeView) indexBoard(boardView *BoardView) {
 	for si := range boardView.Sections {
-		indexSection(byID, &boardView.Sections[si])
+		view.indexSection(&boardView.Sections[si])
 	}
 }
 
-func indexSection(byID map[string]*TaskView, section *SectionView) {
+func (view *TreeView) indexSection(section *SectionView) {
 	for ti := range section.Tasks {
 		item := &section.Tasks[ti]
-		if item.Path == "" || item.Drift == DriftBadFile {
+		if item.Drift == DriftBadFile {
+			view.badIDs[item.ID] = true
 			continue
 		}
-		if _, seen := byID[item.ID]; !seen {
-			byID[item.ID] = item
+		if item.Path == "" {
+			continue
+		}
+		if _, seen := view.byID[item.ID]; !seen {
+			view.byID[item.ID] = item
 		}
 	}
 }

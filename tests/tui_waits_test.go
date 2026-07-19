@@ -57,6 +57,35 @@ func TestTUIWaitAnnotation(t *testing.T) {
 	})
 }
 
+// TestTUIMissingDepBlocks pins behavior change 1: a blocked-by id that resolves
+// nowhere (a deleted dep) blocks in the TUI too — the TUI adopts the CLI rule so
+// a deleted prerequisite never silently unblocks a task.
+func TestTUIMissingDepBlocks(t *testing.T) {
+	root := initDuty(t)
+	mustDuty(t, root, "create", "task", "Blocker")
+	mustDuty(t, root, "create", "task", "Waiter", "--blocked-by", "T-01")
+	mustDuty(t, root, "delete", "task", "T-01") // T-01 now resolves nowhere
+
+	t.Run("scan blocks on a dep that resolves nowhere", func(t *testing.T) {
+		snap := mustScan(t, root)
+		r, ok := scanRow(snap, ".", "T-02")
+		if !ok {
+			t.Fatal("T-02 not scanned")
+		}
+		if len(r.Waits) != 1 || r.Waits[0] != "T-01" {
+			t.Errorf("T-02 Waits = %v, want [T-01] (a deleted dep must not silently unblock)", r.Waits)
+		}
+	})
+
+	t.Run("frame shows the wait on the blocked row", func(t *testing.T) {
+		m := newTUIModelSize(t, root, 120, 35)
+		line := frameLine(t, m.View().Content, "Waiter")
+		if !strings.Contains(line, "waits T-01") {
+			t.Errorf("blocked row missing its wait annotation: %q", line)
+		}
+	})
+}
+
 func TestTUIArchivedDepCountsMet(t *testing.T) {
 	root := initDuty(t)
 	mustDuty(t, root, "create", "task", "Done dep")

@@ -19,6 +19,7 @@ type TreeView struct {
 	Boards []BoardView
 
 	byID        map[string]*TaskView
+	badIDs      map[string]bool
 	archivedIDs map[string]bool
 	// contextPath is the board containing the cwd Load ran from — the empty
 	// scope's base.
@@ -121,10 +122,13 @@ func (view *TreeView) Task(id string) (*TaskView, bool) {
 	return found, ok
 }
 
-// resolveErr reports why id names no open task, wording each case exactly as
-// tree.ResolveTask does so a projection's error reads identically: an archived
-// id is read-only, anything else is unknown.
+// resolveErr reports why id names no open task. A bad-file row is named for the
+// real fault; otherwise the wording mirrors tree.ResolveTask so a projection's
+// error reads identically — an archived id is read-only, anything else unknown.
 func (view *TreeView) resolveErr(id string) error {
+	if view.badIDs[id] {
+		return fmt.Errorf("task %s: unparsable file", id)
+	}
 	if view.archivedIDs[id] {
 		return fmt.Errorf("task %s is archived: %w", id, tree.ErrArchived)
 	}

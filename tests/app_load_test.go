@@ -256,6 +256,22 @@ func TestLoadDriftClasses(t *testing.T) {
 	})
 }
 
+// TestGetTaskUnparsableFile pins the bad-file trap: an id whose only presence is
+// an unparsable open file names the real fault instead of the unknown-id error.
+func TestGetTaskUnparsableFile(t *testing.T) {
+	tr := newMemTree(t)
+	tr.write(filepath.Join(tr.root, "T-05-bad.md"), []byte("not valid frontmatter\n"))
+	tr.row(tr.root, "T-05", "T-05-bad.md", "Bad", task.StatusTodo)
+
+	_, err := app.New(tr.fs).GetTask(tr.root, "T-05")
+	if err == nil {
+		t.Fatal("GetTask on an unparsable file succeeded, want it named as the fault")
+	}
+	if got := err.Error(); got != "task T-05: unparsable file" {
+		t.Errorf("error = %q, want %q", got, "task T-05: unparsable file")
+	}
+}
+
 func TestLoadStrayRule(t *testing.T) {
 	t.Run("rowless files sort by filename into the default section", func(t *testing.T) {
 		tr := newMemTree(t)
