@@ -14,14 +14,10 @@ import (
 	"github.com/raphaelCamblong/duty/internal/fsys"
 )
 
-// debounce is how long the watcher coalesces a burst of filesystem events
-// into one refresh notification.
 const debounce = 100 * time.Millisecond
 
-// Watcher watches every directory under a tree root and coalesces bursts of
-// filesystem events into single notifications on C. Before each notification
-// it re-walks the tree to watch directories that appeared, so new tracks
-// refresh live too.
+// Watcher re-walks the tree before each notification to watch directories
+// that appeared, so new tracks refresh live too.
 type Watcher struct {
 	// C receives one value per debounced burst of events; it is closed when
 	// the watcher stops.
@@ -30,8 +26,7 @@ type Watcher struct {
 	notif *fsnotify.Watcher
 }
 
-// NewWatcher watches every directory under root and starts the debounce
-// loop. Callers own Close.
+// Callers own Close.
 func NewWatcher(f fsys.FS, root string) (*Watcher, error) {
 	fw, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -51,10 +46,8 @@ func (w *Watcher) Close() error {
 	return w.notif.Close()
 }
 
-// loop debounces events: the first event of a burst arms a timer; when it
-// fires, the tree is re-walked for new directories and one notification is
-// sent (dropped if the last one is still unread — the re-scan is total
-// anyway).
+// loop drops a notification if the last one is still unread, since the
+// re-scan is total anyway.
 func (w *Watcher) loop(root string) {
 	defer close(w.C)
 	var fire <-chan time.Time
@@ -82,10 +75,9 @@ func (w *Watcher) loop(root string) {
 	}
 }
 
-// addDirs walks root through the port and watches every directory. Adding a
-// watched path again is a no-op, so re-walks are cheap. With strict false,
-// per-directory failures are skipped — directories vanish mid-walk when tasks
-// are archived.
+// Adding a watched path again is a no-op, so re-walks are cheap. With strict
+// false, per-directory failures are skipped — directories vanish mid-walk
+// when tasks are archived.
 func addDirs(f fsys.FS, fw *fsnotify.Watcher, root string, strict bool) error {
 	return f.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {

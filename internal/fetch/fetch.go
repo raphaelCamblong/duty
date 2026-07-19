@@ -11,10 +11,8 @@ import (
 	"time"
 )
 
-// Fetcher retrieves the bytes at a URL. duty's one network touch goes through
-// it, so callers stay testable without dialing.
+// Fetcher is duty's one network touch; callers stay testable without dialing.
 type Fetcher interface {
-	// Fetch GETs url and returns its body, or an error on any failure.
 	Fetch(url string) ([]byte, error)
 }
 
@@ -24,12 +22,10 @@ const DefaultTimeout = 2 * time.Second
 
 // HTTP is a Fetcher over the real network. A zero HTTP uses DefaultTimeout.
 type HTTP struct {
-	// Timeout bounds the whole request; zero means DefaultTimeout.
 	Timeout time.Duration
 }
 
-// Fetch GETs url with HTTP's timeout and returns its body; a non-200 status or
-// any transport error is returned as an error.
+// Fetch treats a non-200 status or any transport error as a failure.
 func (h HTTP) Fetch(url string) ([]byte, error) {
 	timeout := h.Timeout
 	if timeout == 0 {
