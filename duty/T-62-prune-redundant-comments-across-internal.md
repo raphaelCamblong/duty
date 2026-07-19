@@ -1,7 +1,7 @@
 ---
 id: T-62
 title: Prune redundant comments across internal/
-status: todo
+status: done
 blocked-by: []
 ---
 
@@ -37,9 +37,43 @@ Any code/logic change; the many-argument-function refactor (separate task);
 docs/*.md content; test files.
 
 ## Gates
-- [ ] `just check` green (build, vet, gofumpt, golangci-lint 0 issues, full
+- [x] `just check` green (build, vet, gofumpt, golangci-lint 0 issues, full
   suite) with ZERO test file edits.
-- [ ] Spot check: internal/tui/entry.go and keys.go read leanly (report
+- [x] Spot check: internal/tui/entry.go and keys.go read leanly (report
   before/after comment-line counts for these two specifically, since they
   were the flagged examples).
-- [ ] Report totals: comments removed / kept-as-genuine per package group.
+- [x] Report totals: comments removed / kept-as-genuine per package group.
+
+## Report
+
+### 2026-07-19 18:59 — done
+
+Verified `just check` green across all six T-62 sub-commits (gofumpt clean,
+go vet clean, golangci-lint 0 issues, full test suite passing at 87.9%
+coverage of internal/), zero test file edits. No cross-group integration
+break found; no fix commit needed.
+
+Comment-line totals (gross removed / added-back during rewording / net
+removed / genuine comments kept, counted across internal/+cmd/, all six
+commits diffed against 10c2cc7, the pre-T-62 baseline):
+
+  humanize+fetch+watch      removed 26  added 10  net  16  kept  27
+  fsys+tree+config+names+cmd removed 63  added  6  net  57  kept  98
+  cli                        removed 162 added 24  net 138  kept  29
+  task+board                 removed 91  added  0  net  91  kept 158
+  app                        removed 128 added 50  net  78  kept 223
+  tui                        removed 207 added  1  net 206  kept 266
+  -----------------------------------------------------------------
+  TOTAL                      removed 677 added 91  net 586  kept 801
+
+No group was already clean — every one of the six had comments to prune,
+ranging from 26 (humanize+fetch+watch, already terse) to 207 (tui, the
+heaviest offender) gross comment lines deleted.
+
+Flagged spot-check files (internal/tui, commit 3b4ed84):
+  entry.go: 64 comment lines before -> 26 after
+  keys.go:   5 comment lines before ->  0 after
+
+Both read leanly now: entry.go keeps only the handful of comments that
+state a real constraint; keys.go has none left, all of them were pure
+restatements of the binding name.
