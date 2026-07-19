@@ -1,6 +1,4 @@
-// Package tui is the live board viewer: a read-only Bubble Tea program that
-// renders the tree from the task files (truth) in the order each board index
-// gives, and re-scans on any filesystem event. It never writes.
+// Package tui is duty's live board viewer.
 package tui
 
 import (
@@ -23,7 +21,6 @@ import (
 // Snapshot is the whole tree read at one instant: every board keyed by its
 // slash-separated path relative to the root ("." for the root board).
 type Snapshot struct {
-	// Boards maps board path to its view model.
 	Boards map[string]Board
 }
 
@@ -37,7 +34,6 @@ func (s Snapshot) anyInProgress() bool {
 // Board is one board's view model: identity, its direct tracks, and its
 // task rows grouped in board-index section order.
 type Board struct {
-	// Path is the board's slash path relative to the root, "." for the root.
 	Path string
 	// Title is the board index H1, falling back to the folder name.
 	Title string
@@ -68,11 +64,9 @@ type Board struct {
 
 // Sub is one track line of the parent's view, counts live from files.
 type Sub struct {
-	// Path is the track's path relative to the root.
 	Path string
 	// Name is the folder path relative to the parent, trailing slash.
-	Name string
-	// Title is the track's H1.
+	Name  string
 	Title string
 	// Done and Total count the track's subtree like Board's.
 	Done, Total int
@@ -85,7 +79,6 @@ type Sub struct {
 
 // Section is one "## <name>" group of task rows.
 type Section struct {
-	// Name is the section heading text.
 	Name string
 	// Rows are the section's tasks in board order.
 	Rows []Row
@@ -99,11 +92,9 @@ type Row struct {
 	ID, Title, Status string
 	// File is the task filename; Path its absolute location, "" when the
 	// board row points at a file that does not exist.
-	File, Path string
-	// GatesDone and GatesTotal count ticked vs all gate checkboxes.
+	File, Path            string
 	GatesDone, GatesTotal int
-	// BlockedBy lists the ids the task's frontmatter declares as prerequisites.
-	BlockedBy []string
+	BlockedBy             []string
 	// Waits lists the BlockedBy ids not yet met — the wait state the scan
 	// computes from the snapshot's own statuses; empty when the task is
 	// actionable.
@@ -112,8 +103,7 @@ type Row struct {
 	ClaimedBy string
 	// Drift is "" when file and board agree, else "board says <status>",
 	// "no row", "no file", or "unparsable file".
-	Drift string
-	// Content is the raw task file, kept for the detail view.
+	Drift   string
 	Content []byte
 	// UpdatedAt is the task file's modification time, zero when it has no file.
 	UpdatedAt time.Time
@@ -260,9 +250,6 @@ func scanArchive(f fsys.FS, archiveDir string, includeContent bool) (int, []Row,
 	return count, rows, nil
 }
 
-// readArchivedTask reads one archived task file into a Row: its parsed id,
-// title, status and gates when the frontmatter is valid, else an id recovered
-// from the filename. Content and Path back the read-only preview.
 func readArchivedTask(f fsys.FS, dir string, e fs.DirEntry) (Row, error) {
 	abs := filepath.Join(dir, e.Name())
 	content, err := f.ReadFile(abs)
@@ -328,8 +315,6 @@ func readTasks(f fsys.FS, dir string) (files map[string]Row, bad map[string][]by
 	return files, bad, nil
 }
 
-// entryModTime returns e's modification time from the same directory listing,
-// the zero time when its info cannot be read.
 func entryModTime(e fs.DirEntry) time.Time {
 	info, err := e.Info()
 	if err != nil {
@@ -428,8 +413,6 @@ func link(snap Snapshot, paths []string) {
 	buildSubs(snap, paths)
 }
 
-// buildSubs appends each non-root board to its parent's Subs as a track view,
-// carrying the subtree counts link already rolled up.
 func buildSubs(snap Snapshot, paths []string) {
 	for _, q := range paths {
 		if q == "." {
@@ -446,7 +429,6 @@ func buildSubs(snap Snapshot, paths []string) {
 	}
 }
 
-// within reports whether board path q is p or lies below it.
 func within(q, p string) bool {
 	return p == "." || q == p || strings.HasPrefix(q, p+"/")
 }
@@ -467,8 +449,6 @@ func parentOf(snap Snapshot, p string) string {
 	return "."
 }
 
-// subName renders a track's display name: its path relative to the
-// parent board, with a trailing slash.
 func subName(parent, q string) string {
 	if parent != "." {
 		q = strings.TrimPrefix(q, parent+"/")

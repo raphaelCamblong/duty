@@ -15,9 +15,6 @@ import (
 	"github.com/raphaelCamblong/duty/internal/humanize"
 )
 
-// entry is one line of the left panel: a sub-track, a task row, or a bare
-// section header (never selected, never clickable). archived marks a task row
-// that lives in a board's archive/ — rendered dim, previewable, never edited.
 type entry struct {
 	track    *Sub
 	task     *Row
@@ -25,8 +22,6 @@ type entry struct {
 	archived bool
 }
 
-// FilterValue feeds the list's fuzzy filter: track name+title for tracks,
-// id+title for tasks, nothing for section headers so they filter away.
 func (e entry) FilterValue() string {
 	switch {
 	case e.track != nil:
@@ -37,13 +32,10 @@ func (e entry) FilterValue() string {
 	return ""
 }
 
-// selectable reports whether the entry is a track or a task, not a header.
 func (e entry) selectable() bool {
 	return e.track != nil || e.task != nil
 }
 
-// anySelectable reports whether items holds at least one track or task, so a
-// board carrying only an empty section header still reads as empty.
 func anySelectable(items []list.Item) bool {
 	for _, it := range items {
 		if e, ok := it.(entry); ok && e.selectable() {
@@ -53,8 +45,6 @@ func anySelectable(items []list.Item) bool {
 	return false
 }
 
-// tracksSection is the label of the header above the sub-track rows; like a
-// task section header it is non-selectable and filters away.
 const tracksSection = "Tracks"
 
 // boardEntries lists a board as left-panel entries: a "Tracks" header over the
@@ -90,10 +80,6 @@ func boardEntries(b Board, statusSort, showArchive bool) []list.Item {
 	return items
 }
 
-// visibleSubs returns the indices of the sub-tracks the current view shows:
-// all of them when the archive is on, otherwise every one except a track
-// emptied by archiving (zero open tasks, at least one archived) — an
-// archived-out track hides until the archive is revealed.
 func visibleSubs(subs []Sub, showArchive bool) []int {
 	var out []int
 	for i := range subs {
@@ -105,9 +91,6 @@ func visibleSubs(subs []Sub, showArchive bool) []int {
 	return out
 }
 
-// emptiedByArchiving reports whether a track's subtree holds no open tasks but
-// at least one archived one — the archived-out state, hidden while the archive
-// is off and shown dim with its count while it is on.
 func emptiedByArchiving(s Sub) bool {
 	return s.Total == 0 && s.Archived > 0
 }
@@ -125,8 +108,6 @@ func sortedRows(rows []Row) []Row {
 	return out
 }
 
-// statusRank is a status's position in rollupOrder, the display-sort ranking;
-// an unknown status sorts after every known one.
 func statusRank(status string) int {
 	for i, st := range rollupOrder {
 		if st == status {
@@ -136,9 +117,6 @@ func statusRank(status string) int {
 	return len(rollupOrder)
 }
 
-// compactDelegate renders entries one line each: tracks with a colored
-// per-status rollup, tasks with status/gates/drift columns, section names
-// dim; selectable lines are wrapped in BubbleZone hit-zones.
 type compactDelegate struct {
 	theme       Theme
 	zones       *zone.Manager
@@ -154,12 +132,6 @@ type compactDelegate struct {
 	glyph       string
 }
 
-// newDelegate sizes a compact delegate's columns for one board; showAge governs
-// the always-on relative-age column (whose width is measured here) and showGates
-// the gate column that a narrow terminal drops. showArchive folds the board's
-// archived rows into the id and age widths so they align with the open rows.
-// glyph is the current spinner frame drawn beside in-progress rows, "" when the
-// tree holds none.
 func newDelegate(theme Theme, z *zone.Manager, b Board, showAge, showGates, showArchive bool, now time.Time, glyph string) compactDelegate {
 	d := compactDelegate{
 		theme:       theme,
@@ -223,7 +195,6 @@ func (d compactDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	fmt.Fprint(w, d.zones.Mark(itemZone(index), line))
 }
 
-// itemZone is the stable zone name for the visible entry at index.
 func itemZone(index int) string {
 	return fmt.Sprintf("item-%d", index)
 }
@@ -243,7 +214,6 @@ func splitMatches(matches []int, headLen int) (head, tail []int) {
 	return head, tail
 }
 
-// styleMatches renders s in base with matched runes underlined.
 func styleMatches(s string, matches []int, base lipgloss.Style) string {
 	if len(matches) == 0 {
 		return base.Render(s)
@@ -290,8 +260,6 @@ func (d compactDelegate) archivedLine(r Row, selected bool, w int, idM, titleM [
 	return ansi.Truncate(line, w, "…")
 }
 
-// boldWhen adds bold to base when the row is selected, so the whole focused line
-// reads bold — the chevron alone is thin feedback.
 func boldWhen(base lipgloss.Style, selected bool) lipgloss.Style {
 	if selected {
 		return base.Bold(true)
@@ -336,9 +304,6 @@ func (d compactDelegate) taskLine(r Row, selected bool, w int, idM, titleM []int
 	return ansi.Truncate(line, w, "…")
 }
 
-// statusCell renders a row's status word in its status color, the spinner glyph
-// trailing beside an in-progress status so the fixed status column stays aligned
-// across rows.
 func (d compactDelegate) statusCell(r Row, selected bool) string {
 	cell := boldWhen(d.theme.statusStyle(r.Status), selected).Render(pad(r.Status, statusColWidth))
 	if inProgress(r) && d.glyph != "" {
@@ -347,8 +312,6 @@ func (d compactDelegate) statusCell(r Row, selected bool) string {
 	return cell
 }
 
-// ageCell renders a task row's relative file age, "" when the row has no file
-// (its modification time is unknown).
 func ageCell(r Row, now time.Time) string {
 	if r.UpdatedAt.IsZero() {
 		return ""
@@ -356,7 +319,6 @@ func ageCell(r Row, now time.Time) string {
 	return humanize.RelTime(r.UpdatedAt, now)
 }
 
-// maxAgeWidth sizes the relative-age column across every section.
 func maxAgeWidth(sections []Section, now time.Time) int {
 	w := 0
 	for _, s := range sections {

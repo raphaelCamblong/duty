@@ -7,7 +7,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// scrollTickMsg advances the preview scroll spring one animation frame.
 type scrollTickMsg struct{}
 
 const (
@@ -17,7 +16,6 @@ const (
 	doubleClick = 400 * time.Millisecond
 )
 
-// scrollTickCmd schedules the next animation frame.
 func scrollTickCmd() tea.Cmd {
 	return tea.Tick(time.Second/scrollFPS, func(time.Time) tea.Msg { return scrollTickMsg{} })
 }
@@ -43,8 +41,6 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// wheel scrolls whichever panel the pointer hovers: the preview glides on
-// its spring, the list moves its selection.
 func (m Model) wheel(msg tea.MouseMsg, dir int) (tea.Model, tea.Cmd) {
 	if m.overPreview(msg) {
 		m.scrollTarget = clamp(m.scrollTarget+dir*wheelStep, 0, m.previewMax())
@@ -87,8 +83,6 @@ func (m Model) click(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// clickItem selects the visible entry at index and focuses the list; a double
-// click opens it (a task's preview, a track's descent or card).
 func (m Model) clickItem(index int) Model {
 	m.focus = focusList
 	m.list.Select(index)
@@ -101,20 +95,16 @@ func (m Model) clickItem(index int) Model {
 	return m
 }
 
-// previewMax is the preview's highest top line.
 func (m Model) previewMax() int {
 	return max(m.preview.TotalLineCount()-m.preview.Height(), 0)
 }
 
-// settleAt pins the preview spring at offset, stopping any animation.
 func (m Model) settleAt(offset int) Model {
 	m.scroll, m.scrollVel = float64(offset), 0
 	m.scrollTarget, m.animating = offset, false
 	return m
 }
 
-// startAnim begins the spring animation unless it is already running or the
-// preview is already at rest at its target.
 func (m Model) startAnim() (tea.Model, tea.Cmd) {
 	if m.animating || m.settled() {
 		return m, nil
@@ -123,8 +113,6 @@ func (m Model) startAnim() (tea.Model, tea.Cmd) {
 	return m, scrollTickCmd()
 }
 
-// stepScroll advances the spring toward the target, moving the preview and
-// snapping once the motion has settled.
 func (m Model) stepScroll() (tea.Model, tea.Cmd) {
 	m.scroll, m.scrollVel = m.spring.Update(m.scroll, m.scrollVel, float64(m.scrollTarget))
 	if m.settled() {
@@ -136,8 +124,6 @@ func (m Model) stepScroll() (tea.Model, tea.Cmd) {
 	return m, scrollTickCmd()
 }
 
-// settled reports whether the spring has reached its target to within a
-// fraction of a line.
 func (m Model) settled() bool {
 	return math.Abs(m.scroll-float64(m.scrollTarget)) < 0.2 && math.Abs(m.scrollVel) < 0.2
 }

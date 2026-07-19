@@ -44,7 +44,6 @@ type Theme struct {
 	Blocked adaptive
 }
 
-// resolve parses a slot's value for the theme's mode into a concrete color.
 func (t Theme) resolve(a adaptive) color.Color {
 	if t.dark {
 		return lipgloss.Color(a.Dark)
@@ -100,8 +99,6 @@ func themeFromConfig(p config.Palette, dark bool) (Theme, error) {
 	return t, nil
 }
 
-// overlaySlot validates the light and dark channels of c and writes each set
-// one onto dst, leaving an empty channel at its default.
 func overlaySlot(dst *adaptive, c config.Color, key string) error {
 	if c.Light != "" {
 		if err := validColor(c.Light); err != nil {
@@ -118,8 +115,6 @@ func overlaySlot(dst *adaptive, c config.Color, key string) error {
 	return nil
 }
 
-// validColor accepts a #rrggbb hex triplet or an ansi index 0-255 — the two
-// color forms the duty palette uses.
 func validColor(s string) error {
 	if len(s) == 7 && s[0] == '#' {
 		if _, err := strconv.ParseUint(s[1:], 16, 32); err == nil {
@@ -132,14 +127,10 @@ func validColor(s string) error {
 	return fmt.Errorf("invalid color %q — want #rrggbb or an ansi index 0-255", s)
 }
 
-// statusStyle inks a status word as flat colored text: on dark each word keeps
-// its raw palette hue, on light it shifts to an AA-readable tone; blocked is
-// red, backlog and an unknown status dim grey.
 func (t Theme) statusStyle(status string) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(t.resolve(t.statusSlot(status)))
 }
 
-// statusSlot is the palette slot inking a status word.
 func (t Theme) statusSlot(status string) adaptive {
 	switch status {
 	case task.StatusInProgress:
@@ -171,32 +162,24 @@ func (t Theme) statusColor(status string) color.Color {
 	return t.resolve(t.Dim)
 }
 
-// accent styles text in the accent hue (ids, breadcrumb, selection, title).
 func (t Theme) accent() lipgloss.Style { return lipgloss.NewStyle().Foreground(t.resolve(t.Accent)) }
 
-// dim styles chrome text — separators, ages, hints — in the dim grey.
 func (t Theme) dim() lipgloss.Style { return lipgloss.NewStyle().Foreground(t.resolve(t.Dim)) }
 
-// section styles a bold dim section header.
 func (t Theme) section() lipgloss.Style { return t.dim().Bold(true) }
 
-// crumb styles a bold accent breadcrumb segment.
 func (t Theme) crumb() lipgloss.Style { return t.accent().Bold(true) }
 
-// alert styles scan errors and drift badges in the blocked hue.
 func (t Theme) alert() lipgloss.Style { return lipgloss.NewStyle().Foreground(t.resolve(t.Blocked)) }
 
-// focusBox is the rounded accent-bordered box of a focused panel and the header.
 func (t Theme) focusBox() lipgloss.Style {
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.resolve(t.Accent)).Padding(0, 1)
 }
 
-// blurBox is the rounded dim-bordered box of a blurred panel.
 func (t Theme) blurBox() lipgloss.Style {
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.resolve(t.Dim)).Padding(0, 1)
 }
 
-// panelBox is a panel's border style: accent when focused, dim otherwise.
 func (t Theme) panelBox(focused bool) lipgloss.Style {
 	if focused {
 		return t.focusBox()
@@ -204,7 +187,6 @@ func (t Theme) panelBox(focused bool) lipgloss.Style {
 	return t.blurBox()
 }
 
-// cursorMark is the two-column selection gutter.
 func (t Theme) cursorMark(selected bool) string {
 	if selected {
 		return t.accent().Bold(true).Render("❯") + " "

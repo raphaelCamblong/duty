@@ -16,18 +16,13 @@ import (
 )
 
 const (
-	statusColWidth = len(task.StatusInProgress)
-	gatesColWidth  = 5
-	minTitleWidth  = 8
-	// twoPanelMinWidth is the narrowest terminal that fits the master-detail
-	// layout; below it the view falls back to a single panel.
+	statusColWidth   = len(task.StatusInProgress)
+	gatesColWidth    = 5
+	minTitleWidth    = 8
 	twoPanelMinWidth = 80
-	// minLeftWidth floors the left panel so entries stay readable.
-	minLeftWidth = 30
-	// minBarWidth is the shortest distribution bar worth drawing.
-	minBarWidth = 8
-	// trackBarWidth is the fixed cell width of a track row's inline state bar.
-	trackBarWidth = 14
+	minLeftWidth     = 30
+	minBarWidth      = 8
+	trackBarWidth    = 14
 	// narrowCols is the terminal width below which the list drops the gate
 	// column, keeping the always-on age column room; the preview header keeps
 	// both regardless.
@@ -39,15 +34,12 @@ const (
 // bar's colors.
 var rollupOrder = []string{task.StatusInProgress, task.StatusTodo, task.StatusBlocked, task.StatusBacklog, task.StatusDone}
 
-// zoneList and zonePreview are the BubbleZone names of the two panels.
 const (
-	zoneList    = "panel-list"
-	zonePreview = "panel-preview"
-	// crumbZonePrefix names the per-segment breadcrumb hit-zones.
+	zoneList        = "panel-list"
+	zonePreview     = "panel-preview"
 	crumbZonePrefix = "crumb:"
 )
 
-// crumbZone is the stable zone name of the breadcrumb segment for board path.
 func crumbZone(path string) string { return crumbZonePrefix + path }
 
 // View renders the current frame: header, the body (a full-width browsing
@@ -74,9 +66,6 @@ func (m Model) View() tea.View {
 	return v
 }
 
-// layout sizes the list and preview to the current terminal and chrome
-// heights, then re-renders the open preview at the new width. Browsing gives
-// the list the full width; a narrow open preview takes over the body.
 func (m Model) layout() Model {
 	w, h := m.dims()
 	bodyH := max(h-lipgloss.Height(m.headerView(w))-lipgloss.Height(m.footerView(w)), 3)
@@ -96,7 +85,6 @@ func (m Model) layout() Model {
 	return m.renderPreview(false)
 }
 
-// leftWidth is the left panel's total width: ~38% of the terminal, floored.
 func leftWidth(w int) int {
 	return max(w*38/100, minLeftWidth)
 }
@@ -119,9 +107,6 @@ func (m Model) leftPanel() string {
 	return m.zones.Mark(zoneList, box.Render(inner))
 }
 
-// emptyHint is the centered dim message for a board with no tracks or tasks:
-// archived-out boards point at the toggle, a fresh tree names itself, any
-// other empty track nudges toward create.
 func (m Model) emptyHint() string {
 	if b, ok := m.snap.Boards[m.path]; ok && b.ArchivedSubtree > 0 {
 		return m.theme.dim().Render("all work archived — press a to browse the record")
@@ -132,8 +117,6 @@ func (m Model) emptyHint() string {
 	return m.theme.dim().Render(`no tasks yet — duty create task "…"`)
 }
 
-// rightPanel is the preview — pinned title line over the viewport — in its
-// focus-colored border, a full-panel mouse zone.
 func (m Model) rightPanel() string {
 	title := ansi.Truncate(m.previewTitleText, m.preview.Width(), "…")
 	box := m.theme.panelBox(m.focus == focusPreview)
@@ -142,8 +125,6 @@ func (m Model) rightPanel() string {
 	return m.zones.Mark(zonePreview, box.Render(content))
 }
 
-// headerView is the rounded box holding the breadcrumb and the current
-// track's subtree state: per-status counts plus the distribution bar (§8).
 func (m Model) headerView(w int) string {
 	inner := max(w-4, 1)
 	b, _ := m.board()
@@ -156,8 +137,6 @@ func (m Model) headerView(w int) string {
 	return box.Width(inner + box.GetHorizontalFrameSize()).Render(content)
 }
 
-// stateLine renders a board's subtree per-status counts in status colors,
-// with the ntcharts distribution bar filling the rest of the line.
 func (t Theme) stateLine(b Board, w int) string {
 	rollup := t.rollupOrEmpty(b.Counts)
 	barW := w - lipgloss.Width(rollup) - 2
@@ -167,8 +146,6 @@ func (t Theme) stateLine(b Board, w int) string {
 	return rollup + "  " + t.statusBar(b.Counts, barW)
 }
 
-// statusBar renders per-status counts as one horizontal ntcharts bar w cells
-// wide; no tasks shows a faint rule.
 func (t Theme) statusBar(counts map[string]int, w int) string {
 	if totalCount(counts) == 0 {
 		return t.dim().Render(strings.Repeat("╌", w))
@@ -184,8 +161,6 @@ func (t Theme) statusBar(counts map[string]int, w int) string {
 	return bar.View()
 }
 
-// barData turns status counts into one stacked horizontal bar, its segments in
-// rollupOrder so the header bar and the inline track bars agree on screen.
 func (t Theme) barData(counts map[string]int) barchart.BarData {
 	values := make([]barchart.BarValue, 0, len(rollupOrder))
 	for _, status := range rollupOrder {
@@ -199,8 +174,6 @@ func (t Theme) barData(counts map[string]int) barchart.BarData {
 	return barchart.BarData{Values: values}
 }
 
-// footerView is the bubbles/help hint bar, topped by the last scan error
-// when one is pending.
 func (m Model) footerView(w int) string {
 	if m.scanErr == "" {
 		return m.helpView(w)
@@ -223,10 +196,6 @@ func (m Model) helpView(w int) string {
 	return " " + strings.Join(lines, "\n")
 }
 
-// previewTitle is the pinned line above the open preview, resolved from the
-// open subject: id, colored status, gates n/m, and track title for a task —
-// blocked-by ids and drift appended dim when present; name and title for a
-// track.
 func (m Model) previewTitle() string {
 	switch m.previewKind {
 	case previewTrack:
@@ -241,8 +210,6 @@ func (m Model) previewTitle() string {
 	return m.theme.dim().Render("gone")
 }
 
-// headerAge is the preview header's relative age, "" when the age column is
-// hidden or the row has no file.
 func (m Model) headerAge(r Row) string {
 	if !m.showAge {
 		return ""
@@ -366,8 +333,6 @@ func (m Model) taskMarkdown(content []byte) (Model, string) {
 	return m, out
 }
 
-// trackCard summarizes a selected track: totals, per-status counts, its
-// distribution bar, sections with row counts, and the subtree drift count.
 func (m Model) trackCard(s Sub, w int) string {
 	lines := []string{
 		m.theme.dim().Render(fmt.Sprintf("%d tasks · %d done", s.Total, s.Done)),
@@ -394,8 +359,6 @@ func (m Model) trackCard(s Sub, w int) string {
 	return strings.Join(lines, "\n")
 }
 
-// subtreeDrift tallies drift-flagged rows on the track at path and every
-// track below it.
 func (m Model) subtreeDrift(path string) int {
 	n := 0
 	for p, b := range m.snap.Boards {
@@ -406,8 +369,6 @@ func (m Model) subtreeDrift(path string) int {
 	return n
 }
 
-// rollupOrEmpty renders the per-status rollup, or a dim "empty" when the
-// subtree holds no tasks.
 func (t Theme) rollupOrEmpty(counts map[string]int) string {
 	if r := t.statusRollup(counts); r != "" {
 		return r
@@ -415,8 +376,6 @@ func (t Theme) rollupOrEmpty(counts map[string]int) string {
 	return t.dim().Render("empty")
 }
 
-// statusRollup renders per-status counts in rollupOrder, each colored with its
-// status color, zero counts omitted, joined by a dim middot; "" when empty.
 func (t Theme) statusRollup(counts map[string]int) string {
 	var parts []string
 	for _, st := range rollupOrder {
@@ -427,7 +386,6 @@ func (t Theme) statusRollup(counts map[string]int) string {
 	return strings.Join(parts, t.dim().Render(" · "))
 }
 
-// totalCount sums a status→count map over the lifecycle statuses.
 func totalCount(counts map[string]int) int {
 	n := 0
 	for _, st := range rollupOrder {
@@ -471,8 +429,6 @@ func BarCells(counts map[string]int, width int) map[string]int {
 	return cells
 }
 
-// maxRemainder is the status with the largest fractional remainder, ties
-// broken by lifecycle order.
 func maxRemainder(active []string, rem map[string]float64) string {
 	best := active[0]
 	for _, st := range active[1:] {
@@ -483,9 +439,6 @@ func maxRemainder(active []string, rem map[string]float64) string {
 	return best
 }
 
-// trackBar renders a fixed-width inline status-distribution bar: colored
-// block runs proportional to the subtree per-status counts in lifecycle
-// order, the header bar's palette, "" when the subtree holds no tasks.
 func (t Theme) trackBar(counts map[string]int, width int) string {
 	cells := BarCells(counts, width)
 	if cells == nil {
@@ -505,10 +458,6 @@ func (t Theme) trackBar(counts map[string]int, width int) string {
 // trackBarCell and trackLine's title-pad reserve exactly this width.
 func trackRightWidth(countW int) int { return trackBarWidth + 2 + countW }
 
-// trackBarCell is a track row's right-aligned state column, a fixed
-// trackRightWidth cells: the status-distribution bar and a right-aligned
-// dim total count, or a dim "empty" filling the column when the subtree holds
-// no tasks.
 func (t Theme) trackBarCell(counts map[string]int, countW int) string {
 	bar := t.trackBar(counts, trackBarWidth)
 	if bar == "" {
@@ -565,7 +514,6 @@ func newRenderer(wrap int, dark bool) (*glamour.TermRenderer, error) {
 	)
 }
 
-// gatesCell renders gate progress, blank when a task declares no gates.
 func gatesCell(r Row) string {
 	if r.GatesTotal == 0 {
 		return ""
@@ -573,12 +521,8 @@ func gatesCell(r Row) string {
 	return fmt.Sprintf("%d/%d", r.GatesDone, r.GatesTotal)
 }
 
-// inProgress reports whether a row's status is in-progress — the rows that
-// carry the animated spinner glyph beside their status.
 func inProgress(r Row) bool { return r.Status == task.StatusInProgress }
 
-// claimerTag is the holder name shown dim beside an in-progress row or preview
-// header, "" for any other status or an unclaimed task.
 func claimerTag(r Row) string {
 	if inProgress(r) {
 		return r.ClaimedBy
@@ -586,8 +530,6 @@ func claimerTag(r Row) string {
 	return ""
 }
 
-// waitsTag is the dim "waits T-01,T-03" annotation for a row with unmet
-// dependencies, "" when every blocked-by prerequisite is already met.
 func waitsTag(r Row) string {
 	if len(r.Waits) == 0 {
 		return ""
@@ -595,7 +537,6 @@ func waitsTag(r Row) string {
 	return "waits " + strings.Join(r.Waits, ",")
 }
 
-// pad truncates s to w cells with an ellipsis and pads it back to exactly w.
 func pad(s string, w int) string {
 	s = ansi.Truncate(s, w, "…")
 	if gap := w - lipgloss.Width(s); gap > 0 {
@@ -604,7 +545,6 @@ func pad(s string, w int) string {
 	return s
 }
 
-// driftCount tallies the board's rows carrying a drift flag.
 func driftCount(b Board) int {
 	n := 0
 	for _, s := range b.Sections {
@@ -617,7 +557,6 @@ func driftCount(b Board) int {
 	return n
 }
 
-// maxSubNameWidth sizes the track name column.
 func maxSubNameWidth(subs []Sub) int {
 	w := 0
 	for _, s := range subs {
@@ -638,7 +577,6 @@ func maxSubCountWidth(subs []Sub) int {
 	return w
 }
 
-// maxIDWidth sizes the id column across every section.
 func maxIDWidth(sections []Section) int {
 	w := 0
 	for _, s := range sections {
@@ -649,7 +587,6 @@ func maxIDWidth(sections []Section) int {
 	return w
 }
 
-// maxDriftWidth sizes the drift-badge column; 0 when the board has none.
 func maxDriftWidth(sections []Section) int {
 	w := 0
 	for _, s := range sections {
