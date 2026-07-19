@@ -1,8 +1,7 @@
 ---
 id: T-65
 title: "Names are words: no single-letter identifiers"
-status: in-progress
-claimed-by: fable
+status: done
 blocked-by: []
 ---
 
@@ -35,7 +34,21 @@ Receivers; test files; exported symbol renames; anything beyond identifier
 names.
 
 ## Gates
-- [ ] An AST scan for single-letter params/vars (excluding receivers, blank,
+- [x] An AST scan for single-letter params/vars (excluding receivers, blank,
   and short-loop indices) reports zero offenders across internal/ + cmd/,
   or each survivor is justified in the report.
-- [ ] just check green with zero test edits.
+- [x] just check green with zero test edits.
+
+## Report
+
+### 2026-07-19 20:45 — done
+
+Swept 389 single-letter identifiers to real names in two rounds (an AST
+scanner drove both; round two caught the range-clause vars the first pass
+missed). Survivors are exactly the sanctioned exceptions: 31 i/j loop
+indices in short loops (incl. sort comparators) and 2 receiver
+reassignments in tui/model.go. Receivers stay short per Go idiom and
+CLAUDE.md — flagged as a deliberate judgment call. Thirteen comments that
+still referenced old letter names in prose were reworded to match. Zero
+signature or behavior changes, zero test edits; gofmt/vet/golangci (0
+issues)/suite all green at 87.9% coverage.
