@@ -15,7 +15,9 @@ nothing renders a task until you open one.
   right-aligned bar of its subtree; then tasks under their section headers,
   each showing id, title, colored status (in-progress gets a small animated
   spinner while work is live), gates `2/3`, and a relative age. A
-  task with unmet dependencies shows a dim `waits T-01,T-03` beside its status;
+  task with unmet dependencies shows a dim `waits T-01,T-03` beside its status —
+  a dep counts as met only when it's done or archived, so an unfinished or
+  missing one keeps the task waiting, the same rule the CLI uses;
   a `⚠` marks a row whose board status disagrees with the file. Rows group by
   status by default (in-progress first); the age column always shows, the gate
   column hides below 100 columns.

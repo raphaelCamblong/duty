@@ -320,8 +320,8 @@ func (d compactDelegate) taskLine(row Row, selected bool, width int, match match
 	if d.showAge {
 		line += "  " + dim.Render(pad(ageCell(row, d.now), d.ageW))
 	}
-	if row.Drift != "" {
-		line += "  " + boldWhen(d.theme.alert(), selected).Render(pad("⚠ "+row.Drift, d.driftW))
+	if row.DriftText != "" {
+		line += "  " + boldWhen(d.theme.alert(), selected).Render(pad("⚠ "+row.DriftText, d.driftW))
 	}
 	return ansi.Truncate(line, width, "…")
 }

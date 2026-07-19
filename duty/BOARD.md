@@ -18,7 +18,7 @@ Order top-to-bottom is the intended build order.
 | [T-64](T-64-apis-that-explain-themselves.md) | APIs that explain themselves | done |
 | [T-65](T-65-names-are-words-no-single-letter.md) | Names are words: no single-letter identifiers | done |
 | [T-66](T-66-flatten-deep-nesting.md) | Flatten deep nesting | done |
-| [T-67](T-67-task-representation-investigate-and.md) | Task representation: investigate and redesign | in-progress |
+| [T-67](T-67-task-representation-investigate-and.md) | Task representation: investigate and redesign | done |
 | [T-68](T-68-apis-that-explain-themselves-everywhere.md) | APIs that explain themselves: everywhere load-bearing | todo |
 
 Completed tasks (36) archived: [archive/](archive/).

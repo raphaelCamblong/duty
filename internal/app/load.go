@@ -142,17 +142,23 @@ func joinSections(dir string, index []byte, files map[string]fileEntry) []Sectio
 	consumed := make(map[string]bool)
 	var sections []SectionView
 	for _, sec := range board.Sections(index) {
-		section := SectionView{Name: sec.Name}
-		for _, row := range sec.Rows {
-			if consumed[row.File] {
-				continue
-			}
-			consumed[row.File] = true
-			section.Tasks = append(section.Tasks, joinRow(dir, row, files))
-		}
-		sections = append(sections, section)
+		sections = append(sections, joinSection(dir, sec, files, consumed))
 	}
 	return appendStrays(dir, sections, files, consumed)
+}
+
+// joinSection joins one board section's rows to their files in index order,
+// marking each consumed so a later duplicate row (and the stray sweep) skips it.
+func joinSection(dir string, sec board.Section, files map[string]fileEntry, consumed map[string]bool) SectionView {
+	section := SectionView{Name: sec.Name}
+	for _, row := range sec.Rows {
+		if consumed[row.File] {
+			continue
+		}
+		consumed[row.File] = true
+		section.Tasks = append(section.Tasks, joinRow(dir, row, files))
+	}
+	return section
 }
 
 // joinRow merges one board row with its task file: file truth wins, the row

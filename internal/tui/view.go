@@ -241,8 +241,8 @@ func (t Theme) taskHeader(row Row, track, age, glyph string) string {
 	if len(row.BlockedBy) > 0 {
 		line += "  " + t.blockedByCell(row)
 	}
-	if row.Drift != "" {
-		line += "  " + t.alert().Render("⚠ "+row.Drift)
+	if row.DriftText != "" {
+		line += "  " + t.alert().Render("⚠ "+row.DriftText)
 	}
 	if age != "" {
 		line += "  " + t.dim().Render(age)
@@ -563,7 +563,7 @@ func driftCount(board Board) int {
 func sectionDriftCount(section Section) int {
 	count := 0
 	for _, row := range section.Rows {
-		if row.Drift != "" {
+		if row.DriftText != "" {
 			count++
 		}
 	}
@@ -611,8 +611,8 @@ func maxDriftWidth(sections []Section) int {
 func sectionMaxDriftWidth(section Section) int {
 	width := 0
 	for _, row := range section.Rows {
-		if row.Drift != "" {
-			width = max(width, lipgloss.Width("⚠ "+row.Drift))
+		if row.DriftText != "" {
+			width = max(width, lipgloss.Width("⚠ "+row.DriftText))
 		}
 	}
 	return width

@@ -28,6 +28,27 @@ How the binary keeps the files honest. The layout and code rules live in
 - Generated skeletons (task file, board, `duty/README.md`) are `go:embed`ed
   `.md.tmpl` templates rendered with `text/template`.
 
+## Reading the tree
+
+Every read runs through one loader. `app.Load` walks the tree once, reads each
+board index and open task file a single time, and joins three truths into one
+model — `TreeView` → `BoardView` → `SectionView` → `TaskView`: the file's
+frontmatter, the board row that orders it, and the drift and waits computed from
+what it just read. Every read surface projects over that one model — `get
+tasks`, `get task`, `get next`, `get tracks`, the watcher's snapshots, and the
+TUI — so the same tree can't answer one question two ways.
+
+- **Drift is a typed class**, not a string — in sync, a status disagreement, no
+  row, no file, or an unparsable file. Each surface renders the class its own
+  way (a `⚠` badge with words in the TUI, a column in `get tasks`).
+- **The dep oracle lives in memory.** A `blocked-by` id is met when its task is
+  done or archived; anything else leaves the dependent waiting — a todo,
+  in-progress, or blocked dep, or an id that resolves to no open file. A
+  board-only row carries no file truth, so it never satisfies a dep. The CLI and
+  the TUI read the same oracle, so a missing dependency blocks in both.
+- Mutations never touch the model. Writes stay line-surgical (below); the loader
+  is read-only, and the write path never assembles a `TreeView`.
+
 ## The write lock
 
 Every mutating command (`create`, `status`, `report`, `set`, `gates`, `move`,

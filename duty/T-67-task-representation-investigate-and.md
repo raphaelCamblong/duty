@@ -1,8 +1,7 @@
 ---
 id: T-67
 title: "Task representation: investigate and redesign"
-status: in-progress
-claimed-by: fable
+status: done
 blocked-by: []
 ---
 
@@ -54,14 +53,14 @@ File-format changes; TUI visual restyling; performance regressions
 ## Gates
 - [x] Investigation findings + chosen design + rejected alternatives
   recorded in the report before implementation commits.
-- [ ] The old parallel assembly paths are gone (grep-provable); one loading
+- [x] The old parallel assembly paths are gone (grep-provable); one loading
   path feeds list/get/next/tui/watch.
-- [ ] Every deliberate behavior change is enumerated in the report and
+- [x] Every deliberate behavior change is enumerated in the report and
   covered by an updated or new test; everything not enumerated is
   byte-identical (round-trip + salted-board + golden suites green).
-- [ ] Full suite green, TestStartupPerformance green; depth and identifier
+- [x] Full suite green, TestStartupPerformance green; depth and identifier
   scans clean over the rewritten paths (T-66's five deferrals resolved).
-- [ ] just check green; docs (internals.md, cli.md, tui.md) updated.
+- [x] just check green; docs (internals.md, cli.md, tui.md) updated.
 
 ## Report
 
@@ -153,3 +152,42 @@ S2 app producers become projections, old assembly deleted, cli formatters
 + docs updated; S3 tui scan over the loader, D1 flip, goldens; S4
 internals.md + re-run depth/identifier scans (T-66's five deferrals) +
 full gate.
+
+### 2026-07-19 21:56 — done
+
+Implemented in four staged commits, exactly as designed.
+
+S1: internal/app gained view.go + load.go — TreeView > BoardView >
+SectionView > TaskView join file truth, board truth and computed truth
+once; typed Drift (none / no-row / status / no-file / bad-file);
+in-memory dep oracle; one stray rule; archive contents load only behind
+the toggle. Seven focused loader tests.
+
+S2: List, GetTask, GetNext, GetTracks and Snapshot became projections;
+seventeen parallel assembly functions deleted (boardRows, boardOrder,
+taskRow, drift, nextActionable, nextInBoard, actionable, fillDeps,
+buildTaskInfo, taskInfo, trackInfo, taskStatuses, archivedCount,
+depStatus, unmetDeps method, claim, boardStates — grep-provable). CLI:
+get tasks --agent appends claimed-by and waits; get tracks appends
+backlog (append-only per the documented contract); drift gains no-file /
+bad-file tokens. docs/cli.md updated in the same change.
+
+S3: the TUI scan became a projection too — scan.go 467 to 262 lines,
+its private oracle and joiner deleted. GetTask on an unparsable file
+names the real fault.
+
+S4: docs/internals.md "Reading the tree" section describes the model;
+tui.md states the one waits rule; last two deep functions flattened;
+the Drift/DriftText shadow removed.
+
+All eight enumerated behavior changes landed and are tested; everything
+not enumerated stayed byte-identical — round-trip, salted-board and both
+byte-exact TUI goldens pass untouched. One walk + one parse per file per
+invocation (was O(tasks x deps x tree) walks in list); dep checks are map
+lookups; startup 3.3ms against the 100ms budget. Depth scan: only the
+two justified select-case guards remain (runWatch, watch.loop);
+identifier scan: only sanctioned i/j indices and receiver reassignments.
+just check green throughout; coverage 88.7% (was 87.9%).
+
+Noted for follow-up, out of scope here: the stored archived footer count
+that no reader consumes (mutation-side).

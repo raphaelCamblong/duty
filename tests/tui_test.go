@@ -110,7 +110,7 @@ func TestScanViewModel(t *testing.T) {
 		if !ok {
 			t.Fatal("T-01 not in snapshot")
 		}
-		if r.Status != "in-progress" || r.Title != "Alpha task" || r.Drift != "" {
+		if r.Status != "in-progress" || r.Title != "Alpha task" || r.DriftText != "" {
 			t.Errorf("row = %+v, want in-progress / Alpha task / no drift", r)
 		}
 		if !samePath(t, r.Path, filepath.Join(root, "T-01-alpha-task.md")) {
@@ -157,7 +157,7 @@ func TestScanViewModel(t *testing.T) {
 			return board.SetRowStatus(c, "T-02-beta-task.md", "done")
 		})
 		r, _ := scanRow(mustScan(t, root), ".", "T-02")
-		if r.Status != "todo" || r.Drift != "board says done" {
+		if r.Status != "todo" || r.DriftText != "board says done" {
 			t.Errorf("row = %+v, want status todo drift %q", r, "board says done")
 		}
 	})
@@ -170,7 +170,7 @@ func TestScanViewModel(t *testing.T) {
 		b := mustScan(t, root).Boards["."]
 		open := b.Sections[0]
 		last := open.Rows[len(open.Rows)-1]
-		if open.Name != "Open tasks" || last.ID != "T-01" || last.Drift != "no row" {
+		if open.Name != "Open tasks" || last.ID != "T-01" || last.DriftText != "no row" {
 			t.Errorf("last row of %q = %+v, want T-01 with drift %q", open.Name, last, "no row")
 		}
 	})
@@ -184,7 +184,7 @@ func TestScanViewModel(t *testing.T) {
 		if !ok {
 			t.Fatal("T-02 row vanished with its file; the board row should remain")
 		}
-		if r.Drift != "no file" || r.Path != "" {
+		if r.DriftText != "no file" || r.Path != "" {
 			t.Errorf("row = %+v, want drift %q and empty path", r, "no file")
 		}
 	})

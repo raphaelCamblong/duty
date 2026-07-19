@@ -76,13 +76,13 @@ type Section struct {
 }
 
 // Row is one task line: the loaded task view read through, with the TUI's own
-// drift wording pre-rendered. Drift shadows TaskView.Drift on purpose — the
-// display reads the words, never the class.
+// drift wording pre-rendered as DriftText — the display reads the words, the
+// embedded TaskView.Drift keeps the typed class.
 type Row struct {
 	app.TaskView
-	// Drift is "" when file and board agree, else "board says <status>",
+	// DriftText is "" when file and board agree, else "board says <status>",
 	// "no row", "no file", or "unparsable file".
-	Drift string
+	DriftText string
 }
 
 // Scan projects the whole tree under root into a Snapshot over one app.Load:
@@ -135,7 +135,7 @@ func projectRows(tasks []app.TaskView) []Row {
 	}
 	rows := make([]Row, len(tasks))
 	for i := range tasks {
-		rows[i] = Row{TaskView: tasks[i], Drift: driftText(tasks[i])}
+		rows[i] = Row{TaskView: tasks[i], DriftText: driftText(tasks[i])}
 	}
 	return rows
 }
@@ -197,25 +197,34 @@ func link(snap Snapshot, paths []string) {
 		locals[path] = localAgg{done: current.Done, total: current.Total, arch: current.ArchivedCount, counts: current.Counts}
 	}
 	for _, path := range paths {
-		current := snap.Boards[path]
-		current.Done, current.Total, current.ArchivedSubtree = 0, 0, 0
-		current.Counts = make(map[string]int)
-		for _, candidate := range paths {
-			if !within(candidate, path) {
-				continue
-			}
-			lq := locals[candidate]
-			current.Done += lq.done
-			current.Total += lq.total
-			current.ArchivedSubtree += lq.arch
-			for st, count := range lq.counts {
-				current.Counts[st] += count
-			}
-		}
+		current := rollup(snap.Boards[path], path, paths, locals)
 		current.Parent = parentOf(snap, path)
 		snap.Boards[path] = current
 	}
 	buildSubs(snap, paths)
+}
+
+// rollup replaces one board's local tallies with the sum over its subtree —
+// every board whose path falls within this one.
+func rollup(board Board, path string, paths []string, locals map[string]localAgg) Board {
+	board.Done, board.Total, board.ArchivedSubtree = 0, 0, 0
+	board.Counts = make(map[string]int)
+	for _, candidate := range paths {
+		if within(candidate, path) {
+			accumulate(&board, locals[candidate])
+		}
+	}
+	return board
+}
+
+// accumulate adds one descendant board's local tallies into board's subtree totals.
+func accumulate(board *Board, lq localAgg) {
+	board.Done += lq.done
+	board.Total += lq.total
+	board.ArchivedSubtree += lq.arch
+	for status, count := range lq.counts {
+		board.Counts[status] += count
+	}
 }
 
 func buildSubs(snap Snapshot, paths []string) {
