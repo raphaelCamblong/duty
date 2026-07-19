@@ -3,11 +3,7 @@ package app
 import (
 	"fmt"
 	"maps"
-	"path/filepath"
 	"slices"
-
-	"github.com/raphaelCamblong/duty/internal/task"
-	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
 // TaskState is one open task's watched fields at a moment — the values duty
@@ -38,47 +34,37 @@ type Event struct {
 	New   string
 }
 
-// Snapshot reads every open task in scope and below, keyed by id — the state
-// duty watch diffs; unparsable files are skipped.
+// Snapshot reads every open task in scope and below into the state duty watch
+// diffs, keyed by id. No-file and bad-file rows carry no file truth, so watch
+// skips them — a half-saved file emits no event until it parses.
 func (a App) Snapshot(scope Scope) (map[string]TaskState, error) {
-	boardDir, boards, err := a.walkBoards(scope)
+	view, err := a.Load(scope.Cwd, LoadOptions{})
 	if err != nil {
 		return nil, err
 	}
+	base, err := view.ScopeBase(scope)
+	if err != nil {
+		return nil, err
+	}
+	boards := view.Under(base)
+	baseDir := boards[0].Dir
 	states := make(map[string]TaskState)
-	for _, dir := range boards {
-		if err := a.boardStates(boardDir, dir, states); err != nil {
-			return nil, err
-		}
+	for i := range boards {
+		snapshotBoard(states, baseDir, boards[i])
 	}
 	return states, nil
 }
 
-// boardStates reads every task file directly in boardDir into states, keyed by
-// id and tagged with boardDir's path relative to listDir — the board the
-// snapshot started from.
-func (a App) boardStates(listDir, boardDir string, states map[string]TaskState) error {
-	boardPath := relBoard(listDir, boardDir)
-	files, err := tree.TaskFileNames(a.fs, boardDir)
-	if err != nil {
-		return err
-	}
-	for _, name := range files {
-		content, err := a.fs.ReadFile(filepath.Join(boardDir, name))
-		if err != nil {
-			return err
-		}
-		parsed, err := task.Parse(content)
-		if err != nil {
-			continue
-		}
-		gd, gt := task.CountGates(content)
-		states[parsed.ID] = TaskState{
-			Status: parsed.Status, ClaimedBy: parsed.ClaimedBy, Board: boardPath,
-			GatesDone: gd, GatesTotal: gt,
+func snapshotBoard(states map[string]TaskState, baseDir string, bv BoardView) {
+	boardPath := relBoard(baseDir, bv.Dir)
+	for _, tv := range bv.tasks() {
+		if tv.hasFileTruth() {
+			states[tv.ID] = TaskState{
+				Status: tv.Status, ClaimedBy: tv.ClaimedBy, Board: boardPath,
+				GatesDone: tv.GatesDone, GatesTotal: tv.GatesTotal,
+			}
 		}
 	}
-	return nil
 }
 
 // Diff returns the changes from before to after — one Event per changed field —

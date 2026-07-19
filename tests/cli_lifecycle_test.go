@@ -390,8 +390,8 @@ func TestGetTasks(t *testing.T) {
 		records := make(map[string][]string, len(lines))
 		for _, line := range lines {
 			fields := strings.Split(line, "\t")
-			if len(fields) != 6 {
-				t.Fatalf("record %q: got %d fields, want 6", line, len(fields))
+			if len(fields) != 8 {
+				t.Fatalf("record %q: got %d fields, want 8", line, len(fields))
 			}
 			records[fields[0]] = fields
 		}
@@ -426,6 +426,101 @@ func TestGetTasks(t *testing.T) {
 			t.Errorf("list --agent: code=%d stderr=%q", code, stderr)
 		}
 	})
+
+	t.Run("lists an unparsable file as a bad-file row instead of failing", func(t *testing.T) {
+		root := initDuty(t)
+		createTask(t, root, "Good task")
+		if err := os.WriteFile(filepath.Join(root, "T-08-bad.md"), []byte("not valid frontmatter\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		boardPath := filepath.Join(root, "BOARD.md")
+		updated, err := board.AddRow([]byte(readText(t, boardPath)), board.DefaultSection,
+			board.Row{ID: "T-08", File: "T-08-bad.md", Title: "Bad one", Status: "todo"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(boardPath, updated, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		code, human, stderr := runDuty(t, root, "get", "tasks")
+		if code != 0 || stderr != "" {
+			t.Fatalf("get tasks with a bad file: code=%d stderr=%q, want it listed not an error", code, stderr)
+		}
+		if !strings.Contains(human, "T-08") || !strings.Contains(human, "⚠ unparsable") {
+			t.Errorf("human = %q, want T-08 flagged unparsable", human)
+		}
+		rec := tasksRecord(t, root, "T-08")
+		if rec[4] != "bad-file" {
+			t.Errorf("drift field = %q, want bad-file", rec[4])
+		}
+		if rec[2] != "todo" {
+			t.Errorf("status field = %q, want todo from board truth", rec[2])
+		}
+	})
+
+	t.Run("lists a board row with no file, its status board truth", func(t *testing.T) {
+		root := initDuty(t)
+		createTask(t, root, "Real task")
+		boardPath := filepath.Join(root, "BOARD.md")
+		updated, err := board.AddRow([]byte(readText(t, boardPath)), board.DefaultSection,
+			board.Row{ID: "T-09", File: "T-09-ghost.md", Title: "Ghost", Status: "blocked"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(boardPath, updated, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		rec := tasksRecord(t, root, "T-09")
+		if rec[4] != "no-file" {
+			t.Errorf("drift field = %q, want no-file", rec[4])
+		}
+		if rec[2] != "blocked" {
+			t.Errorf("status field = %q, want blocked from board truth", rec[2])
+		}
+		_, human, _ := runDuty(t, root, "get", "tasks")
+		if !strings.Contains(human, "⚠ no file") {
+			t.Errorf("human = %q, want a no-file flag", human)
+		}
+	})
+
+	t.Run("--agent trails claimed-by then waits", func(t *testing.T) {
+		root := initDuty(t)
+		createTask(t, root, "Dep")
+		mustRun(t, root, "status", "T-01", "in-progress", "--as", "sonnet-9")
+		mustDuty(t, root, "create", "task", "Waiter", "--blocked-by", "T-01")
+
+		dep := tasksRecord(t, root, "T-01")
+		if len(dep) != 8 {
+			t.Fatalf("record %v: got %d fields, want 8", dep, len(dep))
+		}
+		if dep[6] != "sonnet-9" || dep[7] != "" {
+			t.Errorf("dep record claimed-by/waits = %q/%q, want sonnet-9/empty", dep[6], dep[7])
+		}
+		waiter := tasksRecord(t, root, "T-02")
+		if waiter[6] != "" || waiter[7] != "T-01" {
+			t.Errorf("waiter record claimed-by/waits = %q/%q, want empty/T-01", waiter[6], waiter[7])
+		}
+	})
+}
+
+// tasksRecord runs `get tasks --agent` and returns the TSV fields of the row
+// naming id, failing when no row does.
+func tasksRecord(t *testing.T, root, id string) []string {
+	t.Helper()
+	code, stdout, stderr := runDuty(t, root, "get", "tasks", "--agent")
+	if code != 0 || stderr != "" {
+		t.Fatalf("get tasks --agent: code=%d stderr=%q", code, stderr)
+	}
+	for _, line := range strings.Split(strings.TrimRight(stdout, "\n"), "\n") {
+		fields := strings.Split(line, "\t")
+		if fields[0] == id {
+			return fields
+		}
+	}
+	t.Fatalf("no record for %s in %q", id, stdout)
+	return nil
 }
 
 // equalFields reports whether got and want hold the same strings in order.

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/raphaelCamblong/duty/internal/tree"
 )
 
 // TreeView is the whole duty tree loaded once: every board joined to its task
@@ -52,6 +54,13 @@ type TaskView struct {
 	Deps  []Dep
 }
 
+// hasFileTruth reports whether this view carries a parsed task file. The no-file
+// and bad-file drift classes are board truth only — they answer no read that
+// needs file fields, and never satisfy get next or a watch snapshot.
+func (tv TaskView) hasFileTruth() bool {
+	return tv.Drift != DriftNoFile && tv.Drift != DriftBadFile
+}
+
 // Drift classifies the disagreement between a task's file and its board row.
 // Formatters own the words shown for each class; the model only names it.
 type Drift int
@@ -95,11 +104,31 @@ type SectionView struct {
 	Tasks []TaskView
 }
 
+// tasks returns every task in this board, its sections concatenated in board
+// order — the flat sequence list/next/watch/tracks project over.
+func (bv BoardView) tasks() []TaskView {
+	var out []TaskView
+	for i := range bv.Sections {
+		out = append(out, bv.Sections[i].Tasks...)
+	}
+	return out
+}
+
 // Task returns the open task with the given id, resolved from memory. Only
 // file-truth tasks answer: a no-file or unparsable drift row does not.
 func (view *TreeView) Task(id string) (*TaskView, bool) {
 	found, ok := view.byID[id]
 	return found, ok
+}
+
+// resolveErr reports why id names no open task, wording each case exactly as
+// tree.ResolveTask does so a projection's error reads identically: an archived
+// id is read-only, anything else is unknown.
+func (view *TreeView) resolveErr(id string) error {
+	if view.archivedIDs[id] {
+		return fmt.Errorf("task %s is archived: %w", id, tree.ErrArchived)
+	}
+	return fmt.Errorf("unknown task id %q — try 'duty get tasks'", id)
 }
 
 // ScopeBase resolves scope to the board its command walks from: "." the root,

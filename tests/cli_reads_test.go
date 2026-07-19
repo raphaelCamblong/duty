@@ -168,15 +168,16 @@ func TestGetTracks(t *testing.T) {
 		records := make(map[string][]string)
 		for _, line := range strings.Split(strings.TrimRight(stdout, "\n"), "\n") {
 			fields := strings.Split(line, "\t")
-			if len(fields) != 7 {
-				t.Fatalf("record %q: got %d fields, want 7", line, len(fields))
+			if len(fields) != 8 {
+				t.Fatalf("record %q: got %d fields, want 8", line, len(fields))
 			}
 			records[fields[0]] = fields
 		}
-		if want := []string{".", "Board", "1", "1", "0", "1", "1"}; !equalFields(records["."], want) {
+		// backlog trails archived, both zero here: no backlog task was seeded.
+		if want := []string{".", "Board", "1", "1", "0", "1", "1", "0"}; !equalFields(records["."], want) {
 			t.Errorf("root record = %v, want %v", records["."], want)
 		}
-		if want := []string{"backend", "Backend", "1", "0", "1", "0", "1"}; !equalFields(records["backend"], want) {
+		if want := []string{"backend", "Backend", "1", "0", "1", "0", "1", "0"}; !equalFields(records["backend"], want) {
 			t.Errorf("backend record = %v, want %v", records["backend"], want)
 		}
 	})
@@ -188,8 +189,8 @@ func TestGetTracks(t *testing.T) {
 			t.Fatalf("get tracks: code=%d stderr=%q", code, stderr)
 		}
 		for _, want := range []string{
-			"1 todo · 1 in-progress · 0 done · 1 blocked · 1 archived",
-			"1 todo · 0 in-progress · 1 done · 0 blocked · 1 archived",
+			"1 todo · 1 in-progress · 0 done · 1 blocked · 0 backlog · 1 archived",
+			"1 todo · 0 in-progress · 1 done · 0 blocked · 0 backlog · 1 archived",
 			"Board", "Backend",
 		} {
 			if !strings.Contains(stdout, want) {
@@ -210,6 +211,28 @@ func TestGetTracks(t *testing.T) {
 		oneLine(t, "stdout", stdout)
 		if !strings.HasPrefix(stdout, ".\t") {
 			t.Errorf("stdout = %q, want the backend board as \".\"", stdout)
+		}
+	})
+
+	t.Run("counts backlog tasks in a trailing column", func(t *testing.T) {
+		root := initDuty(t)
+		createTask(t, root, "Parked")
+		mustRun(t, root, "status", "T-01", "backlog")
+
+		code, stdout, stderr := runDuty(t, root, "get", "tracks", "--agent")
+		if code != 0 || stderr != "" {
+			t.Fatalf("get tracks --agent: code=%d stderr=%q", code, stderr)
+		}
+		fields := strings.Split(strings.TrimRight(stdout, "\n"), "\t")
+		if len(fields) != 8 {
+			t.Fatalf("record %q: got %d fields, want 8", stdout, len(fields))
+		}
+		if fields[7] != "1" {
+			t.Errorf("backlog field = %q, want 1 (trailing, after archived)", fields[7])
+		}
+		_, human, _ := runDuty(t, root, "get", "tracks")
+		if !strings.Contains(human, "1 backlog") {
+			t.Errorf("human = %q, want a backlog count", human)
 		}
 	})
 }
@@ -334,6 +357,26 @@ func TestGetNext(t *testing.T) {
 		}
 		if fields[9] != "" {
 			t.Errorf("claimed-by field = %q, want empty (todo task, unclaimed)", fields[9])
+		}
+	})
+
+	t.Run("reaches a rowless todo, sorted into the default section", func(t *testing.T) {
+		root := initDuty(t)
+		name := createTask(t, root, "Rowless")
+		boardPath := filepath.Join(root, "BOARD.md")
+		dropped, err := board.DropRow([]byte(readText(t, boardPath)), name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(boardPath, dropped, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		code, stdout, stderr := runDuty(t, root, "get", "next")
+		if code != 0 || stderr != "" {
+			t.Fatalf("get next: code=%d stderr=%q", code, stderr)
+		}
+		if !strings.Contains(stdout, "T-01") {
+			t.Errorf("stdout = %q, want the rowless todo T-01 reachable", stdout)
 		}
 	})
 

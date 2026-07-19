@@ -1,13 +1,9 @@
 package app
 
 import (
-	"errors"
-	"io/fs"
 	"path/filepath"
 	"time"
 
-	"github.com/raphaelCamblong/duty/internal/board"
-	"github.com/raphaelCamblong/duty/internal/names"
 	"github.com/raphaelCamblong/duty/internal/task"
 	"github.com/raphaelCamblong/duty/internal/tree"
 )
@@ -46,24 +42,22 @@ type TrackInfo struct {
 	InProgress int
 	Done       int
 	Blocked    int
+	Backlog    int
 	Archived   int
 }
 
-// GetTask returns the metadata — never the body — of the open task id
-// resolves to.
+// GetTask returns the metadata — never the body — of the open task id resolves
+// to, projected from the loaded tree.
 func (a App) GetTask(cwd, id string) (TaskInfo, error) {
-	root, path, err := a.resolveOpenWithRoot(cwd, id)
+	view, err := a.Load(cwd, LoadOptions{})
 	if err != nil {
 		return TaskInfo{}, err
 	}
-	info, err := a.taskInfo(root, path)
-	if err != nil {
-		return TaskInfo{}, err
+	found, ok := view.Task(id)
+	if !ok {
+		return TaskInfo{}, view.resolveErr(id)
 	}
-	if err := a.fillDeps(root, &info); err != nil {
-		return TaskInfo{}, err
-	}
-	return info, nil
+	return taskInfoFromView(view.Root, *found), nil
 }
 
 // Body returns the whole markdown body below the frontmatter of the task id
@@ -83,188 +77,143 @@ func (a App) Body(cwd, id string) (string, error) {
 // GetTracks returns one TrackInfo per board in scope and below (that board as
 // "."), each counting its own directly-filed tasks by status.
 func (a App) GetTracks(scope Scope) ([]TrackInfo, error) {
-	boardDir, boards, err := a.walkBoards(scope)
+	view, err := a.Load(scope.Cwd, LoadOptions{})
 	if err != nil {
 		return nil, err
 	}
+	base, err := view.ScopeBase(scope)
+	if err != nil {
+		return nil, err
+	}
+	boards := view.Under(base)
+	baseDir := boards[0].Dir
 	out := make([]TrackInfo, 0, len(boards))
-	for _, dir := range boards {
-		info, err := a.trackInfo(boardDir, dir)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, info)
+	for i := range boards {
+		out = append(out, trackInfoOf(baseDir, boards[i]))
 	}
 	return out, nil
+}
+
+func trackInfoOf(baseDir string, bv BoardView) TrackInfo {
+	info := TrackInfo{Path: relBoard(baseDir, bv.Dir), Title: bv.Title, Archived: bv.ArchivedCount}
+	for _, tv := range bv.tasks() {
+		countStatus(&info, tv)
+	}
+	return info
+}
+
+func countStatus(info *TrackInfo, tv TaskView) {
+	if !tv.hasFileTruth() {
+		return
+	}
+	switch tv.Status {
+	case task.StatusTodo:
+		info.Todo++
+	case task.StatusInProgress:
+		info.InProgress++
+	case task.StatusDone:
+		info.Done++
+	case task.StatusBlocked:
+		info.Blocked++
+	case task.StatusBacklog:
+		info.Backlog++
+	}
 }
 
 // GetNext returns the first actionable task in scope and below, or nil; with
 // claim it atomically marks that task in-progress as as before returning it.
 func (a App) GetNext(scope Scope, claim bool, as string) (*TaskInfo, error) {
+	view, err := a.Load(scope.Cwd, LoadOptions{})
+	if err != nil {
+		return nil, err
+	}
+	winner, err := nextIn(view, scope)
+	if err != nil || winner == nil {
+		return nil, err
+	}
+	if claim {
+		return a.claimNext(scope, as)
+	}
+	info := taskInfoFromView(view.Root, *winner)
+	return &info, nil
+}
+
+// claimNext re-loads under the tree lock — the authoritative pass that makes
+// parallel claims each pick a distinct task — and marks that task in-progress.
+func (a App) claimNext(scope Scope, as string) (*TaskInfo, error) {
 	root, err := tree.FindRoot(a.fs, scope.Cwd)
 	if err != nil {
 		return nil, err
 	}
-	info, err := a.nextActionable(root, scope)
-	if err != nil || info == nil {
-		return info, err
-	}
-	if claim {
-		info, err = a.claim(root, scope, as)
-		if err != nil || info == nil {
-			return info, err
-		}
-	}
-	if err := a.fillDeps(root, info); err != nil {
-		return nil, err
-	}
-	return info, nil
-}
-
-// claim re-scans under the tree lock — the authoritative pass that makes
-// parallel claims each pick a distinct task — and marks that task in-progress.
-func (a App) claim(root string, scope Scope, as string) (*TaskInfo, error) {
 	unlock, err := a.lock(root)
 	if err != nil {
 		return nil, err
 	}
 	defer unlock()
-	info, err := a.nextActionable(root, scope)
-	if err != nil || info == nil {
-		return info, err
-	}
-	if err := a.setStatusLocked(info.Path, StatusChange{ID: info.ID, Status: task.StatusInProgress, As: as}); err != nil {
+	view, err := a.Load(scope.Cwd, LoadOptions{})
+	if err != nil {
 		return nil, err
 	}
+	winner, err := nextIn(view, scope)
+	if err != nil || winner == nil {
+		return nil, err
+	}
+	if err := a.setStatusLocked(winner.Path, StatusChange{ID: winner.ID, Status: task.StatusInProgress, As: as}); err != nil {
+		return nil, err
+	}
+	info := taskInfoFromView(view.Root, *winner)
 	info.Status = task.StatusInProgress
 	info.ClaimedBy = as
-	return info, nil
-}
-
-func (a App) nextActionable(root string, scope Scope) (*TaskInfo, error) {
-	_, boards, err := a.walkBoards(scope)
-	if err != nil {
-		return nil, err
-	}
-	for _, boardDir := range boards {
-		info, err := a.nextInBoard(root, boardDir)
-		if err != nil {
-			return nil, err
-		}
-		if info != nil {
-			return info, nil
-		}
-	}
-	return nil, nil
-}
-
-func (a App) taskInfo(root, path string) (TaskInfo, error) {
-	parsed, content, err := a.readTask(path)
-	if err != nil {
-		return TaskInfo{}, err
-	}
-	return buildTaskInfo(root, path, content, parsed, a.mtime(path)), nil
-}
-
-func buildTaskInfo(root, path string, content []byte, parsed task.Task, updated time.Time) TaskInfo {
-	done, total := task.CountGates(content)
-	return TaskInfo{
-		ID:         parsed.ID,
-		Title:      parsed.Title,
-		Status:     parsed.Status,
-		Track:      relBoard(root, filepath.Dir(path)),
-		BlockedBy:  parsed.BlockedBy,
-		GatesDone:  done,
-		GatesTotal: total,
-		Path:       path,
-		UpdatedAt:  updated,
-		ClaimedBy:  parsed.ClaimedBy,
-	}
-}
-
-// mtime returns path's modification time, or the zero time on a stat miss —
-// age is display metadata, so it degrades quietly rather than failing the read.
-func (a App) mtime(path string) time.Time {
-	info, err := a.fs.Stat(path)
-	if err != nil {
-		return time.Time{}
-	}
-	return info.ModTime()
-}
-
-// trackInfo assembles one board's TrackInfo, its path taken relative to
-// listDir — the board the tracks listing started from.
-func (a App) trackInfo(listDir, boardDir string) (TrackInfo, error) {
-	index, err := a.fs.ReadFile(boardIndexPath(boardDir))
-	if err != nil {
-		return TrackInfo{}, err
-	}
-	info := TrackInfo{Path: relBoard(listDir, boardDir), Title: board.TitleOr(index, filepath.Base(boardDir))}
-	statuses, err := a.taskStatuses(boardDir)
-	if err != nil {
-		return TrackInfo{}, err
-	}
-	for _, status := range statuses {
-		switch status {
-		case task.StatusTodo:
-			info.Todo++
-		case task.StatusInProgress:
-			info.InProgress++
-		case task.StatusDone:
-			info.Done++
-		case task.StatusBlocked:
-			info.Blocked++
-		}
-	}
-	info.Archived, err = a.archivedCount(filepath.Join(boardDir, names.ArchiveDir))
-	if err != nil {
-		return TrackInfo{}, err
-	}
-	return info, nil
-}
-
-func (a App) nextInBoard(root, boardDir string) (*TaskInfo, error) {
-	index, err := a.fs.ReadFile(boardIndexPath(boardDir))
-	if err != nil {
-		return nil, err
-	}
-	for _, sec := range board.Sections(index) {
-		for _, row := range sec.Rows {
-			info, err := a.actionable(root, boardDir, row.File)
-			if err != nil {
-				return nil, err
-			}
-			if info != nil {
-				return info, nil
-			}
-		}
-	}
-	return nil, nil
-}
-
-// actionable returns filename's TaskInfo when it's a todo with every blocked-by
-// done, else nil; a missing file is skipped (the board can drift ahead), not an error.
-func (a App) actionable(root, boardDir, filename string) (*TaskInfo, error) {
-	path := filepath.Join(boardDir, filename)
-	parsed, content, err := a.readTask(path)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	if parsed.Status != task.StatusTodo {
-		return nil, nil
-	}
-	waits, err := a.unmetDeps(root, parsed.BlockedBy)
-	if err != nil {
-		return nil, err
-	}
-	if len(waits) > 0 {
-		return nil, nil
-	}
-	info := buildTaskInfo(root, path, content, parsed, a.mtime(path))
 	return &info, nil
+}
+
+// nextIn returns the first actionable task in scope's board and below, in
+// flattened board order — the winner get next reports and claim marks.
+func nextIn(view *TreeView, scope Scope) (*TaskView, error) {
+	base, err := view.ScopeBase(scope)
+	if err != nil {
+		return nil, err
+	}
+	boards := view.Under(base)
+	for i := range boards {
+		if found, ok := firstActionable(boards[i]); ok {
+			return &found, nil
+		}
+	}
+	return nil, nil
+}
+
+func firstActionable(bv BoardView) (TaskView, bool) {
+	for _, tv := range bv.tasks() {
+		if actionable(tv) {
+			return tv, true
+		}
+	}
+	return TaskView{}, false
+}
+
+// actionable reports whether a task is ready to pick up: a file-truth todo with
+// every dependency met. No-file and bad-file rows carry no file truth.
+func actionable(tv TaskView) bool {
+	return tv.hasFileTruth() && tv.Status == task.StatusTodo && len(tv.Waits) == 0
+}
+
+// taskInfoFromView projects one task's metadata straight from its loaded view —
+// Deps and gate counts already computed by Load, so no file is re-read.
+func taskInfoFromView(root string, tv TaskView) TaskInfo {
+	return TaskInfo{
+		ID:         tv.ID,
+		Title:      tv.Title,
+		Status:     tv.Status,
+		Track:      relBoard(root, filepath.Dir(tv.Path)),
+		BlockedBy:  tv.BlockedBy,
+		GatesDone:  tv.GatesDone,
+		GatesTotal: tv.GatesTotal,
+		Path:       tv.Path,
+		UpdatedAt:  tv.UpdatedAt,
+		ClaimedBy:  tv.ClaimedBy,
+		Deps:       tv.Deps,
+	}
 }
 
 // statusArchived and statusMissing are the computed dependency statuses for a
@@ -293,63 +242,6 @@ func UnmetDeps(deps []string, statusOf func(id string) (string, error)) ([]strin
 
 func depMet(status string) bool {
 	return status == task.StatusDone || status == statusArchived
-}
-
-func (a App) unmetDeps(root string, deps []string) ([]string, error) {
-	return UnmetDeps(deps, func(id string) (string, error) {
-		return a.depStatus(root, id)
-	})
-}
-
-func (a App) fillDeps(root string, info *TaskInfo) error {
-	info.Deps = make([]Dep, 0, len(info.BlockedBy))
-	for _, id := range info.BlockedBy {
-		status, err := a.depStatus(root, id)
-		if err != nil {
-			return err
-		}
-		info.Deps = append(info.Deps, Dep{ID: id, Status: status})
-	}
-	return nil
-}
-
-// depStatus is the one source both wait computation and get task's dep
-// annotations read for a blocked-by id's computed status.
-func (a App) depStatus(root, id string) (string, error) {
-	path, err := tree.ResolveTask(a.fs, root, id)
-	if err != nil {
-		if errors.Is(err, tree.ErrArchived) {
-			return statusArchived, nil
-		}
-		return statusMissing, nil
-	}
-	parsed, _, err := a.readTask(path)
-	if err != nil {
-		return "", err
-	}
-	return parsed.Status, nil
-}
-
-func (a App) taskStatuses(dir string) ([]string, error) {
-	_, tasks, err := a.tasksIn(dir)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]string, 0, len(tasks))
-	for _, parsed := range tasks {
-		out = append(out, parsed.Status)
-	}
-	return out, nil
-}
-
-// archivedCount counts dir's task files, or 0 when dir doesn't exist — a
-// board with nothing archived may lack the folder.
-func (a App) archivedCount(dir string) (int, error) {
-	info, err := a.fs.Stat(dir)
-	if err != nil || !info.IsDir() {
-		return 0, nil
-	}
-	return a.countTaskFiles(dir)
 }
 
 // relBoard returns dir's slash path relative to root, "." for root itself.

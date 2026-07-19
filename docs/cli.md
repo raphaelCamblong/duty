@@ -221,12 +221,15 @@ Reads never lock and never write. Each takes `--agent` for stable TSV — see
 
 `duty get tasks` — List open tasks from the current board down, straight from
 the files: `id  status  title`, a relative age, a track prefix when not local,
-and a `⚠ board says …` flag when the board row disagrees. A task with unmet
-dependencies also trails a dim `waits T-01,T-03` naming the ids still blocking
-it (a done or archived dependency counts as met, the same rule `get next`
-walks). Rows come out in board order — board order is priority order, the same
-order `get next` walks — with a task whose file has no board row appended
-after, still flagged.
+and a `⚠ …` flag when the file and its board row disagree — `board says done`
+when the statuses differ, `board says missing` for a file with no row, `no file`
+for a row pointing nowhere, `unparsable` for a file whose frontmatter won't
+parse. A bad file is listed, never an error. A task with unmet dependencies also
+trails a dim `waits T-01,T-03` naming the ids still blocking it (a done or
+archived dependency counts as met, the same rule `get next` walks). Rows come
+out in board order — board order is priority order, the same order `get next`
+walks — with a task whose file has no board row sorted by name into the default
+section, still flagged.
 
 ```sh title="Only what's in progress"
 duty get tasks --status in-progress
@@ -235,7 +238,7 @@ duty get tasks --status in-progress
 Flags:
 - `--status S` — only this status.
 - `--in PATH` — start from another board.
-- `--agent` — TSV: `id`, `board-path`, `status`, `title`, `drift`, `updated`.
+- `--agent` — TSV: `id`, `board-path`, `status`, `title`, `drift`, `updated`, `claimed-by`, `waits`.
 
 ### get task
 
@@ -257,7 +260,8 @@ Flags:
 ### get tracks
 
 `duty get tracks` — One line per board, the root shown as `.`: path, title,
-per-status counts of its own tasks, and its archived count.
+per-status counts of its own tasks (todo, in-progress, done, blocked, backlog),
+and its archived count.
 
 ```sh title="Board-by-board counts"
 duty get tracks
@@ -265,13 +269,15 @@ duty get tracks
 
 Flags:
 - `--in PATH` — start from another board.
-- `--agent` — TSV: `path`, `title`, `todo`, `in-progress`, `done`, `blocked`, `archived`.
+- `--agent` — TSV: `path`, `title`, `todo`, `in-progress`, `done`, `blocked`, `archived`, `backlog`.
 
 ### get next
 
 `duty get next` — The first actionable task: board order first, then sub-tracks
-depth-first — the first `todo` whose `blocked-by` are all done. Nothing
-actionable means no output and exit `0`. Output shape matches `get task`.
+depth-first — the first `todo` whose `blocked-by` are all done. A task whose
+file has no board row still counts; it sorts into the default section, so a
+rowless unblocked todo is reachable here. Nothing actionable means no output and
+exit `0`. Output shape matches `get task`.
 
 ```sh title="Claim the next task"
 duty get next --claim
@@ -360,16 +366,17 @@ Flags:
 Every read takes `--agent`: stable, token-lean TSV — one record per line, no
 padding, no color, the field order part of the contract. New fields only ever
 append, so parsers of the earlier fields keep working: `updated` (the file's
-mtime, RFC3339) trails every record, and `get task`/`get next` append
-`claimed-by` after it. Lifecycle-mutating commands (`status`, `report`,
+mtime, RFC3339) trails every record; `get task`/`get next` append `claimed-by`
+after it, `get tasks` appends `claimed-by` then `waits`, and `get tracks`
+appends `backlog` last. Lifecycle-mutating commands (`status`, `report`,
 `gates`, `move`, `archive`, `delete`, `set`) stay quiet either way; the
 scaffolding commands (`init`, `create task`, `create track`, `skill install`)
 always print their one confirmation line — there's no other way to learn what
 they made.
 
-- `get tasks` — `id  board-path  status  title  drift  updated` (drift empty, `board=<status>`, or `no-row`).
+- `get tasks` — `id  board-path  status  title  drift  updated  claimed-by  waits` (drift empty, `board=<status>`, `no-row`, `no-file`, or `bad-file`; waits comma-joined blocked-by ids not yet met, empty when actionable).
 - `get task` / `get next` — `id  track-path  status  title  gates-done  gates-total  blocked-by  path  updated  claimed-by` (blocked-by comma-joined; claimed-by empty unless an in-progress task names its holder; `get next` prints nothing when nothing's actionable).
-- `get tracks` — `path  title  todo  in-progress  done  blocked  archived`.
+- `get tracks` — `path  title  todo  in-progress  done  blocked  archived  backlog`.
 - `watch` — `time  event  id  field  old  new` (`time` RFC3339; `event` one of `status`, `claimed-by`, `created`, `deleted`, `moved`, `gates`; one line per changed field, streamed until `Ctrl-C`).
 
 ## Cheat sheet

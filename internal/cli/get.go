@@ -144,7 +144,7 @@ func newGetTracksCmd(svc app.App, cwd string, stdout io.Writer) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: path, title, todo, in-progress, done, blocked, archived")
+	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: path, title, todo, in-progress, done, blocked, archived, backlog")
 	addInFlag(cmd, &in)
 	return cmd
 }
@@ -218,7 +218,7 @@ func newGetTasksCmd(svc app.App, cwd string, stdout io.Writer, use string, hidde
 		},
 	}
 	cmd.Flags().StringVar(&status, "status", "", "list only this status")
-	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: id, board-path, status, title, drift, updated")
+	cmd.Flags().BoolVar(&agent, "agent", false, "TSV output: id, board-path, status, title, drift, updated, claimed-by, waits")
 	addInFlag(cmd, &in)
 	return cmd
 }
@@ -282,14 +282,15 @@ func tracksHuman(tracks []app.TrackInfo) []string {
 	}
 	lines := make([]string, 0, len(tracks))
 	for _, tr := range tracks {
-		counts := fmt.Sprintf("%d todo · %d in-progress · %d done · %d blocked · %d archived",
-			tr.Todo, tr.InProgress, tr.Done, tr.Blocked, tr.Archived)
+		counts := fmt.Sprintf("%d todo · %d in-progress · %d done · %d blocked · %d backlog · %d archived",
+			tr.Todo, tr.InProgress, tr.Done, tr.Blocked, tr.Backlog, tr.Archived)
 		lines = append(lines, fmt.Sprintf("%-*s  %-*s  %s", pathW, tr.Path, titleW, tr.Title, counts))
 	}
 	return lines
 }
 
-// trackAgent's column order is a wire contract; don't reorder them.
+// trackAgent's column order is a wire contract; new fields only ever append —
+// backlog trails after archived so existing parsers keep working.
 func trackAgent(tr app.TrackInfo) string {
 	return tsv(
 		tr.Path,
@@ -299,6 +300,7 @@ func trackAgent(tr app.TrackInfo) string {
 		strconv.Itoa(tr.Done),
 		strconv.Itoa(tr.Blocked),
 		strconv.Itoa(tr.Archived),
+		strconv.Itoa(tr.Backlog),
 	)
 }
 
@@ -341,28 +343,39 @@ func statusCell(row app.Row) string {
 	return row.Status
 }
 
+// humanDrift owns the human words for every drift class in one place.
 func humanDrift(row app.Row) string {
-	switch {
-	case row.RowMissing:
-		return "⚠ board says missing"
-	case row.RowStatus != "":
+	switch row.Drift {
+	case app.DriftStatus:
 		return "⚠ board says " + row.RowStatus
+	case app.DriftNoRow:
+		return "⚠ board says missing"
+	case app.DriftNoFile:
+		return "⚠ no file"
+	case app.DriftBadFile:
+		return "⚠ unparsable"
 	}
 	return ""
 }
 
-// tsvLine's column order is a wire contract; updated was appended last so
-// existing parsers keep working.
+// tsvLine's column order is a wire contract; new fields only ever append —
+// updated trails the original record, claimed-by and waits after it.
 func tsvLine(row app.Row) string {
-	return tsv(row.ID, row.Board, row.Status, row.Title, agentDrift(row), row.UpdatedAt.Format(time.RFC3339))
+	return tsv(row.ID, row.Board, row.Status, row.Title, agentDrift(row),
+		row.UpdatedAt.Format(time.RFC3339), row.ClaimedBy, strings.Join(row.Waits, ","))
 }
 
+// agentDrift owns the TSV token for every drift class in one place.
 func agentDrift(row app.Row) string {
-	switch {
-	case row.RowMissing:
-		return "no-row"
-	case row.RowStatus != "":
+	switch row.Drift {
+	case app.DriftStatus:
 		return "board=" + row.RowStatus
+	case app.DriftNoRow:
+		return "no-row"
+	case app.DriftNoFile:
+		return "no-file"
+	case app.DriftBadFile:
+		return "bad-file"
 	}
 	return ""
 }

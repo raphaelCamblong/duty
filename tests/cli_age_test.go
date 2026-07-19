@@ -65,8 +65,8 @@ func TestTaskAgeReads(t *testing.T) {
 
 		_, agent, _ := runDuty(t, root, "get", "tasks", "--agent")
 		fields := strings.Split(strings.TrimRight(agent, "\n"), "\t")
-		if len(fields) != 6 {
-			t.Fatalf("record %q: got %d fields, want 6", agent, len(fields))
+		if len(fields) != 8 {
+			t.Fatalf("record %q: got %d fields, want 8", agent, len(fields))
 		}
 		if got, want := fields[5], mtimeRFC3339(t, path); got != want {
 			t.Errorf("trailing field = %q, want the RFC3339 mtime %q", got, want)
